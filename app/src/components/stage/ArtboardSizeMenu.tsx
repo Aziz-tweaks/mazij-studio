@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../Icon';
-import { SIZES, CUSTOM_SIZE_IDX, sizeAt, dimsOf, nameOf, glyphStyle } from '../../data/constants';
+import { SIZES, CUSTOM_SIZE_IDX, ICONS, MEDIUM_CHIP, sizeAt, dimsOf, nameOf, glyphStyle } from '../../data/constants';
+import { documentDuration, formatDurationSec } from '../../lib/animTimeline';
 import { useStudio } from '../../state/StudioContext';
 
 /** Real dropdown for the artboard size control (top-start of the stage): click opens
@@ -9,6 +10,9 @@ import { useStudio } from '../../state/StudioContext';
  * highlighted row, Enter selects it. Closes on outside click. */
 export function ArtboardSizeMenu() {
   const { state, actions, dict: L } = useStudio();
+  // شارةُ الطبيعة بجدولٍ لا بشرط — انظر `MEDIUM_CHIP`.
+  const chip = MEDIUM_CHIP[state.medium];
+  const docDuration = documentDuration(state.elements.map((e) => e.anim), state.fps);
   const dir = state.lang === 'ar' ? 'rtl' : 'ltr';
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
@@ -93,6 +97,37 @@ export function ArtboardSizeMenu() {
         <span>{nameOf(current, state.lang)}</span>
         <span dir="ltr" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
           {dimsOf(current)}
+        </span>
+        {/* **طبيعةُ المستند ومدّتُه، مقروءتان في أيّ لحظة.**
+         *
+         * هذه هي التنازلُ الوحيد للمالك في المرحلة ١، وهو ليس بوّابةً: فقد سأل أن
+         * يَسأل البرنامجُ «صورةٌ أم فيديو؟» عند الإقلاع، والجوابُ أنّ البرنامج
+         * يَسأل فعلًا — «ريل إنستقرام» **هو** الجواب — وكان يُهمله. فالعلاجُ أن
+         * يصير الجوابُ حاملَ حِمل (ثلاثةُ أسطح)، وأن يكون **مقروءًا باستمرار** لا
+         * مسؤولًا عنه مرّةً واحدة: «هل فهمني فيديو؟» سؤالٌ جوابُه بالنظر، في أيّ
+         * لحظة، على نفس البطاقة التي يُبدَّل منها المقاس.
+         *
+         * والمدّةُ **مشتقّة** لا الرقمَ ٥ — وهي نفسها التي تُصدَّر، ونفسها التي
+         * يُعلنها تذييلُ حوار التصدير. */}
+        <span
+          data-testid="artboard-medium"
+          data-medium={state.medium}
+          data-duration={chip.showsDuration ? Math.round(docDuration * 1000) / 1000 : ''}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            height: 18,
+            padding: '0 6px',
+            borderRadius: 999,
+            background: chip.showsDuration ? 'var(--accentSoft)' : 'var(--surface2)',
+            color: chip.showsDuration ? 'var(--accent)' : 'var(--muted)',
+            fontSize: 10,
+            fontWeight: 600,
+          }}
+        >
+          <Icon size={10} path={ICONS[chip.icon]} />
+          {chip.showsDuration ? `${L[chip.labelKey]} · ${formatDurationSec(docDuration, state.lang)}` : L[chip.labelKey]}
         </span>
         <Icon size={14} path="M5 8l5 5 5-5" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </button>
@@ -222,7 +257,10 @@ export function ArtboardSizeMenu() {
                 }}
               >
                 <span style={{ width: 18, height: 18, display: 'grid', placeItems: 'center', color: 'var(--muted)', flex: 'none' }}>
-                  <span style={glyphStyle({ w: row.w, h: row.h }, 14)} />
+                  {/* مَقبضٌ للقياس. كانت المواصفةُ تَعُدّ `svg` داخل الصفّ وتسمّي
+                      ذلك «كلُّ صفٍّ يَعرض شكلَ نسبته»، والشكلُ `span` لا `svg` —
+                      فالذي كانت تَعُدّه هو علامةُ **الصفّ النشط** وحدها. */}
+                  <span data-glyph="" style={glyphStyle({ w: row.w, h: row.h }, 14)} />
                 </span>
                 <span style={{ flex: 1, fontWeight: 500 }}>{state.lang === 'ar' ? row.ar : row.en}</span>
                 <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>

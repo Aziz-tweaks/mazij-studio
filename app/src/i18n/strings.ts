@@ -89,7 +89,7 @@ export interface Dictionary {
   no_easing_target: string; add_keyframe: string; delete_keyframe: string; kf_value: string; soon: string;
   prop_opacity: string; prop_x: string; prop_y: string; prop_scale: string; prop_rotation: string;
   expand_tracks: string; collapse_tracks: string; kf_easing: string;
-  entrance: string; kf_outside_clip: string;
+  entrance: string; tl_beyond_doc: string;
   ex_estimate: (seconds: number, files: number, mb: number) => string;
   ex_only_project_size: string; ex_only_project_size_hint: string; ex_video_scale_locked: string;
   text_stagger: string; stagger_unit_char: string; stagger_unit_word: string; stagger_unit_line: string;
@@ -260,12 +260,12 @@ export const AR: Dictionary = {
   ease_bounce: 'ارتداد', ease_custom: 'مخصص',
   no_easing_target: 'حدّد عنصرًا لتغيير منحنى حركته', add_keyframe: 'إضافة مفتاح عند المؤشر',
   delete_keyframe: 'حذف المفتاح', kf_value: 'القيمة', soon: 'قريبًا',
+  tl_beyond_doc: 'بعد نهاية المشروع — هذا المدى لا يدخل الملفّ المُصدَّر. اسحب حافّة مقطعٍ إلى هنا ليَطول المشروع.',
   prop_opacity: 'الشفافية', prop_x: 'الموضع X', prop_y: 'الموضع Y', prop_scale: 'المقياس', prop_rotation: 'الدوران',
   expand_tracks: 'إظهار مسارات الخصائص', collapse_tracks: 'إخفاء مسارات الخصائص', kf_easing: 'منحنى المفتاح',
   entrance: 'حركة الدخول',
   // يُقال للمصمّم **لماذا** تعطَّل المفتاح، لا أنه معطَّل: المفتاح يُضاف عند المؤشّر،
   // والمؤشّر واقع خارج مقطع هذه الطبقة، فلا موضع له أصلًا.
-  kf_outside_clip: 'مؤشّر التشغيل خارج مقطع هذه الطبقة — انقله داخل المقطع أو مُدّ حافّة المقطع ليشمله',
   ex_estimate: (seconds, files, mb) =>
     `المدّة ${seconds} ث · ${files === 1 ? 'ملف واحد' : files === 2 ? 'ملفان' : `${files} ملفات`} · الحجم ≈ ${mb} م.ب`,
   ex_only_project_size: 'مقاس المشروع فقط', ex_only_project_size_hint: 'يُبقي هدفًا واحدًا: مقاس هذه اللوحة نفسه',
@@ -489,10 +489,10 @@ export const EN: Dictionary = {
   ease_custom: 'Custom',
   no_easing_target: 'Select an element to edit its easing curve', add_keyframe: 'Add keyframe at playhead',
   delete_keyframe: 'Delete keyframe', kf_value: 'Value', soon: 'Coming soon',
+  tl_beyond_doc: 'Past the end of the project — this range is not in the exported file. Drag a clip edge out here to make the project longer.',
   prop_opacity: 'Opacity', prop_x: 'Position X', prop_y: 'Position Y', prop_scale: 'Scale', prop_rotation: 'Rotation',
   expand_tracks: 'Show property tracks', collapse_tracks: 'Hide property tracks', kf_easing: 'Keyframe easing',
   entrance: 'Entrance',
-  kf_outside_clip: 'The playhead is outside this layer’s clip — move it inside, or drag the clip edge to cover it',
   ex_estimate: (seconds, files, mb) => `${seconds}s · ${files} file${files === 1 ? '' : 's'} · ≈${mb} MB`,
   ex_only_project_size: 'Project size only', ex_only_project_size_hint: 'Keeps one target: this artboard’s own size',
   ex_video_scale_locked: 'Video exports at the artboard’s own resolution — the multiplier is for still images',

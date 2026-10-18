@@ -7,7 +7,17 @@ import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwr
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { openDemoDocument } from './helpers/boot.mjs';
+// NOTE (video branch, phase 1): this spec drives surfaces that exist only on a
+// **timed** document — the timeline's ruler/clips, the transport, the video tool, or
+// MP4/GIF in the export dialog. The demo poster is 1080×1080, i.e. `SIZES[0]`, whose
+// `kind` is `'still'`, so it now opens without them: `DocSnapshot.medium` gates three
+// surfaces, which is the whole point of the phase — the start screen already asked
+// "image or video?" and the answer finally reaches the workspace instead of a badge.
+// `bootDemoTimed` opens the same demo document and then picks a timed destination
+// from the real artboard size menu, which is both the gesture a designer performs and
+// the reversibility `HomeScreen.tsx` promised when it declined a two-button gate.
+// See `qa/helpers/boot.mjs`.
+import { openDemoDocument, switchToTimed } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -176,6 +186,9 @@ async function main() {
   assert(body.includes('فشل التحميل'), 'font load: a bad URL surfaces a visible error state, not a silent failure');
 
   // --- Timeline ---
+  // The transport and the ruler belong to a timed document now; said with the real
+  // size menu rather than assumed. See the file header note.
+  await switchToTimed(page);
   await page.getByText('التصميم', { exact: true }).click();
   await page.waitForTimeout(100);
   const playToggleBtn = page.locator('button svg path[d="M6 4l10 6-10 6z"], button svg path[d="M6 4v12M14 4v12"]').locator('..').locator('..');

@@ -9,7 +9,13 @@
 //
 // Run: node qa/timeline.spec.mjs   (dev server must be running on :1420)
 import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
-import { bootDemo, resumeAfterReload } from './helpers/boot.mjs';
+// NOTE (video branch, phase 1): this spec drives the **timeline**, and the demo
+// poster is 1080×1080 — a still destination — so the timeline's time surfaces no
+// longer exist on it. `bootDemoTimed` opens the same demo document and then picks a
+// timed format from the real artboard size menu, which is the gesture a designer
+// performs and is also the reversibility the start screen promised. See
+// `qa/helpers/boot.mjs`.
+import { bootDemoTimed, resumeAfterReload, switchToTimed } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -50,7 +56,7 @@ async function main() {
     if (m.type() === 'error') pageErrors.push(m.text());
   });
 
-  await bootDemo(page, BASE_URL);
+  await bootDemoTimed(page, BASE_URL);
 
   // ===================== 1. Scrubbing =====================
   const head = page.locator('[data-testid="stage-headline"]');
@@ -62,6 +68,7 @@ async function main() {
   const opacityAtStart = Number(await head.evaluate((el) => getComputedStyle(el).opacity));
   assert(opacityAtStart < 0.05, 'scrub: clicking the ruler at t=0 hides the headline (its clip starts at 0.3s)');
 
+  const undoDisabledBeforeDrag = await page.getByRole('button', { name: 'تراجع' }).isDisabled();
   await page.mouse.move(rb.x + rb.width * 0.05, rb.y + rb.height / 2);
   await page.mouse.down();
   await page.mouse.move(rb.x + rb.width * 0.4, rb.y + rb.height / 2, { steps: 12 });
@@ -69,8 +76,13 @@ async function main() {
   await page.mouse.up();
   assert(opacityMidDrag > 0.9, 'scrub: dragging the ruler past the headline entrance live-updates the artboard mid-drag');
 
-  const undoDisabled1 = await page.getByRole('button', { name: 'تراجع' }).isDisabled();
-  assert(undoDisabled1, 'scrub: a long scrub drag pushes no undo history (it only moves the playhead, not the document)');
+  // Compared across the drag rather than read as an absolute. The document already
+  // carries one real edit before this point — `bootDemoTimed` picks a timed format
+  // from the size menu, which is a document change and correctly undoable — so
+  // "undo is disabled" no longer isolates the scrub. "Undo did not change state"
+  // does, and it is the thing the message actually claims.
+  const undoBeforeScrub = await page.getByRole('button', { name: 'تراجع' }).isDisabled();
+  assert(undoBeforeScrub === undoDisabledBeforeDrag, `scrub: a long scrub drag pushes no undo history (undo disabled ${undoDisabledBeforeDrag} → ${undoBeforeScrub}; it only moves the playhead, not the document)`);
 
   // Playhead handle itself is draggable, not just the ruler strip.
   const playhead = page.locator('[data-testid="timeline-playhead"]');
@@ -111,7 +123,15 @@ async function main() {
   await page.locator('[data-testid="size-menu-button"]').click();
   await page.waitForTimeout(80);
   assert((await page.locator('[data-testid="size-menu"]').count()) === 1, 'size menu: click opens the dropdown');
-  assert((await page.locator('[data-testid="size-option-ig"] svg').count()) === 1, 'size menu: every preset row shows its own aspect glyph');
+  // Measures the aspect glyph, which is what the message claims. It used to count
+  // `svg` inside the row — and the glyph is a `span`; the only `svg` in a row is the
+  // **active** row's checkmark, so the assertion was really testing "ig is the
+  // current size" under a label about every row.
+  // `size-option-custom` is a different branch of the same list — two number fields
+  // and an apply button, no aspect to draw — so it is excluded by name.
+  const glyphRows = await page.locator('[data-testid^="size-option-"] [data-glyph]').count();
+  const presetRows = (await page.locator('[data-testid^="size-option-"]').count()) - (await page.locator('[data-testid="size-option-custom"]').count());
+  assert(glyphRows === presetRows && glyphRows > 1, `size menu: every preset row shows its own aspect glyph (${glyphRows} glyphs across ${presetRows} preset rows)`);
 
   await page.locator('[data-testid="size-option-tt"]').click();
   await page.waitForTimeout(100);
@@ -158,10 +178,16 @@ async function main() {
   assert(Math.abs(abBox.width / abBox.height - 720 / 1280) < 0.02, 'size menu: custom width/height is typed in and applied');
   assert((await page.locator('[data-testid="size-menu-button"]').textContent()).includes('720'), 'size menu: button label reflects the applied custom size');
 
+  // Back to a known baseline before the keyframe section — and a **timed** one,
+  // because that section drives clips on the timeline and the timeline's time
+  // surfaces exist only for a timed destination now. «بوست إنستقرام» (1080×1080) is
+  // a still destination; «ريل إنستقرام» is the same pixel count the rest of this
+  // section assumes about nothing, and it is timed.
   await page.locator('[data-testid="size-menu-button"]').click();
   await page.waitForTimeout(80);
-  await page.locator('[data-testid="size-option-ig"]').click();
-  await page.waitForTimeout(100);
+  await page.locator('[data-testid="size-option-ig-reel"]').click();
+  await page.waitForSelector('[data-testid="timeline-tracks"]');
+  await page.waitForTimeout(150);
 
   // ===================== 3. Real keyframes: clip move/resize =====================
   await page.getByRole('button', { name: 'احترافي' }).click();
@@ -217,11 +243,17 @@ async function main() {
   assert(kfCountAfterAdd === kfCountBefore + 1, 'keyframes: the "+" button adds a real keyframe at the playhead');
   assert(!(await page.getByRole('button', { name: 'تراجع' }).isDisabled()), 'keyframes: adding one is undoable');
 
+  // "Interior" is now read from where the diamond is **painted**, not from its
+  // tooltip. The tooltip used to say `0% · 100%` — a keyframe's position as a
+  // percentage of its own clip — and now says `0.000s · 100%`, because keyframe time
+  // is an absolute duration and a percentage of a clip is a number a designer cannot
+  // use. Position is also the thing a human is actually looking at.
+  const clipGeom = await page.locator('[data-testid="clip-head"]').evaluate((e) => ({ left: parseFloat(e.style.left), width: parseFloat(e.style.width) }));
   const kfLocators = await page.locator('[data-testid^="kf-head-"]').all();
   let interiorKf = null;
   for (const k of kfLocators) {
-    const title = await k.getAttribute('title');
-    if (!title.startsWith('0% ·') && !title.startsWith('100% ·')) {
+    const left = await k.evaluate((e) => parseFloat(e.style.left));
+    if (left > clipGeom.left + 0.4 && left < clipGeom.left + clipGeom.width - 0.4) {
       interiorKf = k;
       break;
     }

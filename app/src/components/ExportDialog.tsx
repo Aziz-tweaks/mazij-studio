@@ -1,9 +1,10 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Icon } from './Icon';
 import { PALETTES, SIZES, FPS_OPTIONS, CUSTOM_SIZE_IDX, sizeAt, dimsOf, glyphStyle, nameOf, seg } from '../data/constants';
 import { useStudio } from '../state/StudioContext';
 import type { ExportResult } from '../state/types';
 import { effectiveExportScale, estimateVideoExport } from '../lib/exportEstimate';
+import { documentDuration } from '../lib/animTimeline';
 
 const IMG_FORMATS = ['png', 'jpg', 'svg'] as const;
 const VID_FORMATS = ['mp4', 'gif'] as const;
@@ -73,10 +74,36 @@ function qBtnStyle(active: boolean): CSSProperties {
 
 export function ExportDialog() {
   const { state, actions, dict: L } = useStudio();
+
+  // **السطحُ الثالث من الثلاثة التي يتفرّع عليها `medium`.** وجهاتُ التصدير:
+  // الساكنُ يُصدَّر صورةً، والمُوقَّتُ يُصدَّر صورةً **وفيديو**. فلا تُعرَض MP4/GIF
+  // على بوسترٍ مربّع، ومن أرادهما بدَّل المقاسَ إلى وجهةٍ مُوقَّتة فظَهرتا في
+  // اللحظة.
+  //
+  // ولم تُستبدَل بـ«قريبًا»: هي تعمل فعلًا، و«قريبًا» فوق سطحٍ عاملٍ تغطيةٌ لا
+  // صِدق. الوجهاتُ تُحجَب لأنّ هذا المستند ليس وجهتَها، لا لأنها غير مبنيّة.
+  //
+  // و«الصورة الحيّة» لا تُحجَب في الحالتين: وجهتُها تطبيقُ الصور لا منصّةُ فيديو،
+  // وهي أصلًا «صورةٌ بذيلٍ متحرّك» — فتبويبُها ليس هذا التفرّع، والخطّة لم تُسمِّها
+  // في أيٍّ من العمودين (§4.2).
+  const showVideoFormats = state.medium === 'timed';
+  const videoFormatSelected = state.exportFormat === 'mp4' || state.exportFormat === 'gif';
+
+  // وجهةٌ محجوبةٌ لا تبقى مختارة. `exportFormat` حالةٌ تدوم بين المستندات، فمستندٌ
+  // اختير له MP4 ثم بُدِّل مقاسُه إلى بوسترٍ كان سيفتح هذا الحوارَ على صيغةٍ لا
+  // يَعرضها زرٌّ — أي زرَّ تصديرٍ يُنفِّذ شيئًا لا يراه أحد، وهو بعينه ما تمنعه
+  // القاعدةُ الرابعة. والتصحيحُ هنا لا في `StudioContext`: القرارُ قرارُ هذا
+  // السطح، ومعرفتُه لا تُنسَخ إلى النموذج.
+  useEffect(() => {
+    if (state.exportOpen && !showVideoFormats && videoFormatSelected) actions.setExportFormat('png');
+  }, [state.exportOpen, showVideoFormats, videoFormatSelected, actions]);
+
   if (!state.exportOpen) return null;
 
   const pal = PALETTES[state.postPalette];
   const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+  // طولُ المستند مشتقًّا — هو ما يَصِفه التذييل وما يُصدَّر فعلًا، لا الرقمُ ٥.
+  const docDuration = documentDuration(state.elements.map((e) => e.anim), state.fps);
   const ratio = size.w / size.h;
   const tall = ratio < 1;
   const headEl = state.elements.find((e) => e.id === 'head');
@@ -159,7 +186,8 @@ export function ExportDialog() {
                   })}
                 </div>
               </div>
-              <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {showVideoFormats && (
+              <div data-testid="export-video-formats" style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>{L.ex_video}</span>
                 <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
                   {VID_FORMATS.map((fmt) => {
@@ -172,6 +200,7 @@ export function ExportDialog() {
                   })}
                 </div>
               </div>
+              )}
               <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>{L.ex_livephoto}</span>
                 <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
@@ -417,7 +446,7 @@ export function ExportDialog() {
               {isVideoFormat && (
                 <span data-testid="export-estimate" dir="auto" style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                   {(() => {
-                    const est = estimateVideoExport(videoTargetDims, state.exportFormat as 'mp4' | 'gif', state.exportFps, state.exportQuality);
+                    const est = estimateVideoExport(videoTargetDims, state.exportFormat as 'mp4' | 'gif', state.exportFps, state.exportQuality, docDuration);
                     return L.ex_estimate(est.seconds, est.files, est.megabytes);
                   })()}
                 </span>

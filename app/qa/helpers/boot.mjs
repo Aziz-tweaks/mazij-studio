@@ -51,6 +51,39 @@ export async function bootBlank(page, baseUrl, formatId) {
   await page.waitForSelector('[data-testid="artboard"]');
 }
 
+/** Switches the open document to a **timed** destination through the real artboard
+ * size menu, and waits for the timeline's track column to exist.
+ *
+ * WHY SPECS NEED THIS NOW. The start screen has always asked "image or video?" —
+ * picking «ريل إنستقرام» *is* answering "video" — and as of the video branch's first
+ * phase the answer is load-bearing: `DocSnapshot.medium` gates three surfaces, one of
+ * which is whether the timeline's ruler/tracks/playhead/transport exist at all. The
+ * demo poster is 1080×1080, i.e. `SIZES[0]`, whose `kind` is `'still'` — so a spec
+ * that opens the demo document and then drives the *timeline* has to say which medium
+ * it means, and the honest way to say it is the gesture a designer performs: open the
+ * size menu, pick a timed format. Nothing is injected.
+ *
+ * It is also the exact reversibility the start screen promised when it declined a
+ * two-button gate (`HomeScreen.tsx`): the decision is changeable inside the editor
+ * with no restart. That promise was untestable until `medium` had consumers.
+ *
+ * The **layer list** is deliberately *not* behind this: it lives inside the same
+ * component as the timeline but is not a time surface, so it is present either way —
+ * which is why specs that only click layer rows need no change. */
+export async function switchToTimed(page, formatId = 'ig-reel') {
+  await page.locator('[data-testid="size-menu-button"]').click();
+  await page.waitForSelector('[data-testid="size-menu"]');
+  await page.locator(`[data-testid="size-option-${formatId}"]`).click();
+  await page.waitForSelector('[data-testid="timeline-tracks"]');
+  await page.waitForTimeout(220);
+}
+
+/** `bootDemo` then `switchToTimed` — the demo document on a timed destination. */
+export async function bootDemoTimed(page, baseUrl, formatId = 'ig-reel') {
+  await bootDemo(page, baseUrl);
+  await switchToTimed(page, formatId);
+}
+
 /** Re-enters the editor after a real `page.reload()`, through the start screen's
  * resume card — the returning-user path.
  *

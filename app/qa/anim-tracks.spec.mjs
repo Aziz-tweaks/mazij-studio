@@ -10,7 +10,17 @@
 //
 // Run: node qa/anim-tracks.spec.mjs   (dev server must be running on :1420)
 import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
-import { bootDemo, resumeAfterReload } from './helpers/boot.mjs';
+// NOTE (video branch, phase 1): this spec drives surfaces that exist only on a
+// **timed** document — the timeline's ruler/clips, the transport, the video tool, or
+// MP4/GIF in the export dialog. The demo poster is 1080×1080, i.e. `SIZES[0]`, whose
+// `kind` is `'still'`, so it now opens without them: `DocSnapshot.medium` gates three
+// surfaces, which is the whole point of the phase — the start screen already asked
+// "image or video?" and the answer finally reaches the workspace instead of a badge.
+// `bootDemoTimed` opens the same demo document and then picks a timed destination
+// from the real artboard size menu, which is both the gesture a designer performs and
+// the reversibility `HomeScreen.tsx` promised when it declined a two-button gate.
+// See `qa/helpers/boot.mjs`.
+import { bootDemoTimed, resumeAfterReload, switchToTimed } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -45,7 +55,7 @@ function makeShape({ start, duration, tracks }) {
     stroke: null,
     strokeWidth: 0,
     radius: 0,
-    anim: { preset: 'none', start, duration, easing: 'linear', bezier: [0, 0, 1, 1], keyframes: [], tracks },
+    anim: { preset: 'none', start, duration, sourceIn: 0, easing: 'linear', bezier: [0, 0, 1, 1], keyframes: [], tracks },
   };
 }
 
@@ -59,14 +69,19 @@ async function testExportParity(page) {
   const el = makeShape({
     start: 0,
     duration: 1,
+    // `time` in **seconds**, not `t` as a fraction of the clip. This fixture is
+    // handed straight to `renderArtboardPng`, bypassing the loader's migration on
+    // purpose (it is testing the renderer, not the loader) — so it has to be written
+    // in the representation the renderer reads. The clip is 1s long, so every number
+    // below is unchanged; only its meaning and its field name are.
     tracks: {
       opacity: [
-        { id: 'o0', t: 0, value: 0, easing: 'linear', bezier: [0, 0, 1, 1] },
-        { id: 'o1', t: 1, value: 1, easing: 'linear', bezier: [0, 0, 1, 1] },
+        { id: 'o0', time: 0, value: 0, easing: 'linear', bezier: [0, 0, 1, 1] },
+        { id: 'o1', time: 1, value: 1, easing: 'linear', bezier: [0, 0, 1, 1] },
       ],
       x: [
-        { id: 'x0', t: 0, value: 0, easing: 'linear', bezier: [0, 0, 1, 1] },
-        { id: 'x1', t: 1, value: 0.5, easing: 'linear', bezier: [0, 0, 1, 1] },
+        { id: 'x0', time: 0, value: 0, easing: 'linear', bezier: [0, 0, 1, 1] },
+        { id: 'x1', time: 1, value: 0.5, easing: 'linear', bezier: [0, 0, 1, 1] },
       ],
     },
   });
@@ -107,7 +122,7 @@ async function main() {
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
 
-  await bootDemo(page, BASE_URL);
+  await bootDemoTimed(page, BASE_URL);
 
   await testExportParity(page);
 
@@ -250,6 +265,12 @@ async function main() {
   await page.reload();
   await resumeAfterReload(page); // reload now lands on the start screen; re-enter through the resume card
   await page.waitForSelector('[data-el-id="legacy-head"]');
+  // The hand-written legacy document is `sizeIdx: 0` (1080×1080, a still
+  // destination) and carries no `medium` at all — which is exactly the case the
+  // migration has to handle: the field is defaulted from the size on load. The
+  // section below drives the **ruler**, so the document is told it is video the way
+  // a designer would tell it.
+  await switchToTimed(page);
 
   // Scrub to t=0 explicitly (the app's initial playhead is mid-timeline, not 0) —
   // a 'slide' clip's legacy keyframes (v: 0 -> 1, linear) must still resolve to

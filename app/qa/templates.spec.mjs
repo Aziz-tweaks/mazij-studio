@@ -21,7 +21,17 @@
 //
 // Run: node qa/templates.spec.mjs   (dev server must be running on :1420)
 import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
-import { bootDemo, openDemoDocument, resumeAfterReload } from './helpers/boot.mjs';
+// NOTE (video branch, phase 1): this spec drives surfaces that exist only on a
+// **timed** document — the timeline's ruler/clips, the transport, the video tool, or
+// MP4/GIF in the export dialog. The demo poster is 1080×1080, i.e. `SIZES[0]`, whose
+// `kind` is `'still'`, so it now opens without them: `DocSnapshot.medium` gates three
+// surfaces, which is the whole point of the phase — the start screen already asked
+// "image or video?" and the answer finally reaches the workspace instead of a badge.
+// `bootDemoTimed` opens the same demo document and then picks a timed destination
+// from the real artboard size menu, which is both the gesture a designer performs and
+// the reversibility `HomeScreen.tsx` promised when it declined a two-button gate.
+// See `qa/helpers/boot.mjs`.
+import { bootDemoTimed, openDemoDocument, resumeAfterReload, switchToTimed } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -134,7 +144,7 @@ async function main() {
     if (m.type() === 'error') pageErrors.push(m.text());
   });
 
-  await bootDemo(page, BASE_URL);
+  await bootDemoTimed(page, BASE_URL);
 
   await testPureFunctions(page);
   await testStoreDefaultsEmpty(page);
@@ -151,6 +161,7 @@ async function main() {
   // block's precondition exactly what it always was: the 7-element poster, an
   // empty template library, and no autosave behind it.
   await openDemoDocument(page);
+  await switchToTimed(page);
 
   // --- 3. Real UI: mark slots, save, fill, apply, undo ------------------------
   const originalHead = await page.locator('[data-el-id="head"]').innerText();

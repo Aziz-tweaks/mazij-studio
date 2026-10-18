@@ -1,6 +1,6 @@
 import { inTauri } from './tauriEnv';
 import { WHISPER_REPO_ID, getModelPartsMap, modelById, type LocalModelInfo } from './localModels';
-import { TIMELINE_DURATION } from './animTimeline';
+
 import { DEFAULT_BEZIER, type Bezier } from './easing';
 import { newElementId, type PropertyKeyframe, type TextElement, defaultTextStagger } from '../state/elements';
 import type { VideoElement } from '../state/elements';
@@ -49,7 +49,7 @@ import type { VideoElement } from '../state/elements';
 export interface CaptionSegment {
   /** Seconds — document-timeline time directly (the video element's own trim window
    * maps 1:1 onto document time, see `videoPlayback.ts`), already clamped into
-   * `[0, TIMELINE_DURATION)`. */
+   * `[0, docDuration)`. */
   start: number;
   end: number;
   text: string;
@@ -262,33 +262,41 @@ export async function transcribeAudio(samples: Float32Array): Promise<CaptionSeg
 const FADE_FRACTION_CAP = 0.25;
 const FADE_SECONDS = 0.08;
 
+/** مسارُ عتامةٍ يُظهر الترجمة عند بدايتها ويُخفيها عند نهايتها.
+ *
+ * والكسورُ تبقى **هنا** في الحساب — فالتلاشي نسبةٌ من طول المقطع بطبعه، وسقفُه ربعُ
+ * المقطع — ثم تُضرَب في المدّة عند الكتابة، لأنّ المفتاح يُخزَّن بالثواني. أي أنّ
+ * هذه الدالّة هي بعينها الحدُّ الفاصل بين اصطلاحٍ واصطلاح، كـ`tracksFromPreset`. */
 function captionOpacityTrack(durationSec: number): PropertyKeyframe[] {
   const bezier = [...DEFAULT_BEZIER] as Bezier;
   const fadeFrac = Math.min(FADE_FRACTION_CAP, (FADE_SECONDS / Math.max(0.001, durationSec)) || FADE_FRACTION_CAP);
+  const at = (frac: number) => frac * durationSec;
   return [
-    { id: newElementId('kf'), t: 0, value: 0, easing: 'linear', bezier: [...bezier] as Bezier },
-    { id: newElementId('kf'), t: fadeFrac, value: 1, easing: 'linear', bezier: [...bezier] as Bezier },
-    { id: newElementId('kf'), t: 1 - fadeFrac, value: 1, easing: 'linear', bezier: [...bezier] as Bezier },
-    { id: newElementId('kf'), t: 1, value: 0, easing: 'linear', bezier },
+    { id: newElementId('kf'), time: at(0), value: 0, easing: 'linear', bezier: [...bezier] as Bezier },
+    { id: newElementId('kf'), time: at(fadeFrac), value: 1, easing: 'linear', bezier: [...bezier] as Bezier },
+    { id: newElementId('kf'), time: at(1 - fadeFrac), value: 1, easing: 'linear', bezier: [...bezier] as Bezier },
+    { id: newElementId('kf'), time: at(1), value: 0, easing: 'linear', bezier },
   ];
 }
 
 /** Turns real transcript segments into real `TextElement`s on the document timeline
  * — each one's `anim.start`/`anim.duration` is the segment's own `[start, end)`
- * (clamped into the document's fixed `TIMELINE_DURATION`, same fixed-length timeline
- * every document/template already shares — see `animTimeline.ts`), with an opacity
- * track that fades the caption in at its start and back out at its end, so it's
- * genuinely only on-screen during its own window rather than persisting forever
- * (the default behavior every other entrance-only `anim` relies on). A segment that
- * starts at/after the timeline's end is dropped rather than silently clipped to
- * zero width — the honest "fixed 5s timeline" limitation documented in
- * docs/CONTROLS.md, not a bug in this function. */
-export function buildCaptionElements(segments: CaptionSegment[]): TextElement[] {
+ * — each one's `anim.start`/`anim.duration` is the segment's own `[start, end)`,
+ * with an opacity track that fades the caption in at its start and back out at its
+ * end, so it's genuinely only on-screen during its own window rather than persisting
+ * forever (the default behavior every other entrance-only `anim` relies on).
+ *
+ * **و`limitSeconds` حدٌّ مُمرَّر لا ثابتٌ مفترَض.** كان `TIMELINE_DURATION`، أي أنّ
+ * كلّ مقطعٍ يبدأ بعد الثانية الخامسة يُسقَط — وهذا كان صحيحًا حين كان الخطّ خمسَ
+ * ثوانٍ بحكم البناء. وقد صار الطولُ مشتقًّا، فالحدُّ يأتي من المُنادي: مدّةُ نافذة
+ * الفيديو المُفرَّغ، لا سقفُ المحرّر. ومقطعٌ يبدأ عند الحدّ أو بعده يُسقَط صراحةً
+ * ولا يُقَصّ إلى عرضٍ صفريّ. */
+export function buildCaptionElements(segments: CaptionSegment[], limitSeconds: number): TextElement[] {
   const elements: TextElement[] = [];
   for (const seg of segments) {
     const start = Math.max(0, seg.start);
-    if (start >= TIMELINE_DURATION - 0.02) continue;
-    const end = Math.min(TIMELINE_DURATION, Math.max(seg.end, start + 0.1));
+    if (start >= limitSeconds - 0.02) continue;
+    const end = Math.min(limitSeconds, Math.max(seg.end, start + 0.1));
     const duration = end - start;
     elements.push({
       id: newElementId('caption'),
@@ -311,6 +319,7 @@ export function buildCaptionElements(segments: CaptionSegment[]): TextElement[] 
         preset: 'none',
         start,
         duration,
+        sourceIn: 0,
         easing: 'linear',
         bezier: [...DEFAULT_BEZIER] as Bezier,
         keyframes: [],

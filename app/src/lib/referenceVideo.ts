@@ -1,7 +1,7 @@
 import type { Bezier } from './easing';
 import { DEFAULT_BEZIER } from './easing';
 import { DEFAULT_IMAGE_CROP, newElementId, type DocElement, type ImageElement, type PropertyKeyframe } from '../state/elements';
-import { TIMELINE_DURATION } from './animTimeline';
+import { DEFAULT_CLIP_DURATION } from './animTimeline';
 import { createTemplate, type Template, type TemplateSlot } from './templates';
 
 /** Roadmap #21: tear down a short reference video into reusable *edit structure* —
@@ -133,32 +133,35 @@ export async function detectReferenceVideoStructure(filePath: string): Promise<R
 
 const FADE_IN = 0.1;
 
-function fadeTrack(): PropertyKeyframe[] {
+/** تلاشٍ من صفرٍ إلى واحد على طول مقطعٍ مدّتُه `fadeDuration` بالثواني. المفتاح
+ * يُخزَّن بالثواني الآن، فالنهايةُ هي المدّةُ نفسها لا الكسرُ `1`. */
+function fadeTrack(fadeDuration: number): PropertyKeyframe[] {
   const bezier = [...DEFAULT_BEZIER] as Bezier;
   return [
-    { id: newElementId('kf'), t: 0, value: 0, easing: 'linear', bezier },
-    { id: newElementId('kf'), t: 1, value: 1, easing: 'linear', bezier },
+    { id: newElementId('kf'), time: 0, value: 0, easing: 'linear', bezier },
+    { id: newElementId('kf'), time: fadeDuration, value: 1, easing: 'linear', bezier },
   ];
 }
 
 /** Builds the motion template's elements: one full-bleed image slot per detected
  * shot. Each slot's `anim.start` is the shot's own start time, linearly rescaled
- * from the reference video's real duration onto this app's fixed `TIMELINE_DURATION`
- * (every document/template shares one timeline length — see `animTimeline.ts` —
- * so a 3-30s reference video's cut *proportions* are preserved, not its absolute
- * seconds). A shot never needs its own "hide" track: elements are painted in array
+ * from the reference video's real duration onto `DEFAULT_CLIP_DURATION`, so a
+ * 3-30s reference video's cut *proportions* are preserved rather than its absolute
+ * seconds. والقالبُ يُؤلَّف عند طولٍ معلوم لا عند «طول الخطّ»: الطولُ صار مشتقًّا
+ * من مقاطع المستند، وهذا القالبُ هو ما يُنتج تلك المقاطع — فلو قرأ الطولَ المشتقّ
+ * لقرأ ناتجَ نفسه. ويبقى المصمّم يسحب الحافّات بعد ذلك فيصير الطولُ طولَه. A shot never needs its own "hide" track: elements are painted in array
  * order (see `createDefaultElements`), so shot N+1 fading in on top at its start
  * automatically covers shot N — exactly the hard-cut look a montage needs, using the
  * entrance-animation mechanism the engine already has rather than inventing a
  * parallel "clip visibility window" concept. The last shot simply stays visible
  * through the end of the timeline, same as any element with no later sibling. */
 export function buildReferenceVideoTemplate(name: string, structure: ReferenceVideoStructure, sizeIdx: number, customW: number, customH: number): Template {
-  const scale = structure.totalDuration > 0 ? TIMELINE_DURATION / structure.totalDuration : 1;
-  const scaledStarts = structure.shots.map((s) => Math.min(TIMELINE_DURATION - 0.01, s.start * scale));
+  const scale = structure.totalDuration > 0 ? DEFAULT_CLIP_DURATION / structure.totalDuration : 1;
+  const scaledStarts = structure.shots.map((s) => Math.min(DEFAULT_CLIP_DURATION - 0.01, s.start * scale));
 
   const elements: DocElement[] = structure.shots.map((_shot, i) => {
     const start = scaledStarts[i];
-    const nextStart = i + 1 < scaledStarts.length ? scaledStarts[i + 1] : TIMELINE_DURATION;
+    const nextStart = i + 1 < scaledStarts.length ? scaledStarts[i + 1] : DEFAULT_CLIP_DURATION;
     const fadeDuration = Math.max(0.02, Math.min(FADE_IN, (nextStart - start) * 0.3));
     const el: ImageElement = {
       id: newElementId('shot'),
@@ -183,10 +186,11 @@ export function buildReferenceVideoTemplate(name: string, structure: ReferenceVi
         preset: 'none',
         start,
         duration: fadeDuration,
+        sourceIn: 0,
         easing: 'linear',
         bezier: [...DEFAULT_BEZIER] as Bezier,
         keyframes: [],
-        tracks: { opacity: fadeTrack() },
+        tracks: { opacity: fadeTrack(fadeDuration) },
       },
     };
     return el;

@@ -6,7 +6,7 @@ import { firstSelectedElement, selectedElements, useStudio } from '../../state/S
 import { geoToPx } from '../../lib/geometry';
 import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
 import { ANIM_PROPERTIES, resolveTextColor } from '../../state/elements';
-import { keyframeAt, canKeyframeAtPlayhead } from '../../lib/animTimeline';
+import { keyframeAt } from '../../lib/animTimeline';
 import type { EasingId } from '../../lib/easing';
 import { EASE_LABEL_KEY } from '../timeline/EasingMenu';
 import { DEFAULT_MODEL_ID, downloadModel, getModelBytes, isModelDownloaded, modelById } from '../../lib/localModels';
@@ -282,20 +282,23 @@ function KeyframeToggleRow({ el }: { el: DocElement }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
       {ANIM_PROPERTIES.map((p: AnimProperty) => {
-        const kf = keyframeAt(el.anim, p, state.t);
-        // «عند المؤشّر» يجب أن تكون صادقة. المؤشّر بعد نهاية المقطع يَمُدّ المقطع
-        // ليصله؛ والمؤشّر **قبل** بدايته وحده هو ما لا يمكن خدمته بلا نقل لحظة البدء،
-        // فيُعطَّل الزرّ بسببٍ مكتوب بدل أن يُنزل المعيَّن على حافّة المقطع صامتًا
-        // (انظر `canKeyframeAtPlayhead` في `lib/animTimeline.ts`). وحذف مفتاحٍ قائم
-        // يبقى متاحًا دائمًا — فذاك لا يحتاج موضعًا جديدًا.
-        const outside = !kf && !canKeyframeAtPlayhead(el.anim, state.t);
+        // «عند المؤشّر» صادقةٌ الآن في كلّ موضعٍ بلا استثناء، فلم يبقَ لهذا الصفّ
+        // حالةُ تعطيل. وما كان يُعطِّله هو أنّ المؤشّر **قبل** بداية المقطع لا
+        // كسرَ له؛ وقد صار زمنَ حركةٍ سالبًا، وهو زمنٌ مشروع. فذهبت
+        // `canKeyframeAtPlayhead` و`disabled` و`kf_outside_clip` معًا — إزالةَ
+        // منعٍ لا تغطيةَ سطح.
+        //
+        // والهويّةُ الآن مقارنةُ رقمَي إطارٍ بمعدّل المستند، لا كسرٌ باعتدالِ
+        // ٠٫٠٢: وهذا هو العطل ٤ في `qa/motion-journey.spec.mjs` مُزالًا من جذره،
+        // فالماسةُ لا تستطيع أن تُبلِّغ عن مفتاحٍ ليس تحت المؤشّر.
+        const kf = keyframeAt(el.anim, p, state.t, state.fps);
         return (
           <button
             key={p}
             data-testid={`kf-toggle-${el.id}-${p}`}
-            disabled={outside}
+            data-keyed={kf ? 'true' : 'false'}
             onClick={() => (kf ? actions.deleteTrackKeyframe(el.id, p, kf.id) : actions.addTrackKeyframeAtPlayhead(el.id, p))}
-            title={outside ? L.kf_outside_clip : `${L[`prop_${p}` as keyof typeof L] as string} · ${L.add_keyframe}`}
+            title={`${L[`prop_${p}` as keyof typeof L] as string} · ${kf ? L.delete_keyframe : L.add_keyframe}`}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -308,8 +311,8 @@ function KeyframeToggleRow({ el }: { el: DocElement }) {
               color: kf ? 'var(--accent)' : 'var(--muted)',
               fontSize: 10.5,
               fontWeight: 600,
-              opacity: outside ? 0.4 : 1,
-              cursor: outside ? 'not-allowed' : 'pointer',
+              opacity: 1,
+              cursor: 'pointer',
             }}
           >
             <span style={{ width: 7, height: 7, transform: 'rotate(45deg)', background: kf ? 'var(--accent)' : 'transparent', border: `1.2px solid ${kf ? 'var(--accent)' : 'var(--muted)'}`, borderRadius: 1 }} />
@@ -1247,7 +1250,8 @@ function AutoCaptionsSection({ el }: { el: DocElement & { type: 'video' } }) {
       const samples = await extractAudioSamples(el);
       setPhase('transcribing');
       const segments = await transcribeAudio(samples);
-      const newEls = buildCaptionElements(segments);
+      // الحدُّ هو طولُ نافذة الفيديو المُفرَّغ نفسه، لا سقفُ محرّرٍ لم يبقَ له سقف.
+      const newEls = buildCaptionElements(segments, Math.max(0.1, el.trimOut - el.trimIn));
       if (newEls.length === 0) {
         setError(L.captions_none_found);
         setPhase('error');

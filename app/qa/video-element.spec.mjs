@@ -23,7 +23,17 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { bootDemo, resumeAfterReload } from './helpers/boot.mjs';
+// NOTE (video branch, phase 1): this spec drives surfaces that exist only on a
+// **timed** document — the timeline's ruler/clips, the transport, the video tool, or
+// MP4/GIF in the export dialog. The demo poster is 1080×1080, i.e. `SIZES[0]`, whose
+// `kind` is `'still'`, so it now opens without them: `DocSnapshot.medium` gates three
+// surfaces, which is the whole point of the phase — the start screen already asked
+// "image or video?" and the answer finally reaches the workspace instead of a badge.
+// `bootDemoTimed` opens the same demo document and then picks a timed destination
+// from the real artboard size menu, which is both the gesture a designer performs and
+// the reversibility `HomeScreen.tsx` promised when it declined a two-button gate.
+// See `qa/helpers/boot.mjs`.
+import { bootDemoTimed, resumeAfterReload } from './helpers/boot.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BASE_URL = 'http://localhost:1420';
@@ -78,7 +88,7 @@ async function main() {
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
 
-  await bootDemo(page, BASE_URL);
+  await bootDemoTimed(page, BASE_URL);
   const undoBtn = page.getByTitle('تراجع');
 
   // ============================================================

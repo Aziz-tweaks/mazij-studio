@@ -1,7 +1,7 @@
 import { homeDir, join } from '@tauri-apps/api/path';
 import { mkdir, remove, writeFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
-import { TIMELINE_DURATION } from './animTimeline';
+
 import { renderArtboardFrames, type ArtboardRenderSpec } from './exportArtboard';
 
 // Roadmap #23 — see docs/ROADMAP-PROGRESS.md "#23 — مواصفة تصدير الصورة الحية"
@@ -85,11 +85,13 @@ export async function exportLivePhoto(
   quality: 'high' | 'med',
   destBaseName: string,
   onProgress: (fraction: number) => void,
+  docDurationSeconds: number,
 ): Promise<LivePhotoResult> {
   const fps = LIVE_PHOTO_FPS;
   const duration = Math.min(LIVE_PHOTO_MAX_DURATION, Math.max(LIVE_PHOTO_MIN_DURATION, durationSeconds));
   const frameCount = Math.max(1, Math.round(duration * fps));
-  const windowStart = Math.min(Math.max(playheadTime - duration / 2, 0), Math.max(0, TIMELINE_DURATION - duration));
+  // نافذةُ الصورة الحيّة تُقتَطع من **طول المستند المشتقّ**، يُمرَّر لا يُفترَض.
+  const windowStart = Math.min(Math.max(playheadTime - duration / 2, 0), Math.max(0, docDurationSeconds - duration));
   const frameTimes = Array.from({ length: frameCount }, (_, i) => windowStart + i / fps);
   const stillIndex = Math.min(frameCount - 1, Math.max(0, Math.round((playheadTime - windowStart) * fps)));
   const stillRelativeTime = stillIndex / fps;

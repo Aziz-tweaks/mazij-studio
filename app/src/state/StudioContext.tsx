@@ -17,13 +17,13 @@ import { initialStudioState } from './types';
 // و`AnimPreset` من رحلة الفيديو (ربط الحركة بالعنصر المحدَّد)، و`withBaseLayerColor`
 // من رحلة البوست (تلوين الشكل عبر كومة المظهر لا عبر الحقل القديم). لا تعارض في
 // النيّة — ملفٌّ واحد التقت عليه ثلاثة فروع.
-import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, TextElement, TextStaggerAnim } from './elements';
+import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
 import { DEFAULT_IMAGE_CROP, cascadeEasingToTracks, defaultAnim, defaultTextStagger, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
 import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor } from '../lib/appearance';
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
-import { TIMELINE_DURATION, canKeyframeAtPlayhead, resolvePropertyAt, stretchClipToTime } from '../lib/animTimeline';
+import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, frameDuration, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
 import { fetchAndRegisterFont } from '../lib/loadFont';
 import type { PersistedArtboard, PersistedDoc } from '../lib/persist';
 import { loadDoc, saveDoc } from '../lib/persist';
@@ -62,18 +62,60 @@ import { loadApiKey } from '../lib/aiKeyStore';
  * `defaultAnim` rather than silently producing a one-keyframe, frozen track. */
 function withPreset(anim: ElementAnim, preset: AnimPreset): ElementAnim {
   const keyframes = anim.keyframes.length >= 2 ? anim.keyframes : defaultAnim(preset, anim.start, anim.duration, anim.easing).keyframes;
-  return { ...anim, preset, keyframes, tracks: tracksFromPreset(preset, keyframes, anim.easing, anim.bezier) };
+  return { ...anim, preset, keyframes, tracks: tracksFromPreset(preset, keyframes, anim.easing, anim.bezier, anim.duration) };
+}
+
+/** مفتاحٌ واحد من مستندٍ محفوظ، مرحَّلًا إن كان قديمًا.
+ *
+ * **والمُميِّزُ هو وجودُ الحقل لا قيمتُه، وهذا هو بيتُ القصيد في المرحلة كلّها.**
+ * الكسر `0.3` والثانية `0.3` رقمان لا يفترقان — فلا ترحيلَ قائمًا على القيمة يمكن
+ * أن يكون آمنًا، ولم يكن في `PersistedDoc` رقمُ نسخةٍ يُفرِّق. ولذلك أُعيد تسميةُ
+ * الحقل `t` → `time`: مفتاحٌ يحمل `time` جديدٌ فيُترك كما هو، ومفتاحٌ يحمل `t`
+ * ولا `time` قديمٌ فيُحوَّل — **ولا حالةَ لبسٍ أبدًا**، ولا في مستندٍ حفظه بناءٌ في
+ * منتصف الإصدار، ولا في مستندٍ مرّ على بناءٍ أقدم ثم رجع.
+ *
+ * والتحويلُ `time = sourceIn + t × duration`: تامٌّ، ومرّةٌ واحدة، وعكسُه ممكنٌ فعلًا
+ * لأنّ `duration` في السجلّ نفسه.
+ *
+ * ولا يقرأ هذا الكود النسخةَ ليقرّر: النسخةُ (`persist.ts`) تحمي من **الأحدث**،
+ * وهذا يحمي من **الأقدم**، وهما حاجتان مختلفتان. انظر `DOC_MIGRATIONS` هناك. */
+function migrateKeyframe(k: PropertyKeyframe | LegacyFractionKeyframe, sourceIn: number, duration: number): PropertyKeyframe {
+  if (typeof (k as PropertyKeyframe).time === 'number') return k as PropertyKeyframe;
+  const legacy = k as LegacyFractionKeyframe;
+  return {
+    id: legacy.id,
+    time: sourceIn + legacy.t * duration,
+    value: legacy.value,
+    easing: legacy.easing,
+    bezier: legacy.bezier,
+  };
+}
+
+function migrateTracks(tracks: PropertyTracks, sourceIn: number, duration: number): PropertyTracks {
+  const next: PropertyTracks = {};
+  for (const [prop, track] of Object.entries(tracks) as [AnimProperty, PropertyKeyframe[] | undefined][]) {
+    if (track) next[prop] = track.map((k) => migrateKeyframe(k, sourceIn, duration));
+  }
+  return next;
 }
 
 /** Documents saved before independent per-property tracks existed carry an `anim`
  * with only the legacy single `keyframes` track (or no `anim` at all). Synthesizes
  * `tracks` from the legacy preset/keyframes/easing so these load and render
  * pixel-identical to before — see `tracksFromPreset` for the exact per-preset
- * mapping. A no-op for any document that already has real tracks. */
+ * mapping.
+ *
+ * ويُرحِّل أيضًا زمنَ المفتاح من كسرٍ إلى ثوانٍ، ويُكمِل `sourceIn` بصفر — وهو
+ * موضعُ الترحيل الصحيح لأنّ هذه الدالّة تمرّ **على كلّ عنصرٍ في كلّ تحميل** عبر
+ * `normalizeDoc`، فلا بابَ خلفيًّا يتسلّل منه مستندٌ غير مرحَّل. */
 function migrateAnim(anim: ElementAnim | undefined): ElementAnim {
   const a = anim ?? defaultAnim('none', 0, 0.6);
-  if (a.tracks && Object.keys(a.tracks).length) return a;
-  return { ...a, tracks: tracksFromPreset(a.preset, a.keyframes, a.easing, a.bezier) };
+  // مستندٌ محفوظ قبل أن يوجد `sourceIn` لم يُقلَّم قطُّ — فأصلُ زمنه بدايتُه، أي صفر.
+  const sourceIn = typeof a.sourceIn === 'number' ? a.sourceIn : 0;
+  if (a.tracks && Object.keys(a.tracks).length) {
+    return { ...a, sourceIn, tracks: migrateTracks(a.tracks, sourceIn, a.duration) };
+  }
+  return { ...a, sourceIn, tracks: tracksFromPreset(a.preset, a.keyframes, a.easing, a.bezier, a.duration) };
 }
 
 /** Documents saved before the char/word/line text-stagger layer (roadmap #6) existed
@@ -97,6 +139,14 @@ function normalizeDoc(doc: DocSnapshot): DocSnapshot {
     // حُفِظ بها بالضبط — «ترحيل بلا فقد» — ومن بعدها يصير المفتاح هو المرجع
     // الوحيد، فلا تبقى قاعدتان تتنازعان الجواب.
     decorAccent: doc.decorAccent ?? doc.elements.length > 0,
+    // ٣٠ إطارًا لكل مستندٍ محفوظٍ قبل أن يصير المعدّل حقلًا — وهو ما كان
+    // `FRAME = 1/30` المثبَّت يفترضه عليه ضمنًا، فالمستند يُفتَح بالصورة التي
+    // حُفِظ بها بالضبط.
+    fps: doc.fps ?? DEFAULT_DOC_FPS,
+    // والطبيعةُ تُشتَقّ من الوجهة إن غابت — لا تُخمَّن ولا تُسأل من جديد. الوجهةُ
+    // هي التي تحملها أصلًا (`SizePreset.kind`)، فهذا السطر يستكمل ذاكرةَ جوابٍ
+    // موجودٍ سلفًا في المستند، لا يختلق جوابًا ثانيًا.
+    medium: doc.medium ?? sizeAt(doc.sizeIdx, doc.customW || 1080, doc.customH || 1080).kind,
     elements: doc.elements.map((e) => ({
       ...e,
       anim: migrateAnim(e.anim),
@@ -182,7 +232,29 @@ function leaveInsertLibrary(s: StudioState): { panel?: PanelId } {
 }
 
 function docOf(s: StudioState): DocSnapshot {
-  return { elements: s.elements, anim: s.anim, sizeIdx: s.sizeIdx, customW: s.customW, customH: s.customH, decorAccent: s.decorAccent };
+  return { elements: s.elements, anim: s.anim, sizeIdx: s.sizeIdx, customW: s.customW, customH: s.customH, decorAccent: s.decorAccent, fps: s.fps, medium: s.medium };
+}
+
+/** تبديلُ مقاسٍ، ومعه إعادةُ اشتقاق الطبيعة.
+ *
+ * دالّةٌ واحدة يمرّ بها كلُّ مسارِ تبديلٍ (`setSizeIdx`، `cycleSize`،
+ * `setCustomSize`، «التحجيم الذكي»)، فلا يبقى بابٌ يُبدِّل المقاس ويُخلِّف
+ * `medium` يقول شيئًا آخر. وهذا هو الردُّ العمليّ على الاعتراض المكتوب في
+ * `src/data/constants.ts` على وجود الحقل في المستند: الحقلُ لا يُنازع المقاس
+ * لأنه لا يُكتَب إلا منه.
+ *
+ * **والمقاسُ المخصّص حالةٌ خاصّة، وهي حالةٌ وجدناها بالقياس.** `sizeAt` تُعيد
+ * للمخصّص `kind: 'still'` بتعليقٍ مكتوبٍ يقول إنّ المستخدم «كتب رقمَين ولم
+ * يُسمِّ وجهة»، وإنّ ذلك **ليس حصرًا** لأنّ «الخطّ الزمني متاح دائمًا».
+ * والشطرُ الأخير صار كاذبًا في اللحظة التي صار فيها `medium` حاملَ حِمل: من كتب
+ * ١٠٨٠×١٩٢٠ بيده على مقطعٍ قائم كان سيَفقد خطَّه الزمنيَّ بلا أيّ إعلان.
+ *
+ * فالمخصّصُ **يُبقي الجوابَ القائم** ولا يَفرض `still`: المستخدم بدَّل أبعادًا لا
+ * وجهةً، فطبيعةُ المستند لا تتغيّر بذلك. ومن أرادها أن تتغيّر اختار وجهةً
+ * مُسمّاةً، وهي تقلبها في اللحظة. (ومستندٌ **جديد** بمقاسٍ مخصّص لا جوابَ سابقَ
+ * له، فهو `still` كما تقول `sizeAt` — انظر `startBlankCustom`.) */
+function withDerivedMedium(sizeIdx: number, customW: number, customH: number, current: DocSnapshot['medium']): Pick<DocSnapshot, 'sizeIdx' | 'customW' | 'customH' | 'medium'> {
+  return { sizeIdx, customW, customH, medium: sizeIdx === CUSTOM_SIZE_IDX ? current : sizeAt(sizeIdx, customW, customH).kind };
 }
 
 function defaultArtboardName(n: number, lang: StudioState['lang']): string {
@@ -246,10 +318,9 @@ function migrateToDocFile(raw: unknown, lang: StudioState['lang']): LoadedDocFil
 /** أوّل لحظةٍ على الخط الزمني تكون فيها كل حركات الدخول قد انتهت — أي نهاية أطول
  * مقطع. مستندٌ بلا عناصر (أو بلا حركة) يُعيد صفرًا، وهو المطلوب لمشروعٍ جديد: المؤشّر
  * عند البداية حيث يتوقّع المصمّم أن يبدأ. */
-function settledTime(elements: DocElement[]): number {
-  let t = 0;
-  for (const el of elements) t = Math.max(t, el.anim.start + el.anim.duration);
-  return Math.min(TIMELINE_DURATION, t);
+function settledTime(elements: DocElement[], fps: number): number {
+  if (!elements.length) return 0;
+  return documentDuration(elements.map((el) => el.anim), fps);
 }
 
 function startDoc(s: StudioState, doc: DocSnapshot, opts?: { paletteIdx?: number; sel?: ElementId | null }): StudioState {
@@ -280,7 +351,7 @@ function startDoc(s: StudioState, doc: DocSnapshot, opts?: { paletteIdx?: number
     // جاهز فعناصره عند اللحظة صفر تكون في **منتصف** دخولها (شفافية صفر وإزاحة
     // قائمة)، فيُفتَح القالب على إطارٍ شبه فارغ لا يشبه ما اختاره المستخدم من
     // المعرض. المطلوب أن يُفتَح القالب على *القالب*: أول لحظةٍ استقرّ فيها كل شيء.
-    t: settledTime(doc.elements),
+    t: settledTime(doc.elements, doc.fps ?? DEFAULT_DOC_FPS),
     cmdOpen: false,
     // صار هناك مشروعٌ مفتوح: شاشة البداية تعرض «متابعة» من الآن، وتصفه من
     // الحالة الحيّة — فالرجوع للشاشة ثم النقر على المتابعة يعود إلى *هذا*.
@@ -747,6 +818,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         // الافتراضيّة بصمت عند أوّل إعادة تحميل. وقد وقع ذلك بعينه في هذه الدفعة:
         // اختيارُ الزخرفة كان يُحفَظ على القرص فعلًا ثم يُطرَح عند القراءة.
         decorAccent: active.doc.decorAccent,
+        // والحقلان الجديدان على القائمة نفسها. والتعليقُ أعلاه ليس تحذيرًا نظريًّا:
+        // سَهوُهما هنا أخفى الخطَّ الزمنيَّ عن كلّ مستندٍ مُوقَّتٍ بعد أوّل إعادة
+        // تحميل — إذ يَرجع `medium` إلى `'still'` من الحالة الابتدائية بصمت.
+        // ظهر ذلك في `qa/timeline.spec.mjs` §٦ وحدها، وتكرّر، فأُصلِح هنا.
+        fps: active.doc.fps,
+        medium: active.doc.medium,
         historyPast: [],
         historyFuture: [],
         dirty: false,
@@ -825,7 +902,19 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const now = performance.now();
       const dt = (now - last) / 1000;
       last = now;
-      patch((cur) => ({ t: cur.t + dt >= TIMELINE_DURATION ? 0 : cur.t + dt }));
+      // يلتفّ عند نهاية **المدى المعروض** لا عند سقفٍ مثبَّت. ولِمَ المدى لا طولُ
+      // المستند: المؤشّر يستطيع أن يقف في أيّ موضعٍ على المسطرة، فلو التفّ التشغيلُ
+      // عند طولِ مستندٍ أقصرَ من المسطرة لكان ضغطُ «تشغيل» والمؤشّرُ في ذلك الفراغ
+      // يَقفز إلى الصفر فورًا — مؤشّرٌ يَقِف حيث يرفض التشغيلُ أن يصل. والفراغُ
+      // نفسُه **مُعلَنٌ لا مكتوم**: `Timeline` يُظلِّل ما بعد طولِ المستند ويقول في
+      // تلميحه إنه خارج الملفّ المُصدَّر.
+      //
+      // والمدّةُ تُحتَسب من `cur` نفسها، فلا تجمد على ما كانت عليه لحظةَ بدء
+      // التشغيل لو عُدِّل مقطعٌ أثناءه.
+      patch((cur) => {
+        const end = timelineSpan(documentDuration(cur.elements.map((el) => el.anim), cur.fps));
+        return { t: cur.t + dt >= end ? 0 : cur.t + dt };
+      });
     }, 16);
     tickRef.current = id;
     return () => {
@@ -843,7 +932,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const togglePlay = useCallback(() => {
     setState((s) => {
       if (s.playing) return { ...s, playing: false };
-      const atEnd = s.t >= TIMELINE_DURATION - 1 / 60;
+      const atEnd = s.t >= timelineSpan(documentDuration(s.elements.map((el) => el.anim), s.fps)) - frameDuration(s.fps);
       return { ...s, playing: true, t: atEnd ? 0 : s.t };
     });
   }, []);
@@ -997,6 +1086,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               decorAccent: ab.doc.decorAccent,
             };
 
+            // **طولُ هذه اللوحة بعينها**، مشتقًّا من مقاطعها. كلُّ لوحةٍ في مشروعٍ
+            // متعدّد اللوحات تملك طولها، فقراءةُ طولِ النشطة للكلّ كانت ستُصدِّر
+            // لوحةً بطولِ أخرى.
+            const abDuration = documentDuration(ab.doc.elements.map((el) => el.anim), ab.doc.fps ?? DEFAULT_DOC_FPS);
             let path: string;
             let pairedMovPath: string | undefined;
             if (isLivePhoto) {
@@ -1008,6 +1101,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
                 state.exportQuality,
                 `mazij-livephoto-${resultId}-${Date.now()}`,
                 (fraction) => patch({ exportProgress: ((step + fraction) / totalSteps) * 100 }),
+                abDuration,
               );
               // Reveal-folder/result-list plumbing below only carries one path per
               // target — the still JPEG's containing folder also holds the paired
@@ -1024,7 +1118,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               path = await exportVideoTarget(
                 // الفيديو بدقّة اللوحة نفسها — انظر `effectiveExportScale`.
                 { ...common, scale: effectiveExportScale(fmt, state.exportScale), transparent: fmt === 'gif' && state.exportTransparent },
-                { format: fmt, fps: state.exportFps, quality: state.exportQuality, transparent: fmt === 'gif' && state.exportTransparent },
+                { format: fmt, fps: state.exportFps, quality: state.exportQuality, transparent: fmt === 'gif' && state.exportTransparent, durationSeconds: abDuration },
                 `mazij-${resultId}-${Date.now()}.${fmt}`,
                 (fraction) => patch({ exportProgress: ((step + fraction) / totalSteps) * 100 }),
               );
@@ -1519,7 +1613,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     () => ({
       goHome: () => patch({ screen: 'home', cmdOpen: false }),
       goEditor: () => patch({ screen: 'editor' }),
-      startBlank: (sizeIdx) => setState((s) => startDoc(s, { elements: [], anim: 'none', sizeIdx, customW: s.customW, customH: s.customH, decorAccent: false })),
+      // **يقرأ طبيعةَ الوجهة ويكتبها.** كان مُعالِجًا واحدًا للوسيطَين لا يقرأ
+      // `SIZES[sizeIdx].kind` إطلاقًا، فمن اختار «ريل إنستقرام» **أجاب** «فيديو»
+      // ثم تسلّم نفسَ لوح الخصائص ونفسَ الشريط ونفسَ الخطّ الزمنيّ المفتوح دائمًا
+      // وشارةً تقول «فيديو · ٥ث». السؤال كان مطروحًا والجوابُ يصل إلى لافتة.
+      startBlank: (sizeIdx) =>
+        setState((s) => startDoc(s, { elements: [], anim: 'none', sizeIdx, customW: s.customW, customH: s.customH, decorAccent: false, fps: DEFAULT_DOC_FPS, medium: sizeAt(sizeIdx, s.customW, s.customH).kind })),
       startBlankCustom: (w, h) =>
         setState((s) =>
           startDoc(s, {
@@ -1529,6 +1628,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             customW: Math.max(1, Math.round(w)),
             customH: Math.max(1, Math.round(h)),
             decorAccent: false,
+            fps: DEFAULT_DOC_FPS,
+            // مقاسٌ مخصّص لا طبيعةَ له: كتب المستخدم رقمَين ولم يُسمِّ وجهة، فهو
+            // `still` كما تقول `sizeAt`. وليس حصرًا: تبديلُ المقاس إلى وجهةٍ
+            // مُوقَّتة يقلبه في أيّ لحظة.
+            medium: sizeAt(CUSTOM_SIZE_IDX, w, h).kind,
           }),
         ),
       startFromStarter: (id) =>
@@ -1537,7 +1641,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           if (!tpl) return s;
           return startDoc(
             s,
-            { elements: tpl.elements(), anim: tpl.anim, sizeIdx: tpl.sizeIdx, customW: s.customW, customH: s.customH, decorAccent: tpl.decorAccent },
+            { elements: tpl.elements(), anim: tpl.anim, sizeIdx: tpl.sizeIdx, customW: s.customW, customH: s.customH, decorAccent: tpl.decorAccent, fps: DEFAULT_DOC_FPS, medium: sizeAt(tpl.sizeIdx, s.customW, s.customH).kind },
             { paletteIdx: tpl.paletteIdx, sel: tpl.selectOnOpen },
           );
         }),
@@ -1599,10 +1703,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setAssetsTab: (assetsTab) => patch({ assetsTab }),
       toggleTimeline: () => patch((s) => ({ tlOpen: !s.tlOpen })),
       togglePlay,
-      scrubTo: (t) => patch({ t: clamp(t, 0, 1) * TIMELINE_DURATION }),
-      cycleSize: () => patchDoc((s) => ({ sizeIdx: (s.sizeIdx + 1) % SIZES.length })),
-      setSizeIdx: (sizeIdx) => patchDoc({ sizeIdx }),
-      setCustomSize: (w, h) => patchDoc({ sizeIdx: CUSTOM_SIZE_IDX, customW: Math.max(1, Math.round(w)), customH: Math.max(1, Math.round(h)) }),
+      // **بالثواني لا بكسرٍ من ٠ إلى ١.** كانت `clamp(t, 0, 1) * TIMELINE_DURATION`،
+      // أي أنّ كلّ مُنادٍ كان عليه أن يعرف طول الخطّ ليحوّل موضعَ مؤشّرٍ إلى كسر —
+      // ومع مدّةٍ مشتقّة لم يبقَ طولٌ واحدٌ يعرفه الجميع. والحجزُ هنا إلى **مدى
+      // المسطرة** لا إلى طول المستند، فيمكن للمؤشّر أن يقف في الفراغ الذي سيُسحَب
+      // إليه مقطع.
+      scrubTo: (seconds) =>
+        patch((s) => ({
+          t: clamp(seconds, 0, timelineSpan(documentDuration(s.elements.map((el) => el.anim), s.fps))),
+        })),
+      // كلُّ تبديلِ مقاسٍ يُعيد اشتقاق الطبيعة. وهذا هو ما يجعل جواب «صورة أم
+      // فيديو» **قابلًا للتراجع**: لا بدءَ من جديد، ولا إعادةَ تحميل — ولا حقلًا
+      // يبقى يقول «فيديو» على بوسترٍ مربّع. انظر `DocSnapshot.medium`.
+      cycleSize: () => patchDoc((s) => withDerivedMedium((s.sizeIdx + 1) % SIZES.length, s.customW, s.customH, s.medium)),
+      setSizeIdx: (sizeIdx) => patchDoc((s) => withDerivedMedium(sizeIdx, s.customW, s.customH, s.medium)),
+      setCustomSize: (w, h) => patchDoc((s) => withDerivedMedium(CUSTOM_SIZE_IDX, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), s.medium)),
       setMagicResizeOn: (magicResizeOn) => patch({ magicResizeOn }),
       // Roadmap #8: same "one undo step for the whole action" shape as `patchDoc`
       // (push the pre-change doc once, update doc fields + elements together) but
@@ -1616,9 +1731,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return {
             ...s,
             elements,
-            sizeIdx,
-            customW: sizeIdx === CUSTOM_SIZE_IDX ? to.w : s.customW,
-            customH: sizeIdx === CUSTOM_SIZE_IDX ? to.h : s.customH,
+            // «التحجيم الذكي» بابٌ رابعٌ لتبديل المقاس، فيمرّ بالمُشتِقّ نفسه —
+            // وإلّا صار المستند مُوقَّتًا في الحقل وساكنًا في المقاس.
+            ...withDerivedMedium(sizeIdx, sizeIdx === CUSTOM_SIZE_IDX ? to.w : s.customW, sizeIdx === CUSTOM_SIZE_IDX ? to.h : s.customH, s.medium),
             historyPast: [...s.historyPast, docOf(s)],
             historyFuture: [],
             dirty: true,
@@ -1662,7 +1777,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         setState((s) => {
           const newId = newArtboardId();
           const name = defaultArtboardName(s.artboards.length + 1, s.lang);
-          const newDoc: DocSnapshot = { elements: [], anim: 'none', sizeIdx: s.sizeIdx, customW: s.customW, customH: s.customH, decorAccent: false };
+          // لوحةٌ جديدة بمقاس النشطة، فطبيعتُها طبيعتُها ومعدّلُها معدّلُها.
+          const newDoc: DocSnapshot = { elements: [], anim: 'none', sizeIdx: s.sizeIdx, customW: s.customW, customH: s.customH, decorAccent: false, fps: s.fps, medium: s.medium };
           const outgoing: ArtboardDoc = { doc: docOf(s), historyPast: s.historyPast, historyFuture: s.historyFuture };
           return {
             ...s,
@@ -1754,35 +1870,31 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       addTrackKeyframeAtPlayhead: (id, property) =>
         setState((s) => {
           const el = s.elements.find((e) => e.id === id);
-          if (!el || el.anim.duration <= 0) return s;
-          // «مفتاح عند المؤشّر» يجب أن تعني عند المؤشّر. كان `clamp(…, 0, 1)` أدناه
-          // يَحجِز الزمن المحلّي، فإذا كان المؤشّر بعد نهاية المقطع هبط المعيَّن على
-          // حافّة المقطع لا تحت المؤشّر: قياسٌ فعلي على مقطع 0→0.6ث والمؤشّر عند
-          // 2.2ث (وهو الموضع الافتراضي السابق للمؤشّر) أنزل المعيَّن عند 12% من
-          // المسطرة والمؤشّر عند 44% — فرقُ ١٫٦ ثانية، بلا أي رسالة.
+          if (!el) return s;
+          // «مفتاح عند المؤشّر» تعني عند المؤشّر، وهي الآن تعنيه دائمًا بلا شرط.
           //
-          // العلاج أن يُمَدّ المقطع ليصل المؤشّر (`stretchClipToTime`)، لا أن يُرفض
-          // الطلب: هذا ما يقصده المصمّم، وهو **مرئي** (يَعرض المقطع فيزداد عرضه على
-          // الخط الزمني) وبلا أثر جانبي على ما ضبطه سابقًا (المفاتيح القائمة تُعاد
-          // معايرة كسورها فتبقى في أزمانها المطلقة نفسها). أما المؤشّر **قبل** بداية
-          // المقطع فلا يُخدَم: تغطيته تعني نقل `start`، أي تغيير لحظة بدء الحركة بلا
-          // طلب — ولذلك يُعطَّل الزرّ هناك بسببٍ مكتوب (`kf_outside_clip`).
-          if (!canKeyframeAtPlayhead(el.anim, s.t)) return s;
-          const anim = stretchClipToTime(el.anim, s.t);
-          const localT = clamp((s.t - anim.start) / anim.duration, 0, 1);
-          // القيمة تُقرأ من المقطع **قبل** التمديد: هي ما يراه المصمّم على الشاشة في
-          // هذه اللحظة بعينها، فلا تُحدِث إضافةُ المفتاح أي قفزة بصرية. (والتمديد
-          // يحفظ الأزمنة المطلقة فالقيمتان متساويتان رياضيًا، لكن يبقى المصدر الأصل.)
+          // وما حُذِف من هنا ثلاثةُ أشياء، وكلُّها كانت أعراضًا للكسر لا عللًا:
+          //
+          // ١. `canKeyframeAtPlayhead`. كان مؤشّرٌ **قبل** بداية المقطع يُرفَض بسببٍ
+          //    مكتوب، لأنّ كسرًا سالبًا لا معنى له. ومفتاحٌ قبل البداية الآن زمنُ
+          //    حركةٍ سالب، وهو زمنٌ مشروع تمامًا — فلا سببَ للرفض، ولا زرَّ معطَّلًا.
+          // ٢. `stretchClipToTime`. كان مؤشّرٌ **بعد** النهاية يَمُدّ المقطع ويُعيد
+          //    معايرة كلّ كسرٍ فيه كي لا يتزحزح ما هو في مكانه. والآن لا شيء
+          //    يتزحزح أصلًا، فلا شيءَ يُعاد.
+          // ٣. `EPS = 0.02`. كان لازمًا لأنّ الكسر متّصلٌ لا يقع على شيء. وقد صار
+          //    يقع: المفتاح على إطارٍ بعينه، والهويّةُ مقارنةُ إطارين.
+          //
+          // والقيمةُ تُقرأ **قبل** الكتابة: هي ما يراه المصمّم على الشاشة في هذه
+          // اللحظة بعينها، فلا تُحدِث إضافةُ المفتاح أيّ قفزةٍ بصرية.
           const value = resolvePropertyAt(el.anim, property, s.t);
-          const track = anim.tracks[property] ?? [];
-          const EPS = 0.02;
-          const existing = track.find((k) => Math.abs(k.t - localT) < EPS);
-          const nextTrack = existing
-            ? track.map((k) => (k.id === existing.id ? { ...k, value } : k))
-            : [...track, { id: newElementId('kf'), t: localT, value, easing: 'easeOut' as EasingId, bezier: [...DEFAULT_BEZIER] as Bezier }];
+          const time = snapToFrame(animTimeAt(el.anim, s.t), s.fps);
+          const key: PropertyKeyframe = { id: newElementId('kf'), time, value, easing: 'easeOut' as EasingId, bezier: [...DEFAULT_BEZIER] as Bezier };
+          // قُمعُ الكتابة الواحد — انظر `setKeyframe`. وهو نفسه الذي يَكتب سحبُ
+          // الماسة في `Clip.tsx`، فلا يبقى مسارانِ يختلفان في معالجة التصادم.
+          const nextTrack = setKeyframe(el.anim.tracks[property], key);
           return {
             ...s,
-            elements: s.elements.map((e) => (e.id === id ? { ...e, anim: { ...anim, tracks: { ...anim.tracks, [property]: nextTrack } } } : e)),
+            elements: s.elements.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, tracks: { ...e.anim.tracks, [property]: nextTrack } } } : e)),
             historyPast: [...s.historyPast, docOf(s)],
             historyFuture: [],
             dirty: true,
@@ -2791,9 +2903,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           sel: null,
           anim: 'none',
           decorAccent: false,
-          sizeIdx: opts?.sizeIdx ?? s.sizeIdx,
-          customW: opts?.customW ?? s.customW,
-          customH: opts?.customH ?? s.customH,
+          // «مستندٌ جديد» بابٌ خامسٌ لتبديل المقاس، فيمرّ بالمُشتِقّ نفسه.
+          ...withDerivedMedium(opts?.sizeIdx ?? s.sizeIdx, opts?.customW ?? s.customW, opts?.customH ?? s.customH, s.medium),
+          fps: s.fps,
           historyPast: [...s.historyPast, docOf(s)],
           historyFuture: [],
           dirty: true,

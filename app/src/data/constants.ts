@@ -77,6 +77,20 @@ export const START_FORMATS: string[] = [
  * sites that need to resolve the *current* size (including custom) use `sizeAt`. */
 export const CUSTOM_SIZE_IDX = -1;
 
+/** شارةُ الطبيعة: أيقونتُها ومفتاحُ لافتتها وهل تَحمل مدّة.
+ *
+ * **جدولٌ لا شرط، وهذا مقصود.** عرضُ الطبيعة ليس تفرّعًا في السلوك: الأسطحُ الثلاثة
+ * التي يتفرّع عليها `medium` فعلًا — وجودُ الخطّ الزمنيّ، وقائمةُ الشريط، ووجهاتُ
+ * التصدير — معدودةٌ ومُقيَّدة (المعيار A8)، وبطاقةُ المقاس وشارةُ الخطّ ليستا منها:
+ * هما تَقرآن الجوابَ وتطبعانه. وجدولٌ مكتوبٌ بـ`Record<SizeMedium, …>` هو الشكلُ
+ * الصحيح لذلك — وهو الشكلُ نفسه الذي تَلبسه `FPS_OPTIONS` و`DEFAULT_FPS` أدناه —
+ * وله خصلةٌ لا يملكها الشرط: إضافةُ طبيعةٍ ثالثةٍ تصير **خطأً في الترجمة** عند كلّ
+ * قارئ، لا شرطًا منسيًّا في موضع. */
+export const MEDIUM_CHIP: Record<SizeMedium, { icon: string; labelKey: 'h_still' | 'h_timed'; showsDuration: boolean }> = {
+  still: { icon: 'image', labelKey: 'h_still', showsDuration: false },
+  timed: { icon: 'video', labelKey: 'h_timed', showsDuration: true },
+};
+
 export function sizeAt(sizeIdx: number, customW: number, customH: number): SizePreset {
   // مقاس مخصّص لا طبيعةَ له: المستخدم كتب رقمين ولم يسمِّ وجهة. نردّه `still` لأنها
   // الحالة الأرخص (لا نفترض مدةً لم يطلبها)، وليس هذا حصرًا عليه: الخط الزمني متاح

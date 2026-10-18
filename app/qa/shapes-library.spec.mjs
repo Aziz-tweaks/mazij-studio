@@ -22,7 +22,7 @@
 //
 // Run: node qa/shapes-library.spec.mjs   (dev server must be running on :1420)
 import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
-import { bootDemo } from './helpers/boot.mjs';
+import { bootDemo, switchToTimed } from './helpers/boot.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || process.env.MAZIJ_URL || 'http://localhost:1420';
 let pass = 0;
@@ -214,6 +214,15 @@ async function main() {
   // image / lottie / video open a file picker on click — about the most unmistakable
   // response a button can give — so they must NOT be handed a «قريبًا» panel that
   // buries the Design panel behind it.
+  //
+  // «فيديو» is one of the two rail destinations that belong to a **timed** document
+  // (`DocSnapshot.medium`, video branch phase 1): a square poster is not a video's
+  // destination, so the button is not offered there — and comes back the instant the
+  // document says it is video. That is said here with the real size menu rather than
+  // assumed, and it is not «قريبًا» over anything: the tool is fully built, it is
+  // simply out of place on a still. The geometry assertions above deliberately ran
+  // first, on the default 1080×1080 artboard they are about.
+  await switchToTimed(page);
   for (const tool of ['image', 'lottie', 'video']) {
     await page.locator(`[data-tool="${tool}"]`).click();
     await page.waitForTimeout(90);
@@ -221,6 +230,13 @@ async function main() {
     const panelText = (await page.locator('[data-panel-tab="props"]').evaluate((b) => b.closest('div').parentElement.parentElement.innerText)) ?? '';
     assert(panelText.trim().length > 20, `"${tool}": the panel still shows real content rather than going blank (${panelText.trim().length} chars)`);
   }
+  // …and back to the square poster, because `SIZES_UNDER_TEST`'s first entry is
+  // «whatever the document currently is, which is 1080×1080». Reversing it is one
+  // gesture, which is the whole argument for a filter over a gate.
+  await page.locator('[data-testid="size-menu-button"]').click();
+  await page.waitForSelector('[data-testid="size-menu"]');
+  await page.locator('[data-testid="size-option-ig"]').click();
+  await page.waitForTimeout(220);
 
   // The pen is the sharpest case, and it caught a real regression during this work:
   // its controls live in the Design panel gated on the ACTIVE TOOL

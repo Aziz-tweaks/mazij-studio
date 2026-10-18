@@ -95,7 +95,10 @@ function MediumBadge({ kind, label }: { kind: 'still' | 'timed'; label: string }
 export function HomeScreen() {
   const { state, actions, dict: L } = useStudio();
   const [query, setQuery] = useState('');
-  const [medium, setMedium] = useState<MediumFilter>('all');
+  // مُرشِّحُ شاشة البداية، وهو **كمّيةٌ أخرى** غير `DocSnapshot.medium`: هذا حالةُ
+  // عرضٍ محليّةٌ تُضيّق قائمةً واحدة، وذاك صفةُ مستندٍ تُحفَظ ويتفرّع عليها ثلاثةُ
+  // أسطح. والاسمُ مُفرَّقٌ صراحةً كي لا يَخلِط بينهما قارئٌ ولا `grep`.
+  const [mediumFilter, setMediumFilter] = useState<MediumFilter>('all');
   const [customW, setCustomW] = useState(state.customW);
   const [customH, setCustomH] = useState(state.customH);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -114,9 +117,9 @@ export function HomeScreen() {
     () =>
       START_FORMATS.map((id) => ({ idx: sizeIdxOf(id), z: SIZES[sizeIdxOf(id)] }))
         .filter((r) => r.idx >= 0 && r.z)
-        .filter((r) => (medium === 'all' ? true : r.z.kind === medium))
+        .filter((r) => (mediumFilter === 'all' ? true : r.z.kind === mediumFilter))
         .filter((r) => matches(r.z, query)),
-    [query, medium],
+    [query, mediumFilter],
   );
 
   // تفاصيل بطاقة المتابعة من **الحالة الحيّة**، لا من لقطةٍ تُؤخَذ عند الإقلاع:
@@ -308,14 +311,14 @@ export function HomeScreen() {
               انظر التعليق الطويل في رأس الملف. */}
           <div data-testid="medium-filter" role="tablist" style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 'var(--rs)', background: 'var(--surface2)', alignSelf: 'flex-start' }}>
             {mediumTabs.map((t) => {
-              const on = medium === t.id;
+              const on = mediumFilter === t.id;
               return (
                 <button
                   key={t.id}
                   role="tab"
                   aria-selected={on}
                   data-testid={`medium-tab-${t.id}`}
-                  onClick={() => setMedium(t.id)}
+                  onClick={() => setMediumFilter(t.id)}
                   style={{
                     height: 30,
                     padding: '0 16px',

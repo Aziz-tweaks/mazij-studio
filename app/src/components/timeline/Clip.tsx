@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import type { AnimProperty, DocElement } from '../../state/elements';
 import { ANIM_PROPERTIES } from '../../state/elements';
-import { TIMELINE_DURATION, MIN_CLIP_DURATION, canKeyframeAtPlayhead } from '../../lib/animTimeline';
+import { animTimeAt, documentDuration, frameDuration, setKeyframe, snapToFrame, timelineSpan, timelineTimeOf } from '../../lib/animTimeline';
 import { clamp } from '../../data/constants';
 import { useStudio } from '../../state/StudioContext';
 
@@ -40,13 +40,15 @@ export function Clip({ el, color, expanded, selectedKf, onSelectKf }: ClipProps)
   const { state, actions, dict: L } = useStudio();
   const rowRef = useRef<HTMLDivElement>(null);
   const anim = el.anim;
-  // زرّ «+» يضيف مفتاحًا **عند المؤشّر**: إن كان المؤشّر بعد نهاية المقطع مُدَّ المقطع
-  // ليصله (بلا إزاحة أي مفتاح قائم عن زمنه المطلق)، وإن كان **قبل** بدايته فلا سبيل
-  // إلى ذلك إلا بنقل لحظة البدء — فيُعطَّل الزرّ بسببٍ مكتوب. وهو نفس المُسنَد الذي
-  // يَفحصه `addTrackKeyframeAtPlayhead`، فلا يختلف المعطَّل عن المرفوض.
-  const canKeyframeHere = canKeyframeAtPlayhead(anim, state.t);
-  const leftPct = (anim.start / TIMELINE_DURATION) * 100;
-  const widthPct = (anim.duration / TIMELINE_DURATION) * 100;
+  // زرّ «+» لم يبقَ له حالةُ تعطيل. كان يُعطَّل إذا كان المؤشّر **قبل** بداية
+  // المقطع، لأنّ كسرًا سالبًا لا معنى له؛ ومفتاحٌ قبل البداية الآن زمنُ حركةٍ سالب
+  // وهو مشروع. فسقطت `canKeyframeAtPlayhead` و`disabled` و`kf_outside_clip` معه —
+  // **وهذا ليس تغطيةً لسطحٍ معطوب بل إزالةُ منعٍ لم يبقَ له سبب**: الزرّ يعمل في
+  // كلّ موضعٍ الآن، ولم يُستبدَل تعطيلُه بصمتٍ ولا بـ«قريبًا».
+  const span = timelineSpan(documentDuration(state.elements.map((e) => e.anim), state.fps));
+  const frame = frameDuration(state.fps);
+  const leftPct = (anim.start / span) * 100;
+  const widthPct = (anim.duration / span) * 100;
 
   const startGesture = (kind: GestureKind, property: AnimProperty, kfId: string | undefined, e: React.PointerEvent) => {
     e.stopPropagation();
@@ -58,38 +60,49 @@ export function Clip({ el, color, expanded, selectedKf, onSelectKf }: ClipProps)
     const startStart = anim.start;
     const startDuration = anim.duration;
     const startKf = kfId ? anim.tracks[property]?.find((k) => k.id === kfId) : undefined;
-    const startKfT = startKf?.t ?? 0;
+    const startKfTime = startKf?.time ?? 0;
     if (kind === 'kf' && kfId) onSelectKf({ elId: el.id, property, kfId });
     let moved = false;
     actions.beginElementEdit();
     (e.target as Element).setPointerCapture(e.pointerId);
 
     const move = (ev: PointerEvent) => {
-      const deltaSec = ((ev.clientX - startClientX) / rectWidth) * TIMELINE_DURATION;
+      const deltaSec = ((ev.clientX - startClientX) / rectWidth) * span;
       if (Math.abs(ev.clientX - startClientX) > 2) moved = true;
       actions.liveUpdateElements((els) =>
         els.map((e2) => {
           if (e2.id !== el.id) return e2;
           const a = e2.anim;
           if (kind === 'move') {
-            const newStart = clamp(startStart + deltaSec, 0, TIMELINE_DURATION - a.duration);
+            // **بلا سقف.** كان الحجزُ إلى `TIMELINE_DURATION - duration`، أي أنّ
+            // مقطعًا لا يستطيع أن ينتهي بعد الثانية الخامسة بحال. وقد صار الطولُ
+            // مشتقًّا من المقاطع، فالمقطعُ هو الذي يُطيل المستند لا العكس.
+            const newStart = Math.max(0, startStart + deltaSec);
             return { ...e2, anim: { ...a, start: newStart } };
           }
           if (kind === 'resize-left') {
             const end = startStart + startDuration;
-            const newStart = clamp(startStart + deltaSec, 0, end - MIN_CLIP_DURATION);
+            // أدنى طولٍ **إطارٌ واحدٌ بمعدّل المستند**، لا عُشرَ ثانيةٍ مثبَّتًا —
+            // وذاك كان ثلاثةَ إطاراتٍ عند ٣٠ وستّةً عند ٦٠.
+            const newStart = clamp(startStart + deltaSec, 0, end - frame);
             return { ...e2, anim: { ...a, start: newStart, duration: end - newStart } };
           }
           if (kind === 'resize-right') {
-            const newDuration = clamp(startDuration + deltaSec, MIN_CLIP_DURATION, TIMELINE_DURATION - startStart);
+            const newDuration = Math.max(frame, startDuration + deltaSec);
             return { ...e2, anim: { ...a, duration: newDuration } };
           }
-          // kind === 'kf'
+          // kind === 'kf' — الماسة تُسحَب بالثواني مباشرةً، وتمرّ بقُمع الكتابة
+          // الواحد (`setKeyframe`). وقبل ذلك كان هذا المسار يكتب الزمن بنفسه
+          // بـ`clamp(…, 0, 1)` و**بلا أيّ معالجةٍ للتصادم**: ماستان على الزمن نفسه
+          // وإحداهما تحت الأخرى إلى الأبد. فصار التصادمُ استبدالًا صريحًا يحفظ
+          // `id` و`easing` و`bezier` للمفتاح القائم.
           const track = a.tracks[property];
-          if (!track) return e2;
-          const deltaFrac = a.duration > 0 ? deltaSec / a.duration : 0;
-          const newT = clamp(startKfT + deltaFrac, 0, 1);
-          return { ...e2, anim: { ...a, tracks: { ...a.tracks, [property]: track.map((k) => (k.id === kfId ? { ...k, t: newT } : k)) } } };
+          if (!track || !kfId) return e2;
+          const dragged = track.find((k) => k.id === kfId);
+          if (!dragged) return e2;
+          const newTime = snapToFrame(startKfTime + deltaSec, state.fps);
+          const without = track.filter((k) => k.id !== kfId);
+          return { ...e2, anim: { ...a, tracks: { ...a.tracks, [property]: setKeyframe(without, { ...dragged, time: newTime }) } } };
         }),
       );
     };
@@ -102,8 +115,8 @@ export function Clip({ el, color, expanded, selectedKf, onSelectKf }: ClipProps)
       // a way to be selected for value-editing — it has no hit-area of its own once
       // the resize handle takes priority over it.
       if (!moved && (kind === 'resize-left' || kind === 'resize-right')) {
-        const edgeT = kind === 'resize-left' ? 0 : 1;
-        const edgeKf = anim.tracks.opacity?.find((k) => k.t === edgeT);
+        const edgeTime = kind === 'resize-left' ? (anim.sourceIn ?? 0) : (anim.sourceIn ?? 0) + anim.duration;
+        const edgeKf = anim.tracks.opacity?.find((k) => Math.abs(k.time - edgeTime) < frame / 2);
         if (edgeKf) onSelectKf({ elId: el.id, property: 'opacity', kfId: edgeKf.id });
       }
     };
@@ -138,14 +151,19 @@ export function Clip({ el, color, expanded, selectedKf, onSelectKf }: ClipProps)
           </>
         )}
         {track.map((kf) => {
-          const pct = ((anim.start + kf.t * anim.duration) / TIMELINE_DURATION) * 100;
+          // **من زمنٍ مطلقٍ لا من كسرٍ في المقطع.** كان الموضع
+          // `(start + t × duration) / TIMELINE_DURATION`، فكان كلُّ تغييرٍ في
+          // المدّة يُحرِّك كلَّ ماسةٍ على الشاشة.
+          const pct = (timelineTimeOf(anim, kf.time) / span) * 100;
           const selected = selectedKf?.elId === el.id && selectedKf.property === property && selectedKf.kfId === kf.id;
           return (
             <div
               key={kf.id}
               data-testid={`kf-${el.id}-${kf.id}`}
               onPointerDown={(e) => startGesture('kf', property, kf.id, e)}
-              title={`${(kf.t * 100).toFixed(0)}% · ${(kf.value * 100).toFixed(0)}%`}
+              // بالثواني لا بنسبةٍ من المقطع. كان التلميح يقول «٥١٪» — أي نسبةَ
+              // المفتاح من مقطعه، وهو رقمٌ لا يستطيع المصمّم أن يفعل به شيئًا.
+              title={`${kf.time.toFixed(3)}s · ${(kf.value * 100).toFixed(0)}%`}
               style={{
                 position: 'absolute',
                 left: `${pct}%`,
@@ -165,8 +183,8 @@ export function Clip({ el, color, expanded, selectedKf, onSelectKf }: ClipProps)
         })}
         <button
           data-testid={`clip-${el.id}-add-kf${property === 'opacity' ? '' : `-${property}`}`}
-          disabled={!canKeyframeHere}
-          title={canKeyframeHere ? L.add_keyframe : L.kf_outside_clip}
+          data-anim-time={snapToFrame(animTimeAt(anim, state.t), state.fps).toFixed(4)}
+          title={L.add_keyframe}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
@@ -187,8 +205,8 @@ export function Clip({ el, color, expanded, selectedKf, onSelectKf }: ClipProps)
             fontSize: 11,
             lineHeight: 1,
             zIndex: 4,
-            opacity: canKeyframeHere ? 1 : 0.4,
-            cursor: canKeyframeHere ? 'pointer' : 'not-allowed',
+            opacity: 1,
+            cursor: 'pointer',
           }}
         >
           +

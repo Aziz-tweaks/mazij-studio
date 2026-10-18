@@ -30,9 +30,26 @@ import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwr
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bootDemo } from './helpers/boot.mjs';
+// NOTE (video branch, phase 1): this spec drives surfaces that exist only on a
+// **timed** document — the timeline's ruler/clips, the transport, the video tool, or
+// MP4/GIF in the export dialog. The demo poster is 1080×1080, i.e. `SIZES[0]`, whose
+// `kind` is `'still'`, so it now opens without them: `DocSnapshot.medium` gates three
+// surfaces, which is the whole point of the phase — the start screen already asked
+// "image or video?" and the answer finally reaches the workspace instead of a badge.
+// `bootDemoTimed` opens the same demo document and then picks a timed destination
+// from the real artboard size menu, which is both the gesture a designer performs and
+// the reversibility `HomeScreen.tsx` promised when it declined a two-button gate.
+// See `qa/helpers/boot.mjs`.
+import { bootDemoTimed } from './helpers/boot.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// NOTE (video branch, phase 1): `TIMELINE_DURATION` is gone — the document's length
+// is derived from its clips now, and `buildCaptionElements` takes the limit as an
+// argument instead of reading a module-level constant. In the app that limit is the
+// transcribed video's own trimmed window (`PropsTab`), not an editor ceiling. This
+// spec pins the same arithmetic it always did by passing `CAPTION_LIMIT`, which is
+// the 5 the constant used to hold, so the fixture and its expectations are unchanged.
+const CAPTION_LIMIT = 5;
 const BASE_URL = 'http://localhost:1420';
 const FIXTURE = path.join(__dirname, 'fixtures', 'auto-captions-ground-truth.mp4');
 const FIXTURE_B64 = fs.readFileSync(FIXTURE).toString('base64');
@@ -53,10 +70,9 @@ function assert(cond, msg) {
 // 1 & 2. Pure registry + segment->timeline math, no network, deterministic.
 // ============================================================
 async function testPureFunctions(page) {
-  const r = await page.evaluate(async () => {
+  const r = await page.evaluate(async (CAPTION_LIMIT) => {
     const { LOCAL_MODELS, modelById } = await import('/src/lib/localModels.ts');
     const { buildCaptionElements } = await import('/src/lib/autoCaptions.ts');
-    const { TIMELINE_DURATION } = await import('/src/lib/animTimeline.ts');
 
     const whisper = modelById('whisper-tiny-en');
     const registryOk = !!(
@@ -73,16 +89,16 @@ async function testPureFunctions(page) {
 
     const segments = [
       { start: 0.2, end: 1.0, text: 'Hello' },
-      { start: TIMELINE_DURATION - 0.01, end: TIMELINE_DURATION + 0.5, text: 'dropped' },
+      { start: CAPTION_LIMIT - 0.01, end: CAPTION_LIMIT + 0.5, text: 'dropped' },
     ];
-    const elements = buildCaptionElements(segments);
+    const elements = buildCaptionElements(segments, CAPTION_LIMIT);
     const el = elements[0];
     const track = el?.anim.tracks.opacity ?? [];
     const duration = 1.0 - 0.2;
     const fadeFrac = Math.min(0.25, 0.08 / duration);
 
     const mathOk = !!(
-      elements.length === 1 && // the second segment (>= TIMELINE_DURATION) is dropped, not clipped
+      elements.length === 1 && // the second segment (>= the limit) is dropped, not clipped
       el.type === 'text' &&
       el.text === 'Hello' &&
       el.halign === 'center' &&
@@ -90,18 +106,24 @@ async function testPureFunctions(page) {
       Math.abs(el.anim.start - 0.2) < 1e-6 &&
       Math.abs(el.anim.duration - duration) < 1e-6 &&
       track.length === 4 &&
-      track[0].t === 0 &&
+      // Keyframe time is seconds now, not a fraction of the clip — so the same four
+      // positions are the same four fractions **times the duration**. The fade is
+      // still a proportion of the clip by nature (capped at a quarter of it), and
+      // that proportion still lives in `captionOpacityTrack`; what changed is that
+      // it is multiplied out at the one boundary between the two conventions
+      // instead of being stored unresolved.
+      track[0].time === 0 &&
       track[0].value === 0 &&
-      Math.abs(track[1].t - fadeFrac) < 1e-6 &&
+      Math.abs(track[1].time - fadeFrac * duration) < 1e-6 &&
       track[1].value === 1 &&
-      Math.abs(track[2].t - (1 - fadeFrac)) < 1e-6 &&
+      Math.abs(track[2].time - (1 - fadeFrac) * duration) < 1e-6 &&
       track[2].value === 1 &&
-      track[3].t === 1 &&
+      Math.abs(track[3].time - duration) < 1e-6 &&
       track[3].value === 0
     );
 
     return { registryOk, mathOk, dump: { el, track } };
-  });
+  }, CAPTION_LIMIT);
 
   assert(r.registryOk, `registry: whisper-tiny-en is a real downloadable MIT 7-part speech-to-text model, each part with a full sha256 and real size summing to the model total, and it is the only speech-to-text entry`);
   assert(r.mathOk, `pure fn: buildCaptionElements produces exact anim.start/duration + a 4-keyframe fade-in/fade-out opacity track, and drops a segment starting at/after the fixed timeline length (${JSON.stringify(r.dump)})`);
@@ -112,10 +134,9 @@ async function testPureFunctions(page) {
 //    against the real fixture (real speech audio muxed with AAC into the MP4).
 // ============================================================
 async function testRealTranscription(page) {
-  const r = await page.evaluate(async ({ b64 }) => {
+  const r = await page.evaluate(async ({ b64, CAPTION_LIMIT }) => {
     const { modelById, isModelDownloaded, downloadModel } = await import('/src/lib/localModels.ts');
     const { extractAudioSamples, transcribeAudio, buildCaptionElements } = await import('/src/lib/autoCaptions.ts');
-    const { TIMELINE_DURATION } = await import('/src/lib/animTimeline.ts');
 
     const res = await fetch(`data:video/mp4;base64,${b64}`);
     const blob = await res.blob();
@@ -153,7 +174,7 @@ async function testRealTranscription(page) {
       }
     }
 
-    const elements = segments ? buildCaptionElements(segments) : null;
+    const elements = segments ? buildCaptionElements(segments, CAPTION_LIMIT) : null;
 
     return {
       downloadError,
@@ -162,9 +183,9 @@ async function testRealTranscription(page) {
       segments,
       transcribeErr,
       elements,
-      TIMELINE_DURATION,
+      CAPTION_LIMIT,
     };
-  }, { b64: FIXTURE_B64 });
+  }, { b64: FIXTURE_B64, CAPTION_LIMIT });
 
   assert(!r.downloadError, `real e2e: Whisper model actually downloaded + sha256-verified over the network without error (${r.downloadError})`);
   assert(!r.samplesErr, `real e2e: real browser Web-Audio decode+resample of the fixture's real AAC audio track succeeded (${r.samplesErr})`);
@@ -175,7 +196,7 @@ async function testRealTranscription(page) {
   assert(Array.isArray(r.segments) && r.segments.length >= 1, `real e2e: real transcription returned at least one real segment (${JSON.stringify(r.segments)})`);
   const seg = r.segments?.[0];
   assert(seg && seg.text.length > 3 && /hello/i.test(seg.text), `real e2e: the transcribed text contains a recognizable real word from the real speech audio — not empty/garbage (got "${seg?.text}")`);
-  assert(seg && seg.start >= 0 && seg.end > seg.start && seg.end <= r.TIMELINE_DURATION, `real e2e: segment timestamps are real and within the document's fixed timeline (${JSON.stringify(seg)})`);
+  assert(seg && seg.start >= 0 && seg.end > seg.start && seg.end <= r.CAPTION_LIMIT, `real e2e: segment timestamps are real and within the document's fixed timeline (${JSON.stringify(seg)})`);
   assert(Array.isArray(r.elements) && r.elements.length === r.segments.length, 'real e2e: every real segment became a real caption TextElement');
 
   return r.elements[0];
@@ -312,7 +333,7 @@ async function main() {
   const pageErrors = [];
   page.on('pageerror', (e) => pageErrors.push(e.message));
 
-  await bootDemo(page, BASE_URL);
+  await bootDemoTimed(page, BASE_URL);
 
   await testPureFunctions(page);
   const realCaptionElement = await testRealTranscription(page);

@@ -7,7 +7,7 @@ import { computeImageCropLayout } from './imageCrop';
 import { maskLocalPolygonPoints, type PxBox } from './geometry';
 import { commandsToSvgPath, drawPathCommandsToCtx, pathElementCommands } from './pathGeometry';
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from './variableStroke';
-import { TIMELINE_DURATION, entranceVisualAt } from './animTimeline';
+import { documentDuration, entranceVisualAt } from './animTimeline';
 import { SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, type StaggerToken, type UnitVisual } from './textStagger';
 import { getLottieExportFrame, resetLottieExportEngine } from './lottieExportEngine';
 import { getVideoExportFrame, resetVideoExportEngine } from './videoExportEngine';
@@ -42,9 +42,10 @@ export interface ArtboardRenderSpec {
    * يستطيع حذفه. والمعاينة في `Stage.tsx` تقرأ الحقل نفسه بالشرط نفسه. */
   decorAccent: boolean;
   /** Timeline time (seconds) at which every element's entrance clip is resolved.
-   * Defaults to `TIMELINE_DURATION` (every clip fully settled) — the same "freeze on
-   * the final state" behavior static PNG/SVG export always had. Video/GIF frame
-   * rendering passes the real per-frame time instead. */
+   * Defaults to `settledTimeOf(spec)` — the instant every clip in **this document**
+   * has finished, which is the same "freeze on the final state" behaviour static
+   * PNG/SVG export always had, now derived from the document instead of assumed to
+   * be 5 seconds. Video/GIF frame rendering passes the real per-frame time instead. */
   time?: number;
   /** Roadmap #12 — precomputed `shapeTextOnCurve` result per curved text element id,
    * keyed by `TextElement.id`. `renderArtboardSvg` stays synchronous (its real glyph
@@ -293,8 +294,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/** «كلُّ المقاطع قد انتهت» لهذا المستند بعينه. كان الجوابُ خمسَ ثوانٍ لكلّ مستند،
+ * فكان صحيحًا لمستندٍ طوله خمسُ ثوانٍ وخطأً صامتًا لغيره: مستندٌ مقطعُه يبدأ عند
+ * السادسة كان يُصدَّر PNG قبل أن يبدأ. ومعدّلُ الإطارات هنا لا يؤثّر إلّا في
+ * الأرضيّة (إطارٌ واحد) فيكفي الافتراض. */
+function settledTimeOf(spec: Omit<ArtboardRenderSpec, 'scale'>): number {
+  return documentDuration(spec.elements.map((el) => el.anim), 30);
+}
+
 async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRenderSpec, 'scale'>, w: number, h: number) {
-  const time = spec.time ?? TIMELINE_DURATION;
+  const time = spec.time ?? settledTimeOf(spec);
   for (const el of spec.elements) {
     if (!el.visible) continue;
     const x = el.geo.x * w;
@@ -795,10 +804,10 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
       // model — out of scope for this pass (documented in docs/CONTROLS.md). What
       // *is* honest and real: a rasterized snapshot of the exact frame visible at
       // `spec.time` (the same settled-time convention every other element already
-      // uses for SVG — see `TIMELINE_DURATION` default below), embedded as a real
+      // uses for SVG — see `settledTimeOf` above), embedded as a real
       // `<image>` — never a blank box pretending to be the animation.
       try {
-        const time = spec.time ?? TIMELINE_DURATION;
+        const time = spec.time ?? settledTimeOf(spec);
         const frameCanvas = getLottieExportFrame(el.id, el.data, bw, bh, time, el.loop);
         const dataUrl = frameCanvas.toDataURL('image/png');
         parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}><image href="${dataUrl}" x="0" y="0" width="${bw}" height="${bh}" /></g>`);

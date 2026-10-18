@@ -1,4 +1,4 @@
-import { TIMELINE_DURATION } from './animTimeline';
+
 
 /** تقدير حجم مخرَج الفيديو، للتذييل الحيّ في حوار التصدير
  * (`re-capcut-flows.md` §4.2: «المدّة: 3s | الحجم: حوالي 4 MB»، ويتحدّث مع كل تغيير).
@@ -55,11 +55,16 @@ export interface VideoEstimate {
 
 /** `dims` أبعاد كل ملفٍ سيُكتب (بعد `exportScale`)؛ الحجم مجموعٌ عليها كلها لأن
  * التذييل يُقدّر ما يُنتجه الزرّ عند ضغطه، لا ملفًا واحدًا منها. */
-export function estimateVideoExport(dims: { w: number; h: number }[], format: 'mp4' | 'gif', fps: number, quality: 'high' | 'med'): VideoEstimate {
+/** `seconds` هي مدّةُ المستند المشتقّة، تُمرَّر لا تُفترَض: التذييلُ يَصِف ما
+ * سيُنتجه الزرّ عند ضغطه، والمستندُ لم يبقَ خمسَ ثوانٍ بحكم البناء. */
+export function estimateVideoExport(dims: { w: number; h: number }[], format: 'mp4' | 'gif', fps: number, quality: 'high' | 'med', seconds: number): VideoEstimate {
   const bpp = BITS_PER_PIXEL[format][quality];
-  const bits = dims.reduce((sum, d) => sum + d.w * d.h * fps * TIMELINE_DURATION * bpp, 0);
+  const bits = dims.reduce((sum, d) => sum + d.w * d.h * fps * seconds * bpp, 0);
   return {
-    seconds: TIMELINE_DURATION,
+    // منزلتان. المدّةُ صارت مشتقّةً من مجموعِ `start + duration`، وذاك جمعُ أعدادٍ
+    // عشريّةٍ ثنائيّة — فـ«١٫٦ث» تَصِل إلى هنا `1.5999999456982597`. والتذييلُ
+    // سطرٌ يُقرأ، فيُقرَّب للقراءة؛ والرقمُ الكامل حيث يُقاس (`data-duration`).
+    seconds: Math.round(seconds * 100) / 100,
     files: dims.length,
     // منزلتان لا واحدة: مخرجات هذا النوع من المحتوى تقع تحت ١ م.ب فعلًا (0.09 م.ب
     // للملف المقيس أعلاه)، فالتقريب لمنزلة واحدة كان يطبعها كلّها «0.1 م.ب».

@@ -1,8 +1,8 @@
 import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { useStudio } from '../state/StudioContext';
-import { TIMELINE_DURATION } from '../lib/animTimeline';
+import { documentDuration, formatClock, formatDurationSec, frameDuration, tickLadder, timelineSpan, timelineTimeOf } from '../lib/animTimeline';
 import type { AnimProperty, DocElement } from '../state/elements';
 import { elementDisplayName } from '../lib/layerNames';
 import { EASING_IDS, type EasingId } from '../lib/easing';
@@ -10,10 +10,8 @@ import { EasingMenu, EASE_LABEL_KEY } from './timeline/EasingMenu';
 import { AnimPresetMenu } from './timeline/AnimPresetMenu';
 import { BezierEditor } from './timeline/BezierEditor';
 import { Clip, CLIP_ROW_H, PROP_ROW_H, EXPANDABLE_PROPERTIES, type SelectedKf } from './timeline/Clip';
-import { ICONS, clamp, sizeAt } from '../data/constants';
+import { ICONS, clamp } from '../data/constants';
 
-const TICKS = [0, 1, 2, 3, 4];
-const FRAME = 1 / 30;
 const RULER_H = 26;
 
 const KNOWN_COLOR: Record<string, string> = {
@@ -49,6 +47,14 @@ function hasCustomAnimation(tracks: import('../state/elements').PropertyTracks):
   });
 }
 
+/** عنوانُ علامةٍ على المسطرة. ثوانٍ صحيحةٌ تُكتَب `3s`، وما دقّ عن الثانية يُكتَب
+ * بمنزلتَيه (`0.5s`) — فسُلَّمُ العلامات يَنزل إلى أعشار الثانية على مستندٍ قصير،
+ * و`${t}s` وحدها كانت ستطبع `0.30000000000000004s`. */
+function tickLabel(t: number): string {
+  if (Math.abs(t - Math.round(t)) < 1e-9) return `${Math.round(t)}s`;
+  return `${(Math.round(t * 100) / 100).toFixed(2).replace(/0$/, '')}s`;
+}
+
 function layerRowHeight(expanded: boolean): number {
   return CLIP_ROW_H + (expanded ? EXPANDABLE_PROPERTIES.length * PROP_ROW_H : 0);
 }
@@ -76,16 +82,42 @@ function fromSlider(property: AnimProperty, slider: number): number {
   return property === 'rotation' ? slider : slider / 100;
 }
 
-export function Timeline() {
+/** `timed` هي الجوابُ عن «صورةٌ أم فيديو؟» واصلًا من `App.tsx`، وهو موضعُ التفرّع
+ * الوحيد — انظر التعليقَ المطوَّل عند `<Timeline timed=…>` هناك لِمَ دعامةٌ تُمرَّر
+ * ولا يُرفَع المكوّن كلُّه (خلاصتُه: قائمةُ الطبقات تعيش هنا ولا بيتَ لها غيره).
+ *
+ * وهذا الملفُّ **لا يَقرأ `state.medium` في شرطٍ ولا يُقارنه**: الجوابُ يصل دعامةً،
+ * فلا يصير هذا موضعًا رابعًا يتفرّع عليه ويجوز أن يختلف عن الثلاثة. */
+export function Timeline({ timed }: { timed: boolean }) {
   const { state, actions, dict: L } = useStudio();
   const isPro = state.mode === 'pro';
-  const playheadPct = (state.t / TIMELINE_DURATION) * 100;
+  // **طولُ المستند مشتقّ، ومدى المسطرة أرضيّةٌ عليه.** لا ثابتَ هنا بعد اليوم:
+  // `docDuration` ما يُعرَض ويُصدَّر، و`span` ما تُقاس عليه النِّسَب المئويّة —
+  // انظر `timelineSpan` لِمَ هما كمّيتان لا واحدة.
+  const docDuration = documentDuration(state.elements.map((el) => el.anim), state.fps);
+  const span = timelineSpan(docDuration);
+  const frame = frameDuration(state.fps);
+  const playheadPct = (state.t / span) * 100;
   const [dragId, setDragId] = useState<string | null>(null);
   const [selectedKf, setSelectedKf] = useState<SelectedKf | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   /** الطبقة التي يُعاد تسميتها الآن داخل سطرها — حالة عرضٍ محليّة لا مستنديّة. */
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const trackWrapRef = useRef<HTMLDivElement>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
+  // عرضُ المسطرة بالبكسل، مقيسًا لا مُقدَّرًا — سُلَّمُ العلامات يَقرِّر خطوتَه
+  // بالتباعد على الشاشة، فلا بدّ من العرض الحقيقيّ. و٦٠٠ أرضيّةٌ لأوّل تصيير
+  // قبل أن يوجد العنصر، تُستبدَل بالمقيس فورًا عند أوّل تغيير مقاس.
+  const [rulerW, setRulerW] = useState(600);
+  useEffect(() => {
+    const node = rulerRef.current;
+    if (!node) return;
+    const update = () => setRulerW(node.getBoundingClientRect().width || 600);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, []);
 
   // Layers list shows top-most element first, matching the array's z-order (last = topmost).
   const layers = [...state.elements].reverse();
@@ -105,19 +137,23 @@ export function Timeline() {
     }
   }
 
+  const ladder = tickLadder(span, rulerW);
+
   const pauseIfPlaying = () => {
     if (state.playing) actions.togglePlay();
   };
 
-  const fractionFromClientX = (clientX: number, rect: DOMRect) => clamp((clientX - rect.left) / rect.width, 0, 1);
+  // **بالثواني.** كان الكسرُ هو عقدَ `scrubTo`، فكان على كلّ مُنادٍ أن يعرف طول
+  // الخطّ ليحوّل موضعَ مؤشّرٍ إلى كسرٍ — ومع طولٍ مشتقّ لم يبقَ طولٌ يعرفه الجميع.
+  const secondsFromClientX = (clientX: number, rect: DOMRect) => clamp((clientX - rect.left) / rect.width, 0, 1) * span;
 
   const startScrub = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.currentTarget.focus();
     pauseIfPlaying();
     const rect = e.currentTarget.getBoundingClientRect();
-    actions.scrubTo(fractionFromClientX(e.clientX, rect));
+    actions.scrubTo(secondsFromClientX(e.clientX, rect));
     (e.target as Element).setPointerCapture(e.pointerId);
-    const move = (ev: PointerEvent) => actions.scrubTo(fractionFromClientX(ev.clientX, rect));
+    const move = (ev: PointerEvent) => actions.scrubTo(secondsFromClientX(ev.clientX, rect));
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
@@ -131,7 +167,11 @@ export function Timeline() {
       e.preventDefault();
       pauseIfPlaying();
       const dir = e.key === 'ArrowRight' ? 1 : -1;
-      actions.scrubTo(clamp(state.t / TIMELINE_DURATION + (dir * FRAME) / TIMELINE_DURATION, 0, 1));
+      // إطارٌ واحدٌ **بمعدّل المستند**، لا `1/30` مثبَّتًا. وأثرُ تثبيته مقيس
+      // (`re-effectcraft-source.md:549-552`): عند تصديرٍ بـ٢٤ إطارًا يهبط مفتاحٌ
+      // وُضِع بالسهم بين إطارَي مخرَج، فيُظهر الإطارُ الأوّل قيمةً مُستَقرَأة لا
+      // قيمةَ المفتاح نفسه.
+      actions.scrubTo(state.t + dir * frame);
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedKf) {
       e.preventDefault();
       actions.deleteTrackKeyframe(selectedKf.elId, selectedKf.property, selectedKf.kfId);
@@ -139,14 +179,19 @@ export function Timeline() {
     }
   };
 
-  const tLabel = `00:0${Math.floor(state.t)}.${String(Math.round((state.t % 1) * 100)).padStart(2, '0')}`;
+  // مُنسِّقٌ حقيقيّ. كان البادئةُ `00:0` مكتوبةً بالحرف، فكان صحيحًا تحت العشر
+  // ثوانٍ ولا شيءَ غير ذلك — وهو ما لم يكن ظاهرًا حين كان الخطّ لا يتجاوز الخمس.
+  const tLabel = formatClock(state.t);
 
-  // طبيعة المشروع كما يراها الخط الزمني. مشتقّةٌ من المقاس المختار لا من حقلٍ
-  // مستقل، فتبديل المقاس من `ArtboardSizeMenu` يقلبها فورًا — وهذا هو ما يجعل
-  // جواب «صورة أم فيديو» قابلًا للتراجع داخل المحرّر بلا بدءٍ من جديد
-  // (`re-capcut-flows.md` §1.2). والمدّة تُكتب للمُوقَّت فقط: كتابة «٥ ثوانٍ» على
-  // بوستر ثابت رقمٌ بلا معنى.
-  const medium = sizeAt(state.sizeIdx, state.customW, state.customH).kind;
+  // **لا اشتقاقَ محليًّا للطبيعة هنا، ولا مقارنةً عليها.** كان هذا الملفّ يحتسب
+  // `sizeAt(...).kind` بنفسه ومستهلكاه شارةٌ ولافتة — أي أنّ الجوابَ كان يُحتسَب
+  // ثم لا يَحمل شيئًا. وقد صار حقلًا في المستند (`DocSnapshot.medium`) تتفرّع عليه
+  // ثلاثةُ أسطحٍ بعينها: وجودُ الخطّ الزمنيّ (`App.tsx`)، وقائمةُ الشريط
+  // (`ToolRail.tsx`)، ووجهاتُ التصدير (`ExportDialog.tsx`).
+  //
+  // ولذلك **لا شرطَ هنا**: هذا المكوّن لا يُركَّب إلّا على مستندٍ مُوقَّت، فشرطُ
+  // «أمُوقَّتٌ هو؟» داخله سؤالٌ جوابه معلومٌ سلفًا — وموضعٌ رابعٌ يتفرّع عليه.
+  // والشارةُ تُعلن الطبيعةَ والمدّةَ المشتقّة لا الرقمَ ٥.
 
   /** اسم الطبقة كما يقرأه المصمّم: ترجمةٌ مُسمّاة لعناصر البوستر الجاهز، وإلا اسمٌ
    * مشتقٌّ من المحتوى.
@@ -209,11 +254,13 @@ export function Timeline() {
         >
           <Icon size={16} path="M5 8l5 5 5-5" style={{ transform: state.tlOpen ? 'none' : 'rotate(180deg)', transition: 'transform .25s' }} />
         </button>
-        <span style={{ fontWeight: 600, fontSize: 12 }}>{L.timeline}</span>
+        <span style={{ fontWeight: 600, fontSize: 12 }}>{timed ? L.timeline : L.layers}</span>
         <span
           data-testid="timeline-medium"
-          data-medium={medium}
-          data-duration={medium === 'timed' ? TIMELINE_DURATION : ''}
+          data-medium={state.medium}
+          // والمدّةُ تُكتب للمُوقَّت فقط: كتابةُ رقمِ ثوانٍ على بوسترٍ ثابت رقمٌ
+          // بلا معنى، وهذا هو العقدُ الذي تقيسه `qa/start-screen.spec.mjs`.
+          data-duration={timed ? Math.round(docDuration * 1000) / 1000 : ''}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -222,15 +269,16 @@ export function Timeline() {
             padding: '0 7px',
             flex: 'none',
             borderRadius: 999,
-            background: medium === 'timed' ? 'var(--accentSoft)' : 'var(--surface2)',
-            color: medium === 'timed' ? 'var(--accent)' : 'var(--muted)',
+            background: timed ? 'var(--accentSoft)' : 'var(--surface2)',
+            color: timed ? 'var(--accent)' : 'var(--muted)',
             fontSize: 10.5,
             fontWeight: 600,
           }}
         >
-          <Icon size={11} path={medium === 'timed' ? ICONS.video : ICONS.image} />
-          {medium === 'timed' ? `${L.h_timed} · ${TIMELINE_DURATION}${state.lang === 'ar' ? 'ث' : 's'}` : L.h_still}
+          <Icon size={11} path={timed ? ICONS.video : ICONS.image} />
+          {timed ? `${L.h_timed} · ${formatDurationSec(docDuration, state.lang)}` : L.h_still}
         </span>
+        {timed && (
         <div dir="ltr" style={{ display: 'flex', alignItems: 'center', gap: 8, marginInlineStart: 6 }}>
           {/* Icon-only, so it needs a real accessible name. Without one it announces
               as just "button" to VoiceOver, shows no tooltip on hover, and cannot be
@@ -249,16 +297,18 @@ export function Timeline() {
           </button>
           <span data-testid="timeline-time" data-t={state.t.toFixed(3)} style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', color: 'var(--muted)', minWidth: 60 }}>{tLabel}</span>
         </div>
+        )}
         <div style={{ flex: 1 }} />
         {/* حركة الدخول متاحة في الوضعين: في «بسيط» هي **الطريق الوحيد** إلى الحركة
             (لا مفاتيح ولا مسارات هناك)، وفي «احترافي» هي نقطة البداية التي تُضبَط
             مفاتيحها بعد ذلك. وهي مربوطة بالتحديد لا بالوضع، مثل `EasingMenu` بجانبها. */}
-        <AnimPresetMenu />
-        {isPro && <EasingMenu />}
+        {/* حركةُ الدخول والمنحنى سطحانِ زمنيّان: لا يُعرَضان على مستندٍ ساكن. */}
+        {timed && <AnimPresetMenu />}
+        {timed && isPro && <EasingMenu />}
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-        <div style={{ width: 150, flex: 'none', borderInlineEnd: '1px solid var(--line)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div style={{ width: timed ? 150 : '100%', flex: timed ? 'none' : 1, borderInlineEnd: timed ? '1px solid var(--line)' : 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           <div style={{ height: RULER_H, flex: 'none', display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: 11, color: 'var(--muted)', borderBottom: '1px solid var(--line)' }}>{L.layers}</div>
           {layers.map((el) => {
             const selected = state.selectedIds.includes(el.id);
@@ -384,6 +434,11 @@ export function Timeline() {
           })}
         </div>
 
+        {/* **كلُّ السطح الزمنيّ**: المسطرةُ والمسارات والمؤشّرُ ولوحُ المفتاح.
+            محجوبٌ عن المستند الساكن، وهو ما يقيسه المعيار A7 بغياب
+            `[data-testid="timeline-tracks"]` من DOM. وما يبقى فوقه قائمةُ
+            الطبقات، وهي ليست سطحًا زمنيًّا — انظر `App.tsx`. */}
+        {timed && (
         <div
           ref={trackWrapRef}
           dir="ltr"
@@ -391,19 +446,51 @@ export function Timeline() {
           onKeyDown={onTrackKeyDown}
           style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', outline: 'none' }}
         >
-          <div data-testid="timeline-ruler" onPointerDown={startScrub} style={{ height: RULER_H, flex: 'none', position: 'relative', borderBottom: '1px solid var(--line)', cursor: 'ew-resize', touchAction: 'none' }}>
-            {TICKS.map((i) => (
-              <div key={i} style={{ position: 'absolute', left: `${i * 20}%`, top: 0, height: '100%', display: 'flex', alignItems: 'flex-end', gap: 4, paddingBottom: 4, borderLeft: '1px solid var(--line)' }}>
-                <span style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 4, fontVariantNumeric: 'tabular-nums' }}>{i}s</span>
-              </div>
-            ))}
+          <div ref={rulerRef} data-testid="timeline-ruler" data-span={span} onPointerDown={startScrub} style={{ height: RULER_H, flex: 'none', position: 'relative', borderBottom: '1px solid var(--line)', cursor: 'ew-resize', touchAction: 'none' }}>
+            {ladder.ticks.map((t) => {
+              const isLabel = Math.abs(t / ladder.labelStride - Math.round(t / ladder.labelStride)) < 1e-9;
+              return (
+                <div
+                  key={t}
+                  data-tick={t}
+                  data-label={isLabel ? 'true' : 'false'}
+                  style={{ position: 'absolute', left: `${(t / span) * 100}%`, top: 0, height: isLabel ? '100%' : '45%', bottom: 0, display: 'flex', alignItems: 'flex-end', gap: 4, paddingBottom: 4, borderLeft: '1px solid var(--line)' }}
+                >
+                  {isLabel && <span style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 4, fontVariantNumeric: 'tabular-nums' }}>{tickLabel(t)}</span>}
+                </div>
+              );
+            })}
           </div>
+          {/* **الفراغُ بعد نهاية المستند، مُعلَنًا لا مكتومًا.**
+              طولُ المستند مشتقٌّ من مقاطعه، ومدى المسطرة لا يَقِلّ عن
+              `DEFAULT_CLIP_DURATION` كي يبقى موضعٌ تُسحَب إليه المقاطع
+              (`timelineSpan`). فيبقى على مستندٍ قصيرٍ مدًى **لا يدخل الملفّ
+              المُصدَّر**، والسكوتُ عنه هو بعينه «الشاشة تقول شيئًا والملفّ يقول
+              آخر». فيُظلَّل ويُقال سببُه في تلميحه. */}
+          {docDuration < span && (
+            <div
+              data-testid="timeline-beyond-doc"
+              data-from={Math.round(docDuration * 1000) / 1000}
+              title={L.tl_beyond_doc}
+              style={{
+                position: 'absolute',
+                top: RULER_H,
+                bottom: 0,
+                left: `${(docDuration / span) * 100}%`,
+                right: 0,
+                background: 'repeating-linear-gradient(135deg, transparent 0 5px, rgba(127,127,127,.09) 5px 10px)',
+                borderInlineStart: '1px dashed var(--line)',
+                pointerEvents: 'none',
+                zIndex: 1,
+              }}
+            />
+          )}
           <div data-testid="timeline-tracks" onPointerDown={startScrub} style={{ flex: 1, position: 'relative', cursor: 'ew-resize', overflowY: 'auto', touchAction: 'none' }}>
             {layers.map((el) => {
               const color = colorForLayer(el.id);
               if (!isPro) {
-                const leftPct = (el.anim.start / TIMELINE_DURATION) * 100;
-                const widthPct = (el.anim.duration / TIMELINE_DURATION) * 100;
+                const leftPct = (el.anim.start / span) * 100;
+                const widthPct = (el.anim.duration / span) * 100;
                 return (
                   <div key={el.id} style={{ height: CLIP_ROW_H, position: 'relative', borderBottom: '1px solid var(--line)' }}>
                     <div style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top: 7, height: 16, borderRadius: 4, background: color, opacity: 0.35 }} />
@@ -462,7 +549,7 @@ export function Timeline() {
                   data-testid="kf-popover"
                   style={{
                     position: 'absolute',
-                    left: `calc(${(((selectedKfEl.anim.start + selectedKfData.t * selectedKfEl.anim.duration) / TIMELINE_DURATION) * 100).toFixed(2)}% - 90px)`,
+                    left: `calc(${((timelineTimeOf(selectedKfEl.anim, selectedKfData.time) / span) * 100).toFixed(2)}% - 90px)`,
                     top: placeBelow ? rowTop + rowHeight + 8 : rowTop - 8,
                     transform: placeBelow ? undefined : 'translateY(-100%)',
                     zIndex: 6,
@@ -547,6 +634,7 @@ export function Timeline() {
               );
             })()}
         </div>
+        )}
       </div>
     </div>
   );

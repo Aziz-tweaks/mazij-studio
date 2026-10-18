@@ -1,13 +1,15 @@
 import { homeDir, join } from '@tauri-apps/api/path';
 import { mkdir, remove, writeFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
-import { TIMELINE_DURATION } from './animTimeline';
+
 import { renderArtboardFrames, type ArtboardRenderSpec } from './exportArtboard';
 
 export type VideoFormat = 'mp4' | 'gif';
 
 export interface VideoExportOptions {
   format: VideoFormat;
+  /** طولُ المستند بالثواني، مشتقًّا من مقاطعه (`documentDuration`). */
+  durationSeconds: number;
   fps: number;
   quality: 'high' | 'med';
   /** Only meaningful for GIF — MP4 (yuv420p/H.264) has no alpha channel, so the
@@ -68,7 +70,11 @@ export async function exportVideoTarget(
   destFileName: string,
   onProgress: (fraction: number) => void,
 ): Promise<string> {
-  const frameCount = Math.max(1, Math.round(TIMELINE_DURATION * opts.fps));
+  // **المدّة تأتي من المستند لا من ثابت.** كانت `TIMELINE_DURATION * fps`، أي أنّ
+  // كلّ تصديرٍ خمسُ ثوانٍ بالضبط أيًّا كان المشروع. وتُمرَّر عبر `opts` لا تُقرأ من
+  // هنا، فهذه الوحدة لا تعرف الحالة — وهو ما يُبقي `frameTimes[i] = i / fps`
+  // مشتقّةً من الفهرس بلا تراكم، وهي الخصلة التي رصدتها الورقتان وأُكِّدت بالقراءة.
+  const frameCount = Math.max(1, Math.round(opts.durationSeconds * opts.fps));
   const frameTimes = Array.from({ length: frameCount }, (_, i) => i / opts.fps);
 
   const home = await homeDir();

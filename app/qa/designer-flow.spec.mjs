@@ -16,7 +16,13 @@
 //
 // Run: node qa/designer-flow.spec.mjs   (dev server must be running on :1420)
 import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
-import { bootDemo } from './helpers/boot.mjs';
+// NOTE (video branch, phase 1): §5 below drives the **transport**, which belongs to a
+// timed document now — `DocSnapshot.medium` gates it, which is the point of the
+// phase: the start screen already asked "image or video?" and the answer finally
+// reaches the workspace. The demo poster is 1080×1080, a still destination, so this
+// says which medium it means through the real artboard size menu. See
+// `qa/helpers/boot.mjs`.
+import { bootDemoTimed } from './helpers/boot.mjs';
 
 const BASE_URL = process.env.MAZIJ_URL ?? 'http://localhost:1420';
 let pass = 0;
@@ -70,7 +76,7 @@ async function main() {
     if (m.type() === 'error') pageErrors.push(`console: ${m.text()}`);
   });
 
-  await bootDemo(page, BASE_URL);
+  await bootDemoTimed(page, BASE_URL);
   await page.waitForTimeout(400);
 
   // ── 1. Text editing: the single most common thing a designer does ──────────

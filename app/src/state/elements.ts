@@ -44,13 +44,41 @@ export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 'r
  * rotation — i.e. exactly what a static (non-animated) element already looks like. */
 export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1, x: 0, y: 0, scale: 1, rotation: 0 };
 
-/** One keyframe on one property's independent track. `t` is a fraction (0..1) of the
- * clip's own duration, same convention as the legacy `AnimKeyframe`. `easing`/`bezier`
- * describe the curve of the segment that *starts* at this keyframe and runs to the
- * next one on the same track (the last keyframe's easing is unused, same as the old
- * single-track model's last-segment convention) — this is what makes easing per
- * segment rather than one curve for the whole clip. */
+/** One keyframe on one property's independent track.
+ *
+ * **`time` is an absolute duration in seconds**, measured in *animation time* — i.e.
+ * from `ElementAnim.sourceIn`, not as a fraction of the clip's length. Idea from
+ * محرّر خطٍّ زمنيٍّ مفتوح, `crates/edit/src/lib.rs:16`: *"Keyframes are stored in media time, so
+ * trims and splits never need to move them."* (MIT OR Apache-2.0.)
+ *
+ * ولماذا تغيّر: كان الحقل كسرًا (٠..١) من مدّة المقطع، فكان كلُّ تغييرٍ في المدّة
+ * يُعيد توقيت ما وُقِّت أصلًا — ومن ذلك الاختيار الواحد وُلدت ثلاثُ عِللٍ مسجَّلة:
+ * حذفُ الدخول الصامت (العطل ٤ في `qa/motion-journey.spec.mjs`)، وتشبُّعُ الزمن
+ * المحلّي عند ١ فكلُّ لحظةٍ بعد المقطع تُجيب «١»، و`stretchClipToTime` كلّها — اثنان
+ * وعشرون سطرًا لا تفعل إلّا إعادةَ قياس كلّ كسرٍ كي لا يتزحزح ما هو في مكانه أصلًا.
+ *
+ * **والحقل مُسمّى `time` لا `t` عن قصد: الاسمُ هو المُميِّز.** الكسر `0.3` والثانية
+ * `0.3` رقمان لا يفترقان، ولم يكن في المستندات المحفوظة رقمُ نسخةٍ يُفرِّق — فلو
+ * بقي الاسم لصار كلُّ دخولٍ محفوظٍ عند ٠٫٣ من المقطع دخولًا عند ٠٫٣ ثانية، بلا أيّ
+ * خطأٍ يظهر. فصار **وجودُ الحقل** هو المُميِّز: مفتاحٌ فيه `t` ولا `time` قديم،
+ * ومفتاحٌ فيه `time` جديد، ولا حالةَ لبسٍ أبدًا — ولا حتى في مستندٍ حفظه بناءٌ في
+ * منتصف الإصدار. انظر `migrateKeyframe` في `StudioContext.tsx`.
+ *
+ * `easing`/`bezier` describe the curve of the segment that *starts* at this keyframe
+ * and runs to the next one on the same track (the last keyframe's easing is unused,
+ * same as the old single-track model's last-segment convention) — this is what makes
+ * easing per segment rather than one curve for the whole clip. */
 export interface PropertyKeyframe {
+  id: string;
+  time: number;
+  value: number;
+  easing: EasingId;
+  bezier: Bezier;
+}
+
+/** A keyframe as saved **before** keyframe time became absolute: `t` is a fraction of
+ * the clip's duration. Nothing but the migration may read this. */
+export interface LegacyFractionKeyframe {
   id: string;
   t: number;
   value: number;
@@ -71,6 +99,36 @@ export interface ElementAnim {
   preset: AnimPreset;
   start: number;
   duration: number;
+  /** أصلُ زمنِ الحركة بالثواني: اللحظةُ التي يقابلها `start` على الخطّ الزمنيّ.
+   *
+   * حقلان لا حقلٌ واحد، وهذا هو بيتُ القصيد. الفائدةُ ليست في كون الزمن مطلقًا
+   * وحده، بل في أنّ `start` و`sourceIn` **يتحرّكان معًا عند تقليم الحافّة الأولى
+   * ومنفردين عند النقل** — وهو ما يجعل الفعلين كلاهما بلا أثرٍ على المفاتيح
+   * (محرّر خطٍّ زمنيٍّ مفتوح، `crates/project/src/lib.rs:651-659`):
+   *
+   * | الفعل | `start` | `sourceIn` | أثره على المفاتيح |
+   * |---|---|---|---|
+   * | نقل المقطع | يتغيّر | لا يتغيّر | تتحرّك **مع** المقطع ✓ |
+   * | تقليم الحافّة الأولى | `+= d` | `+= d` | **لا تتغيّر** — يُقَصّ الرأس ولا يُعاد توقيت شيء ✓ |
+   * | تقليم الحافّة الأخيرة | لا يتغيّر | لا يتغيّر | **لا تتغيّر** ✓ |
+   *
+   * وحقلٌ واحد لا يقدر على ذلك: مفاتيحٌ نسبةً إلى `start` وحده يُزحزحها تقليمُ
+   * الرأس، ومفاتيحٌ بزمنِ المستند المطلق يُعيد النقلُ كتابتها كلَّها.
+   *
+   * ولمستندٍ لم يُقلَّم قطُّ `sourceIn` صفرٌ، فتختصر `animTimeAt` إلى
+   * `t − start` — فلا يكلّف هذا الحقل شيئًا قبل أن توجد المرحلة ٢، ويعني أنّ
+   * المرحلة ٢ لا تحتاج أيّ عملٍ تمثيليٍّ بعده.
+   *
+   * **ولا حقل `speed`.** لا سرعةَ مقطعٍ في مزيج للرسوميّات، و`trimIn`/`trimOut`
+   * في `VideoElement` كمّيةٌ أخرى تمامًا — نافذةٌ داخل المصدر لا على الخطّ.
+   *
+   * واختياريٌّ في النوع وغيابُه **صفر** — وهو عقدُ «كلُّ حقلٍ جديد اختياريٌّ
+   * يُكمَّل بقيمةٍ محايدة» المكتوب في `src/lib/persist.ts`، ونفسُه الذي يحمله
+   * `groupId` و`appearance` و`name`. وقيمةُ الصفر هي المحايدة فعلًا: بها تختصر
+   * `animTimeAt` إلى `t − start`. و`migrateAnim` تُجسّده صريحًا عند كلّ تحميل كما
+   * تفعل `migrateAppearance`، فالمستندُ المحفوظ يحمله دائمًا؛ وبقاؤه اختياريًّا
+   * في النوع هو ما يَمنع مُحلِّلًا أن يُعيد `NaN` لعنصرٍ بُني بلا الحقل. */
+  sourceIn?: number;
   easing: EasingId;
   bezier: Bezier;
   keyframes: AnimKeyframe[];
@@ -79,23 +137,29 @@ export interface ElementAnim {
 
 /** Maps an entrance preset onto the independent per-property tracks that render
  * identically to the old fixed preset formulas that `animTimeline.ts` used before
- * per-property tracks existed. Every legacy keyframe's `v`
- * becomes one keyframe on the relevant track(s) at the same `t`, carrying the clip's
- * one-time global `easing`/`bezier` forward onto every segment — so a document saved
- * before per-property tracks existed loads and plays back pixel-identical. */
-export function tracksFromPreset(preset: AnimPreset, keyframes: AnimKeyframe[], easing: EasingId, bezier: Bezier): PropertyTracks {
+ * per-property tracks existed. Every legacy keyframe's `v` becomes one keyframe on
+ * the relevant track(s), carrying the clip's one-time global `easing`/`bezier`
+ * forward onto every segment — so a document saved before per-property tracks
+ * existed loads and plays back pixel-identical.
+ *
+ * `duration` is now a parameter because `AnimKeyframe.t` is still a fraction (it is
+ * the legacy simple-mode storage and stays one) while `PropertyKeyframe.time` is
+ * seconds — so the conversion `time = t × duration` happens exactly here, at the one
+ * boundary between the two conventions. */
+export function tracksFromPreset(preset: AnimPreset, keyframes: AnimKeyframe[], easing: EasingId, bezier: Bezier, duration: number): PropertyTracks {
+  const at = (k: AnimKeyframe) => k.t * duration;
   switch (preset) {
     case 'fade':
-      return { opacity: keyframes.map((k) => ({ id: k.id, t: k.t, value: clamp01(k.v), easing, bezier: [...bezier] })) };
+      return { opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })) };
     case 'slide':
       return {
-        opacity: keyframes.map((k) => ({ id: k.id, t: k.t, value: clamp01(k.v), easing, bezier: [...bezier] })),
-        y: keyframes.map((k) => ({ id: k.id, t: k.t, value: (1 - k.v) * 0.1, easing, bezier: [...bezier] })),
+        opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
+        y: keyframes.map((k) => ({ id: k.id, time: at(k), value: (1 - k.v) * 0.1, easing, bezier: [...bezier] })),
       };
     case 'pop':
       return {
-        opacity: keyframes.map((k) => ({ id: k.id, t: k.t, value: clamp01(k.v), easing, bezier: [...bezier] })),
-        scale: keyframes.map((k) => ({ id: k.id, t: k.t, value: Math.max(0, k.v), easing, bezier: [...bezier] })),
+        opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
+        scale: keyframes.map((k) => ({ id: k.id, time: at(k), value: Math.max(0, k.v), easing, bezier: [...bezier] })),
       };
     case 'none':
     default:
@@ -131,10 +195,12 @@ export function defaultAnim(preset: AnimPreset, start: number, duration: number,
     preset,
     start,
     duration,
+    // عنصرٌ جديد لم يُقلَّم: أصلُ زمنِ حركته هو بدايتها. انظر `ElementAnim.sourceIn`.
+    sourceIn: 0,
     easing,
     bezier,
     keyframes,
-    tracks: tracksFromPreset(preset, keyframes, easing, bezier),
+    tracks: tracksFromPreset(preset, keyframes, easing, bezier, duration),
   };
 }
 

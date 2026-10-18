@@ -1,10 +1,11 @@
 import type { Lang } from '../i18n/strings';
-import type { ToolId } from '../data/constants';
+import type { SizeMedium, ToolId } from '../data/constants';
 import type { DocElement, ElementId } from './elements';
 // `createDefaultElements` لم يعد يُستورَد هنا: شاشة البداية نقلت البوستر التجريبي الجاهز
 // إلى `starterTemplates.ts` وجعلت المستند الفاضي هو نقطة الانطلاق، فلم يبقَ له إلا
 // ذكرٌ في تعليق أدناه. وبقي `DEFAULT_POLYGON_N` لأن مكتبة الأشكال تحتاجه.
 import { DEFAULT_POLYGON_N } from '../lib/shapeFactory';
+import { DEFAULT_DOC_FPS } from '../lib/animTimeline';
 import type { Template } from '../lib/templates';
 
 export type Screen = 'editor' | 'home';
@@ -128,6 +129,35 @@ export interface DocSnapshot {
    * «الألوان». وهي داخل `DocSnapshot` لا خارجه لأنها صفةُ مستندٍ تُحفَظ وتُتراجَع
    * ككل صفةٍ أخرى، ولأن كل لوحةٍ في مشروعٍ متعدّد اللوحات تملك جوابها الخاص. */
   decorAccent: boolean;
+  /** معدّلُ إطارات المستند. شبكةُ الزمن كلُّها تُقاس به: كلُّ كتابةِ مفتاحٍ
+   * تُقرَّب إليه (`snapToFrame`)، وخطوةُ السهم إطارٌ منه، و«أهناك مفتاحٌ عند
+   * المؤشّر؟» مقارنةُ أرقامِ إطاراتٍ فيه.
+   *
+   * قيمُه من `FPS_OPTIONS` القائمة (`src/data/constants.ts`)، وكلُّها أعدادٌ
+   * صحيحة — ولذلك يكفي مزيجَ **شبكةٌ** ولا يحتاج قاعدةَ زمنٍ صحيحةً بنبضاتٍ
+   * دقيقة. وغيابُه في مستندٍ محفوظٍ يعني ٣٠ (`DEFAULT_DOC_FPS`)، وهو ما كان
+   * `FRAME = 1/30` المثبَّت في `Timeline.tsx` يفترضه ضمنًا على كلّ مستند. */
+  fps: number;
+  /** صورةٌ أم فيديو — جوابُ شاشة البداية، محفوظًا حيث يُقرأ.
+   *
+   * **وهو مشتقٌّ لا مستقلّ.** الطبيعةُ تملكها الوجهةُ نفسها (`SizePreset.kind`)،
+   * فهذا الحقل **ذاكرةٌ لجوابِ الوجهة** لا جوابٌ ثانٍ يُنازعها: يُكتَب من
+   * `SIZES[sizeIdx].kind` عند بدء المستند، ويُعاد اشتقاقه عند كلّ تبديلِ مقاس،
+   * ويُستكمَل عند التحميل من `sizeAt(...)` إن غاب. وبذلك لا يتعارض مع المقاس
+   * المختار — وهو الاعتراضُ المكتوب على `SizeMedium` في `src/data/constants.ts`،
+   * وهو اعتراضٌ صحيح: لم يُحَلّ بإنكاره بل بجعلِ الحقل مشتقًّا.
+   *
+   * ولذلك **يبقى الفرعُ قابلًا للتراجع**: تبديلُ المقاس من `ArtboardSizeMenu`
+   * يقلب الطبيعةَ في أيّ لحظةٍ بلا بدءٍ من جديد — وهي بالضبط الخصلةُ التي
+   * تَهدِمها بوّابةُ الزرّين، وهي الوعدُ الذي قطعته `HomeScreen.tsx` ولم يكن
+   * **مُختبَرًا، لأنّ شيئًا في اتّجاه المجرى لم يكن يقرأ `kind` أصلًا**: كان
+   * يُحتسَب في موضعٍ واحد ومستهلكاه شارةٌ ولافتة.
+   *
+   * ولِمَ حقلٌ في المستند لا اشتقاقٌ في كلّ موضع: لأنّ المواضعَ التي تتفرّع عليه
+   * ثلاثةٌ بعينها (وجودُ الخطّ الزمنيّ، وقائمةُ الشريط، ووجهاتُ التصدير)، وثلاثةُ
+   * اشتقاقاتٍ محليّة ثلاثةُ أجوبةٍ قد تختلف. حقلٌ واحد = جوابٌ واحد = `grep`
+   * يستطيع عدَّ المواضع. */
+  medium: SizeMedium;
 }
 
 export interface AiMessage {
@@ -229,6 +259,10 @@ export interface StudioState {
    * تعيش `elements`/`anim`/`sizeIdx`: اللوحة النشطة وحدها هنا، وبقيّة اللوحات في
    * `artboardDocs`. */
   decorAccent: boolean;
+  /** حقلا مستندٍ آخران، مسطّحان على الحالة كجيرانهما — انظر `DocSnapshot.fps`
+   * و`DocSnapshot.medium`. */
+  fps: number;
+  medium: SizeMedium;
   zoom: number;
   panX: number;
   panY: number;
@@ -412,6 +446,11 @@ export const initialStudioState: StudioState = {
   // ولا زخرفة. المستند الافتتاحي فارغ، و«فارغ» تعني أن كل ما سيظهر على اللوحة
   // وضعه المصمّم بيده — انظر `DocSnapshot.decorAccent`.
   decorAccent: false,
+  // ثلاثون إطارًا، وهو المعدّل الذي كان `FRAME = 1/30` المثبَّت يفترضه على كلّ
+  // مستند. والمستندُ الافتتاحيّ صورةٌ ثابتة: `sizeIdx: 0` هو «بوست إنستقرام»
+  // و`kind: 'still'` — فالجوابُ هنا مطابقٌ لجواب الوجهة، كما يجب أن يكون دائمًا.
+  fps: DEFAULT_DOC_FPS,
+  medium: 'still',
   zoom: 100,
   panX: 0,
   panY: 0,

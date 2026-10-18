@@ -275,14 +275,35 @@ async function main() {
     `and the new keyframe landed under the playhead — ${landed}% of the ruler against a playhead at ${playheadPct.toFixed(2)}% (it used to land on the clip edge, 12% vs a 44% playhead)`,
   );
 
-  // A playhead *before* the clip's start is the one case that cannot be served, and it
-  // says so instead of misplacing anything.
+  // A playhead *before* the clip's start used to be the one case that could not be
+  // served: a keyframe's time was a fraction of its clip, a fraction before the clip
+  // is negative, and a negative fraction is meaningless — so the ◇ was disabled with
+  // a written reason («مؤشّر التشغيل خارج مقطع هذه الطبقة»).
+  //
+  // **That case no longer exists**, because keyframe time is an absolute duration
+  // measured from the clip's own origin: a time before the clip is an ordinary
+  // negative animation time, and the resolver holds the first keyframe's value there
+  // rather than extrapolating. So the refusal had nothing left to refuse, the
+  // `disabled` state is gone and the string was deleted with it. Two assertions
+  // replace the two that pinned the refusal, and they are strictly stronger: the
+  // button works, and the key it writes lands where the playhead is.
   await parkPlayhead(page, 0.2);
   await selectLayer(page, line2);
   const l2Toggle = page.locator(`[data-testid="kf-toggle-${line2}-opacity"]`);
-  const blocked = await l2Toggle.evaluate((e) => ({ disabled: e.disabled, title: e.title }));
-  assert(blocked.disabled === true, 'with the playhead before a clip starts, ◇ is visibly disabled rather than dropping a keyframe somewhere else');
-  assert(/مؤشّر التشغيل خارج مقطع/.test(blocked.title), `and it says why: «${blocked.title}»`);
+  const beforeClip = await l2Toggle.evaluate((e) => ({ disabled: e.disabled, title: e.title, keyed: e.dataset.keyed }));
+  assert(
+    beforeClip.disabled === false && beforeClip.keyed === 'false',
+    `with the playhead before a clip starts, ◇ is live and reads unfilled (disabled=${beforeClip.disabled}, keyed=${beforeClip.keyed}) — a keyframe before the clip is a negative animation time, which is legal, so there is nothing left to disable`,
+  );
+  const l2KeysBefore = await page.evaluate((i) => document.querySelectorAll(`[data-testid^="kf-${i}-"]`).length, line2);
+  await l2Toggle.click();
+  await page.waitForTimeout(220);
+  const l2KeysAfter = await page.evaluate((i) => document.querySelectorAll(`[data-testid^="kf-${i}-"]`).length, line2);
+  const l2Keyed = await l2Toggle.evaluate((e) => e.dataset.keyed);
+  assert(
+    l2KeysAfter === l2KeysBefore + 1 && l2Keyed === 'true',
+    `and pressing it adds a real key at the playhead (${l2KeysBefore} → ${l2KeysAfter} diamonds, ◇ now reads keyed=${l2Keyed}) — under the playhead, not on the clip edge, and without moving \`anim.start\``,
+  );
 
   // ============================================================
   // 5. Playback: resumes where the playhead is, and keeps wall time
@@ -345,7 +366,23 @@ async function main() {
   await page.getByRole('button', { name: 'MP4', exact: true }).click();
   await page.waitForTimeout(220);
   const est4 = await page.locator('[data-testid="export-estimate"]').innerText();
-  assert(/^المدّة 5 ث/.test(est4), `choosing MP4 states the real duration up front: «${est4}»`);
+  // **The duration is the document's own now, not the constant 5.** `TIMELINE_DURATION`
+  // is deleted: a project's length is `max(anim.start + anim.duration)` across its
+  // clips, so this journey — whose last clip ends at 1.6s — is a 1.6s project and
+  // exports 1.6s. The old assertion read `/^المدّة 5 ث/` and was measuring a constant.
+  // This one reads the duration the timeline itself reports and requires the dialog to
+  // agree with it, which is the stronger statement and محرّر خطٍّ زمنيٍّ مفتوح §5.2's actual rule:
+  // the dialog cannot contradict the timeline.
+  const docSeconds = await page.evaluate(() => Number(document.querySelector('[data-testid="timeline-medium"]').dataset.duration));
+  const shownSeconds = Number((est4.match(/المدّة ([\d.]+) ث/) || [])[1]);
+  assert(
+    Number.isFinite(shownSeconds) && Math.abs(shownSeconds - Math.round(docSeconds * 100) / 100) < 0.011,
+    `choosing MP4 states the real **derived** duration up front — the timeline reports ${docSeconds.toFixed(3)}s and the dialog says ${shownSeconds}s: «${est4}»`,
+  );
+  assert(
+    docSeconds < 5 - 1e-6,
+    `and it is genuinely derived, not the old constant: this project's clips end at ${docSeconds.toFixed(3)}s, under the 5 that every project used to report regardless of its content`,
+  );
   assert(/4 ملفات/.test(est4), `and that the four default targets mean four separate encodes: «${est4}»`);
 
   const onByDefault = await page.evaluate(() =>
@@ -367,11 +404,26 @@ async function main() {
   // 69,104 at متوسطة, and the GIF 271,060 — see the measurement table in
   // src/lib/exportEstimate.ts. Pin the headline one so a future edit to those
   // constants has to come with a fresh measurement.
-  assert(/0\.09 م\.ب/.test(est1), `and its size estimate matches the real file it is estimating — 91,314 bytes measured, «${est1}» shown`);
+  // The calibration still has to hold, and it still does — but it was measured on a
+  // **5-second** 1080×1920 export (91,314 bytes at عالية), and the estimate is linear
+  // in duration by construction (`dims × fps × seconds × bitsPerPixel`). So the
+  // comparison scales the measured file by this project's own derived duration. The
+  // coefficient is what is pinned; pinning «0.09 م.ب» would now be pinning the
+  // coefficient *times a length this project does not have*.
+  const mbShown = (text) => Number((text.match(/([\d.]+) م\.ب/) || [])[1]);
+  const expectedHighMb = Math.round(((91314 / 1e6) * (docSeconds / 5)) * 100) / 100;
+  assert(
+    Math.abs(mbShown(est1) - expectedHighMb) <= 0.02,
+    `and its size estimate matches the real file it is estimating — 91,314 bytes measured over 5s scales to ≈${expectedHighMb} م.ب over this project's ${docSeconds.toFixed(2)}s, «${est1}» shown`,
+  );
   await page.getByRole('button', { name: 'متوسطة', exact: true }).click();
   await page.waitForTimeout(220);
   const estMed = await page.locator('[data-testid="export-estimate"]').innerText();
-  assert(/0\.07 م\.ب/.test(estMed), `and it tracks the quality switch — 69,104 bytes measured at متوسطة, «${estMed}» shown`);
+  const expectedMedMb = Math.round(((69104 / 1e6) * (docSeconds / 5)) * 100) / 100;
+  assert(
+    Math.abs(mbShown(estMed) - expectedMedMb) <= 0.02 && mbShown(estMed) < mbShown(est1),
+    `and it tracks the quality switch — 69,104 bytes measured at متوسطة over 5s scales to ≈${expectedMedMb} م.ب here, «${estMed}» shown, and it is below the عالية figure`,
+  );
   await page.getByRole('button', { name: 'عالية', exact: true }).click();
   await page.waitForTimeout(180);
 
