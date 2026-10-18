@@ -20,7 +20,15 @@ import { decodePng, averageColor, pixelAt, hexOf, parseHex, colorDistance } from
 
 const DEFAULT_COLOR_TOLERANCE = 40;
 
-function evalCriterion(c, img, bg) {
+/** تقييمُ بندِ صورةٍ ساكنة على صورةٍ **مفكوكة** — لا على مسارِ ملفّ.
+ *
+ * صُدِّر ليستعمله محكّمُ الفيديو كما هو، بلا نسخٍ ولا تفريع: بندُ `frameAt` ليس
+ * إلا «استخرج الإطار المعروض عند t ثم اسأله الأسئلةَ الساكنةَ نفسَها». ولو
+ * نُسخت هذه الدالّة هناك لصار للمستودع مقياسان للون الواحد، ولاختلف جوابُهما
+ * يومًا — وهو بعينه السببُ الذي من أجله استُخرج `lib/png.mjs` من ثلاث نسخ.
+ *
+ * ولم يتغيّر من منطق الدالّة شيء بالتصدير: كلمةُ `export` وحدها أُضيفت. */
+export function evalCriterion(c, img, bg) {
   switch (c.type) {
     case 'canvas': {
       const ok = img.width === c.w && img.height === c.h;
@@ -119,7 +127,10 @@ function inkAverage(img, region, bg, minDistance) {
   return { r: Math.round(sum.r / core.length), g: Math.round(sum.g / core.length), b: Math.round(sum.b / core.length) };
 }
 
-function inkFraction(img, region, bg, minDistance) {
+/** نسبةُ بكسلات المنطقة التي تبتعد عن الخلفيّة. صُدِّرت لأن بندَ `appearsBetween`
+ * المرئي هو هذا المقياس نفسه مقروءًا عند زمنين، ولمُعاير العتبات الذي يَقرؤه
+ * عبر الزمن ليُخرج عتبتَي «فارغ» و«ممتلئ» من قياسٍ لا من تخمين. */
+export function inkFraction(img, region, bg, minDistance) {
   const x0 = Math.round(region.x * img.width);
   const y0 = Math.round(region.y * img.height);
   const x1 = Math.min(img.width, Math.round((region.x + region.w) * img.width));

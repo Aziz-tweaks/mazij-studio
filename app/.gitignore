@@ -35,6 +35,26 @@ qa/replication/assets/
 qa/replication/attempt-t02.png
 qa/replication/attempt-t03.png
 
+# حلقة المحاكاة — الفيديو.
+#
+# مجموعتان لسببين مختلفين، ولا تُدمَجان:
+#
+# (١) `t00-video-calib/*.mp4` مُخرَجاتُ بناء، لا مراجع. تُولَّد بأمرٍ واحد من
+#     `make-video-controls.mjs` المتتبَّع، وأُثبِتت إعادةُ إنتاجها بتطابق md5 بين
+#     تشغيلين. والمحفوظُ في المستودع هو **الأرقامُ المقيسة** — في `spec.json` تحت
+#     `calibration` وفي `README.md` الهدف — لأنها ما يجب أن يبقى قابلًا للمراجعة.
+#     ومن ولّدها بإصدار ffmpeg آخر فقاس أرضيّةَ ضجيجٍ مختلفة فذلك نتيجةٌ تُبلَّغ.
+#
+#     وt01 لا يُقاس عليها: مرجعُه `target.png` يُصيّره **متصفّح** من
+#     `reference.html`، ونتيجتُه تتبع إصدارَ المتصفّح وخطوطَ الجهاز، فيُتتبَّع.
+#
+# (٢) `t04-logo-anim/target.mp4` مرجعٌ لا يملكه هذا المستودع — فيديو المالك
+#     «مزيج لوجو انيميشن» — فحكمُه حكمُ t02 وt03: محليٌّ لا يُرفَع. والمجلّد يحمل
+#     `README.md` يشرح ما ينقصه وكيف تُكتَب مواصفتُه حين يَصِل.
+qa/replication/targets/t00-video-calib/*.mp4
+qa/replication/targets/t04-logo-anim/target.mp4
+qa/replication/attempt-t04.mp4
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
