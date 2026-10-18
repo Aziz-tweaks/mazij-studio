@@ -40,6 +40,8 @@ function startWindowDrag(e: React.PointerEvent) {
 export function TopBar() {
   const { state, actions, dict: L } = useStudio();
   const isEditor = state.screen === 'editor';
+  const undoLabel = state.historyLabels[state.historyPast.length - 1] ?? '';
+  const redoLabel = state.historyFutureLabels[0] ?? '';
   const mSimple = seg(state.mode !== 'pro');
   const mPro = seg(state.mode === 'pro');
   const cmdKeyLabel = isMac ? '⌘K' : 'Ctrl K';
@@ -133,11 +135,36 @@ export function TopBar() {
           {state.mode === 'pro' && (
             <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{L.duration}</span>
           )}
+          {/* **خطوةُ التراجع تَحمل اسمَها.** القاعدةُ مكتوبةٌ عند `pushHistory`
+              في `StudioContext.tsx`: التنقّلُ والتحديدُ والمؤشّرُ لا تُسجَّل، وكلُّ
+              ما يُغيّر المستند خطوةٌ واحدةٌ مُسمّاة. وخطوةٌ من موضعٍ لم يُسمِّ
+              نفسَه بعد تعود إلى «تراجع» العامّة — لا اسمٌ مُختلَق. */}
           <div style={{ display: 'flex', gap: 2 }}>
-            <button title={L.undo} className="mz-btn" disabled={!state.historyPast.length} onClick={actions.undo} style={{ ...iconBtnStyle, opacity: state.historyPast.length ? 1 : 0.35 }}>
+            <button
+              data-testid="undo-btn"
+              data-undo-label={undoLabel}
+              // عددُ الخطوات مقروءٌ على الزرّ، كما يُقرأ الزمنُ على الساعة
+              // (`data-t`) والمدى على المسطرة (`data-span`). والمعيار B5 يسأل
+              // «أبقي سجلُّ التراجع كما هو؟» وهو سؤالٌ لا يُجاب بالعين.
+              data-history-past={state.historyPast.length}
+              title={undoLabel ? `${L.undo}: ${undoLabel}` : L.undo}
+              className="mz-btn"
+              disabled={!state.historyPast.length}
+              onClick={actions.undo}
+              style={{ ...iconBtnStyle, opacity: state.historyPast.length ? 1 : 0.35 }}
+            >
               <Icon size={18} path="M8 5L4 9l4 4M4 9h8a4 4 0 0 1 0 8h-1" />
             </button>
-            <button title={L.redo} className="mz-btn" disabled={!state.historyFuture.length} onClick={actions.redo} style={{ ...iconBtnStyle, opacity: state.historyFuture.length ? 1 : 0.35 }}>
+            <button
+              data-testid="redo-btn"
+              data-redo-label={redoLabel}
+              data-history-future={state.historyFuture.length}
+              title={redoLabel ? `${L.redo}: ${redoLabel}` : L.redo}
+              className="mz-btn"
+              disabled={!state.historyFuture.length}
+              onClick={actions.redo}
+              style={{ ...iconBtnStyle, opacity: state.historyFuture.length ? 1 : 0.35 }}
+            >
               <Icon size={18} path="M12 5l4 4-4 4M16 9H8a4 4 0 0 0 0 8h1" />
             </button>
           </div>

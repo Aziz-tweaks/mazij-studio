@@ -185,6 +185,23 @@ export function cascadeEasingToTracks(tracks: PropertyTracks, easing: EasingId, 
   return next;
 }
 
+/** أهذه المساراتُ ما زالت ما يُنتجه نمطٌ جاهزٌ وحده، أم بُنيت باليد فوقه؟
+ *
+ * `x` و`rotation` لا يَظهران في مسارات أيّ نمطٍ أصلًا (انظر `tracksFromPreset`
+ * أعلاه) — فمجرّدُ وجودهما يعني أنّ المصمّم فتح مسارًا بيده. و`opacity`/`y`/`scale`
+ * يَزرع النمطُ فيها مفتاحَين بالضبط، فأكثرُ من اثنين على أيّ مسارٍ هو الدليل.
+ *
+ * وكانت هذه الدالّةُ تسكن `Timeline.tsx` ومُستهلِكها **واحدٌ: تلوينُ أيقونةِ ساعة**.
+ * نُقِلت هنا لأنّ لها الآن مستهلِكًا ثانيًا يَحمي المستند: حرسُ `withPreset` —
+ * فتطبيقُ نمطٍ لم يَعُد يُبيد مسارًا بُني باليد في صمت. */
+export function hasCustomAnimation(tracks: PropertyTracks): boolean {
+  return Object.entries(tracks).some(([prop, track]) => {
+    if (!track || !track.length) return false;
+    if (prop === 'x' || prop === 'rotation') return true;
+    return track.length > 2;
+  });
+}
+
 export function defaultAnim(preset: AnimPreset, start: number, duration: number, easing: EasingId = 'easeOut'): ElementAnim {
   const keyframes: AnimKeyframe[] = [
     { id: newElementId('kf'), t: 0, v: 0 },

@@ -1,4 +1,5 @@
 import type { AnimPreset } from '../../state/elements';
+import { hasCustomAnimation } from '../../state/elements';
 import { useStudio } from '../../state/StudioContext';
 
 const PRESETS: AnimPreset[] = ['none', 'fade', 'slide', 'pop'];
@@ -21,8 +22,18 @@ export function AnimPresetMenu() {
 
   if (!el) return <span style={{ fontSize: 11, color: 'var(--muted)' }}>{L.tl_simple_hint}</span>;
 
+  /** **الحرسُ معلَنٌ على السطح لا مكتومٌ في النموذج.**
+   *
+   * `withPreset` تُعيد بناءَ `tracks` كلّها من زوج `keyframes` القديم، فمسارُ `x`
+   * أو `rotation` بُني باليد كان يُباد بنقرةٍ واحدةٍ بلا تحذير. والنموذجُ يَرفض
+   * الآن (انظر `withPreset` في `StudioContext.tsx`)، **ورفضٌ صامتٌ زرٌّ ميت** —
+   * فالأزرارُ معطَّلةٌ وتلميحُها يقول السببَ وما يُزيله. وهي القاعدةُ نفسُها التي
+   * تَجعل المؤشّرةَ `not-allowed` على حافّةِ مقطعٍ مقفول: الممنوعُ يقول ذلك
+   * **قبل** أن تحاوله. */
+  const blocked = hasCustomAnimation(el.anim.tracks);
+
   return (
-    <div data-testid="anim-preset-menu" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <div data-testid="anim-preset-menu" data-preset-blocked={blocked ? 'true' : 'false'} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
       <span style={{ fontSize: 11, color: 'var(--muted)' }}>{L.entrance}</span>
       <div style={{ display: 'flex', padding: 2, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
         {PRESETS.map((p) => {
@@ -32,6 +43,8 @@ export function AnimPresetMenu() {
               key={p}
               data-testid={`anim-preset-${p}`}
               data-active={active}
+              disabled={blocked}
+              title={blocked ? L.preset_blocked : undefined}
               onClick={() => actions.setElementAnimPreset(el.id, p)}
               style={{
                 height: 22,
@@ -43,6 +56,8 @@ export function AnimPresetMenu() {
                 fontSize: 11,
                 fontWeight: active ? 600 : 500,
                 boxShadow: active ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
+                opacity: blocked ? 0.4 : 1,
+                cursor: blocked ? 'not-allowed' : 'pointer',
               }}
             >
               {L[`anim_${p}` as const]}

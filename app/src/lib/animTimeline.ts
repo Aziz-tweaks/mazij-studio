@@ -96,13 +96,30 @@ export function snapToFrame(seconds: number, fps: number): number {
  * before the clip or after it is a perfectly ordinary negative or large number here,
  * and `trackValueAt` holds the end keyframes rather than extrapolating. */
 export function animTimeAt(anim: ElementAnim, timelineTime: number): number {
-  return (anim.sourceIn ?? 0) + (timelineTime - anim.start);
+  return timelineTime - clipOffset(anim);
 }
 
 /** Animation time → timeline time. The inverse of `animTimeAt`; what the timeline
  * uses to place a keyframe diamond. */
 export function timelineTimeOf(anim: ElementAnim, animTime: number): number {
-  return anim.start + (animTime - (anim.sourceIn ?? 0));
+  return animTime + clipOffset(anim);
+}
+
+/** `start − sourceIn` — the **one quantity** that maps between the two axes, and the
+ * one a trim leaves invariant because it moves both fields by the same delta (§1A).
+ *
+ * ولِمَ تُحتَسب أوّلًا بدل `sourceIn + (t − start)`: الصيغتان متطابقتان جبرًا
+ * ومختلفتان في حسابٍ عشريٍّ ثنائيّ. تقليمُ الرأس بـ٠٫٤ث يجعل الحدَّين `0.4` و
+ * `0.4`، فطرحُهما **صفرٌ تامّ** ويبقى الزمنُ `t` كما هو بتّةً ببتّة؛ أمّا
+ * `0.4 + (t − 0.4)` فجمعٌ وطرحٌ متعاقبان يُخرجان آخرَ بتّةٍ في بعض القيم. والمعيار
+ * B2 يقول «**بالضبط** ما كانت تُعيده»، وهذه الصيغةُ تجعل الكلمةَ صحيحةً حرفًا لا
+ * تقريبًا — ومعها تصير دورةُ `timelineTimeOf(anim, animTimeAt(anim, t)) === t`
+ * مضمونةً لكلّ `t`، وهي خصلةٌ لا تُعطيها الصيغةُ الأخرى.
+ *
+ * ولعنصرٍ لم يُقلَّم قطُّ القيمةُ `start − 0 = start`، فالسلوكُ قبل المرحلة ٢
+ * واحدٌ لا يتغيّر. */
+export function clipOffset(anim: ElementAnim): number {
+  return anim.start - (anim.sourceIn ?? 0);
 }
 
 /** The resolved value of every independent property track at a given instant — the

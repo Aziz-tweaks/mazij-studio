@@ -90,6 +90,11 @@ export interface Dictionary {
   prop_opacity: string; prop_x: string; prop_y: string; prop_scale: string; prop_rotation: string;
   expand_tracks: string; collapse_tracks: string; kf_easing: string;
   entrance: string; tl_beyond_doc: string;
+  /** المرحلة ٢ — المقاطعُ الحيّة: التقسيمُ وأسبابُ تعطيله، وحرسُ النمط الجاهز،
+   * وأسماءُ خطوات التراجع. */
+  split_clip: string; split_consequence: string; split_no_selection: string; split_locked: string; split_outside: string;
+  preset_blocked: string;
+  undo_clip_move: string; undo_clip_trim_in: string; undo_clip_trim_out: string; undo_kf_move: string;
   ex_estimate: (seconds: number, files: number, mb: number) => string;
   ex_only_project_size: string; ex_only_project_size_hint: string; ex_video_scale_locked: string;
   text_stagger: string; stagger_unit_char: string; stagger_unit_word: string; stagger_unit_line: string;
@@ -261,6 +266,12 @@ export const AR: Dictionary = {
   no_easing_target: 'حدّد عنصرًا لتغيير منحنى حركته', add_keyframe: 'إضافة مفتاح عند المؤشر',
   delete_keyframe: 'حذف المفتاح', kf_value: 'القيمة', soon: 'قريبًا',
   tl_beyond_doc: 'بعد نهاية المشروع — هذا المدى لا يدخل الملفّ المُصدَّر. اسحب حافّة مقطعٍ إلى هنا ليَطول المشروع.',
+  split_clip: 'تقسيم', split_consequence: 'يُنتج عنصرين منفصلين بالنصّ نفسه',
+  split_no_selection: 'حدّد مقطعًا لتقسيمه', split_locked: 'الطبقة مقفولة — افتح قفلها لتقسيمها',
+  split_outside: 'المؤشّر خارج المقطع المحدَّد — انقله داخله ليُقسَّم',
+  preset_blocked: 'لهذا العنصر مسارات حركة بُنيت باليد — تطبيق حركة دخول جاهزة سيَمحوها، فهو ممنوع. احذف مفاتيحها أوّلًا إن أردت البدء من جديد.',
+  undo_clip_move: 'نقل المقطع', undo_clip_trim_in: 'تقليم بداية المقطع', undo_clip_trim_out: 'تقليم نهاية المقطع',
+  undo_kf_move: 'نقل مفتاح',
   prop_opacity: 'الشفافية', prop_x: 'الموضع X', prop_y: 'الموضع Y', prop_scale: 'المقياس', prop_rotation: 'الدوران',
   expand_tracks: 'إظهار مسارات الخصائص', collapse_tracks: 'إخفاء مسارات الخصائص', kf_easing: 'منحنى المفتاح',
   entrance: 'حركة الدخول',
@@ -490,6 +501,12 @@ export const EN: Dictionary = {
   no_easing_target: 'Select an element to edit its easing curve', add_keyframe: 'Add keyframe at playhead',
   delete_keyframe: 'Delete keyframe', kf_value: 'Value', soon: 'Coming soon',
   tl_beyond_doc: 'Past the end of the project — this range is not in the exported file. Drag a clip edge out here to make the project longer.',
+  split_clip: 'Split', split_consequence: 'produces two separate elements carrying the same text',
+  split_no_selection: 'Select a clip to split it', split_locked: 'This layer is locked — unlock it to split',
+  split_outside: 'The playhead is outside the selected clip — move it inside to split',
+  preset_blocked: 'This element has hand-built animation tracks — applying an entrance preset would erase them, so it is refused. Delete their keyframes first if you want to start over.',
+  undo_clip_move: 'Move clip', undo_clip_trim_in: 'Trim clip in', undo_clip_trim_out: 'Trim clip out',
+  undo_kf_move: 'Move keyframe',
   prop_opacity: 'Opacity', prop_x: 'Position X', prop_y: 'Position Y', prop_scale: 'Scale', prop_rotation: 'Rotation',
   expand_tracks: 'Show property tracks', collapse_tracks: 'Hide property tracks', kf_easing: 'Keyframe easing',
   entrance: 'Entrance',

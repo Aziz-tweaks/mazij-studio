@@ -237,6 +237,10 @@ export interface StudioState {
    * history — committed (or discarded, if nothing actually changed) once the gesture
    * ends. Fixes a plain click/press pushing a no-op undo step. */
   pendingEditSnapshot: DocSnapshot | null;
+  /** اسمُ الإيماءة الجارية، يُوضَع عند `beginElementEdit` ويُستهلَك عند
+   * `commitElementEdit` — فالخطوةُ الواحدة تَحمل اسمَها من أوّلها لا من آخرها،
+   * حيث لم يبقَ من يعرف ما كانت. */
+  pendingEditLabel: string | null;
   /** نقاط المسار الجاري رسمه بالقلم، بإحداثيات المستند (بكسل) — ليست جزءًا من
    * `DocSnapshot`/التراجع، لأن المسار لا يصبح عنصرًا حقيقيًا إلا عند `penFinish`.
    * `h` هو مقبض الخروج الذي سحبه المصمم أثناء وضع النقطة (إزاحة بالبكسل من النقطة)؛
@@ -269,6 +273,19 @@ export interface StudioState {
   homePrompt: string;
   historyPast: DocSnapshot[];
   historyFuture: DocSnapshot[];
+  /** **قاعدةُ التراجع، في سطرٍ واحد** (فكرةٌ من محرّر خطٍّ زمنيٍّ مفتوح،
+   * `crates/engine/src/keyboard.rs:33-34`): *التنقّلُ والتحديدُ والمؤشّرُ الزمنيُّ
+   * لا تُسجَّل، وكلُّ ما يُغيّر المستند خطوةٌ واحدةٌ مُسمّاة.*
+   *
+   * الخطوةُ كانت موجودةً ومجهولةَ الاسم. و`historyLabels[i]` اسمُ الخطوة التي
+   * يُعيدها `historyPast[i]`، فيقول تلميحُ زرّ التراجع **ماذا** سيتراجع عنه بدل
+   * «تراجع» المجرّدة. وسلسلةٌ فارغةٌ = خطوةٌ من موضعٍ لم يُسمِّ نفسَه بعد، فيعود
+   * التلميحُ إلى العامّ — لا اسمٌ مُختلَق.
+   *
+   * وتُحفَظ طولًا بطولٍ مع `historyPast`؛ وتبديلُ اللوحة يُعيدها فوارغَ بطول
+   * سجلّها، لأنّ الأسماء حالةُ جلسةٍ لا مستند (لا تُكتَب إلى القرص). */
+  historyLabels: string[];
+  historyFutureLabels: string[];
   dirty: boolean;
   saveState: 'idle' | 'saving' | 'saved' | 'error';
   savedAt: number | null;
@@ -427,6 +444,7 @@ export const initialStudioState: StudioState = {
   lockAspect: false,
   magicResizeOn: false,
   pendingEditSnapshot: null,
+  pendingEditLabel: null,
   penDraft: [],
   penClosePath: false,
   nodeEditId: null,
@@ -457,6 +475,8 @@ export const initialStudioState: StudioState = {
   homePrompt: '',
   historyPast: [],
   historyFuture: [],
+  historyLabels: [],
+  historyFutureLabels: [],
   dirty: false,
   saveState: 'idle',
   savedAt: null,

@@ -4,6 +4,9 @@ import { Icon } from './Icon';
 import { useStudio } from '../state/StudioContext';
 import { documentDuration, formatClock, formatDurationSec, frameDuration, tickLadder, timelineSpan, timelineTimeOf } from '../lib/animTimeline';
 import type { AnimProperty, DocElement } from '../state/elements';
+import { hasCustomAnimation } from '../state/elements';
+import { canSplitAt } from '../lib/timelineEdit';
+import { hitTest } from '../lib/timelineHit';
 import { elementDisplayName } from '../lib/layerNames';
 import { EASING_IDS, type EasingId } from '../lib/easing';
 import { EasingMenu, EASE_LABEL_KEY } from './timeline/EasingMenu';
@@ -34,18 +37,6 @@ function colorForLayer(id: string): string {
   return `hsl(${hash % 360}, 45%, 58%)`;
 }
 
-
-/** x/rotation never appear in any preset's default tracks (see `tracksFromPreset` in
- * elements.ts) — their mere presence already means the user keyframed them by hand.
- * Opacity/y/scale are preset-seeded with exactly 2 keyframes, so more than that on
- * any track is the signal that the animation was hand-customized beyond the preset. */
-function hasCustomAnimation(tracks: import('../state/elements').PropertyTracks): boolean {
-  return Object.entries(tracks).some(([prop, track]) => {
-    if (!track || !track.length) return false;
-    if (prop === 'x' || prop === 'rotation') return true;
-    return track.length > 2;
-  });
-}
 
 /** عنوانُ علامةٍ على المسطرة. ثوانٍ صحيحةٌ تُكتَب `3s`، وما دقّ عن الثانية يُكتَب
  * بمنزلتَيه (`0.5s`) — فسُلَّمُ العلامات يَنزل إلى أعشار الثانية على مستندٍ قصير،
@@ -162,22 +153,83 @@ export function Timeline({ timed }: { timed: boolean }) {
     window.addEventListener('pointerup', up);
   };
 
+  /** ضغطُ المسطرة يمرّ بفاحص الإصابة نفسِه الذي تمرّ به صفوفُ المقاطع، فتكون
+   * «أهذه مسطرةٌ أم صفٌّ أم حافّة؟» جوابًا من جدولٍ واحد لا من شجرةِ DOM. وهو
+   * عقدُ محرّر خطٍّ زمنيٍّ مفتوح المعماريّ: المؤشّرةُ والتحويمُ والضغطةُ **والمواصفة** تقرأ
+   * `hitTest` وحدها (`timeline_hit.rs:3-4`). */
+  const onRulerPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const hit = hitTest({ x: e.clientX - rect.left, y: e.clientY - rect.top }, { width: rect.width, span, rulerHeight: rect.height }, []);
+    if (hit.kind !== 'ruler') return;
+    startScrub(e);
+  };
+
+  /**
+   * **شريطُ التشغيل.** `Space` يُكمِل من المؤشّر، و`←`/`→` إطارٌ واحدٌ من إطارات
+   * **المستند**، و`⇧` معهما خمسةٌ، و`Home`/`End` طرفا المستند.
+   *
+   * ولِمَ هي على **سطح الخطّ الزمنيّ** لا على النافذة كلّها، وهذا قرارٌ مُعلَن:
+   * المفتاحان مأخوذان أصلًا بمعنًى آخر لا يجوز نقضُه — `Space` هو «اسحب اللوحة»
+   * على اللوحة (`Stage.tsx:119`)، والأسهمُ تُزحزح العنصرَ المحدَّد
+   * (`Stage.tsx:233-246`). فربطُهما على النافذة كان سيُنتج معنيَين لمفتاحٍ واحد،
+   * وهو بعينه ما تَمنعه قاعدةُ «لا وضعَ صامتًا». والسطحُ هنا قابلٌ للتركيز أصلًا
+   * (`tabIndex={0}`) وكان يملك الأسهمَ وحدها، فهذا توسيعُ ما هو قائم.
+   *
+   * و`stopPropagation` ليس تجميلًا: الأسهمُ كانت تُنفَّذ **مرّتين** — نقلُ المؤشّر
+   * هنا وزحزحةُ العنصر على مُستمِع النافذة في `Stage.tsx` — فسهمٌ واحدٌ يُحرّك
+   * الزمنَ والعنصرَ معًا. وإيقافُ الانتشار عند حاوية React يَمنع مُستمِعي النافذة،
+   * فيبقى للمفتاح معنًى واحدٌ حيث للسطح تركيز.
+   */
   const onTrackKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
+      e.stopPropagation();
       pauseIfPlaying();
       const dir = e.key === 'ArrowRight' ? 1 : -1;
       // إطارٌ واحدٌ **بمعدّل المستند**، لا `1/30` مثبَّتًا. وأثرُ تثبيته مقيس
       // (`re-effectcraft-source.md:549-552`): عند تصديرٍ بـ٢٤ إطارًا يهبط مفتاحٌ
       // وُضِع بالسهم بين إطارَي مخرَج، فيُظهر الإطارُ الأوّل قيمةً مُستَقرَأة لا
       // قيمةَ المفتاح نفسه.
-      actions.scrubTo(state.t + dir * frame);
+      // و`⇧` خمسةُ إطارات: خطوةٌ أكبر لا وحدةٌ أخرى، فيبقى كلُّ موضعٍ على الشبكة.
+      actions.scrubTo(state.t + dir * frame * (e.shiftKey ? 5 : 1));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      e.stopPropagation();
+      pauseIfPlaying();
+      actions.scrubTo(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      e.stopPropagation();
+      pauseIfPlaying();
+      // نهايةُ **المستند** لا نهايةُ مدى المسطرة: الأولى آخرُ لحظةٍ تدخل الملفَّ
+      // المُصدَّر، والثانية أرضيّةُ منظرٍ مُظلَّلةٌ مُعلَنٌ أنها خارجه.
+      actions.scrubTo(docDuration);
+    } else if (e.code === 'Space') {
+      e.preventDefault();
+      e.stopPropagation();
+      // `togglePlay` يُكمِل من المؤشّر ولا يَرجع إلى الصفر إلّا إن كان المؤشّر عند
+      // النهاية — العطل ٦ في `qa/motion-journey.spec.mjs`، مُغلَقٌ في المرحلة ١؛
+      // وهذا هو المفتاحُ الذي كان ينقصه.
+      actions.togglePlay();
     } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedKf) {
       e.preventDefault();
+      e.stopPropagation();
       actions.deleteTrackKeyframe(selectedKf.elId, selectedKf.property, selectedKf.kfId);
       setSelectedKf(null);
     }
   };
+
+  /** المقطعُ المحدَّد، وهو ما يُقسَّم. ومستندٌ بلا تحديدٍ لا شيءَ فيه يُقسَّم —
+   * فيقول الزرُّ ذلك بدل أن يُضغَط فلا يحدث شيء. */
+  const splitTarget = state.sel ? state.elements.find((e) => e.id === state.sel) : undefined;
+  const splitPossible = !!splitTarget && !splitTarget.locked && canSplitAt(splitTarget.anim, state.t, { fps: state.fps });
+  const splitTitle = !splitTarget
+    ? L.split_no_selection
+    : splitTarget.locked
+      ? L.split_locked
+      : !splitPossible
+        ? L.split_outside
+        : `${L.split_clip} (⌘B) — ${L.split_consequence}`;
 
   // مُنسِّقٌ حقيقيّ. كان البادئةُ `00:0` مكتوبةً بالحرف، فكان صحيحًا تحت العشر
   // ثوانٍ ولا شيءَ غير ذلك — وهو ما لم يكن ظاهرًا حين كان الخطّ لا يتجاوز الخمس.
@@ -296,6 +348,41 @@ export function Timeline({ timed }: { timed: boolean }) {
             <Icon size={14} fill="currentColor" path={state.playing ? 'M6 4v12M14 4v12' : 'M6 4l10 6-10 6z'} />
           </button>
           <span data-testid="timeline-time" data-t={state.t.toFixed(3)} style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', color: 'var(--muted)', minWidth: 60 }}>{tLabel}</span>
+          {/* **التقسيم له سطحٌ يُرى، لا اختصارٌ وحده.** و`⌘B` ليس بديلًا عنه:
+              قاعدةُ محرّر فيديو شائع `B` موجودةٌ على زرٍّ هناك أيضًا، ومَن لا يعرف الاختصارَ
+              لا يجد القدرةَ أصلًا.
+
+              **وتلميحُه يقول ما يُنتجه قبل أن يُضغَط** — «يُنتج عنصرين منفصلين
+              بالنصّ نفسه». وهذا ليس تزيينًا: التقسيم في نموذج مزيج **مضاعفةُ
+              عنصر**، فهو بابٌ جديدٌ إلى الحدّ الموثَّق «لونان في عنصر نصٍّ واحد»
+              (§5.4) — وتكاليفُه هناك مكتوبةٌ في `docs/CONTROLS.md:45`. فيُعلَن
+              لا يُكتشَف.
+
+              والمعطَّلُ يقول سببَه: لا تحديد، أو عنصرٌ مقفول، أو مؤشّرٌ خارج
+              المقطع — ثلاثُ رسائلَ لا صمتٌ واحد. */}
+          <button
+            data-testid="timeline-split-btn"
+            onClick={() => actions.splitAtPlayhead()}
+            disabled={!splitPossible}
+            aria-label={L.split_clip}
+            title={splitTitle}
+            style={{
+              height: 24,
+              padding: '0 8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--rs)',
+              background: 'var(--surface2)',
+              color: 'var(--text)',
+              fontSize: 11,
+              opacity: splitPossible ? 1 : 0.45,
+            }}
+          >
+            <Icon size={13} path="M10 2v6M10 12v6M4 10h12M7 7l3 3-3 3" />
+            {L.split_clip}
+          </button>
         </div>
         )}
         <div style={{ flex: 1 }} />
@@ -318,6 +405,9 @@ export function Timeline({ timed }: { timed: boolean }) {
               <div key={el.id} style={{ height: layerRowHeight(expanded), flex: 'none' }}>
                 <div
                   data-layer-id={el.id}
+                  // التحديدُ مقروءٌ لا مُستنتَجًا من لونِ خلفيّة: المعيار B6 يسأل
+                  // «أيُّ النصفين محدَّد بعد التقسيم؟» وهو سؤالٌ عن حالةٍ لا عن لون.
+                  data-selected={selected ? 'true' : 'false'}
                   draggable={isPro}
                   onDragStart={() => setDragId(el.id)}
                   onDragOver={(e) => isPro && e.preventDefault()}
@@ -446,7 +536,7 @@ export function Timeline({ timed }: { timed: boolean }) {
           onKeyDown={onTrackKeyDown}
           style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', outline: 'none' }}
         >
-          <div ref={rulerRef} data-testid="timeline-ruler" data-span={span} onPointerDown={startScrub} style={{ height: RULER_H, flex: 'none', position: 'relative', borderBottom: '1px solid var(--line)', cursor: 'ew-resize', touchAction: 'none' }}>
+          <div ref={rulerRef} data-testid="timeline-ruler" data-span={span} onPointerDown={onRulerPointerDown} style={{ height: RULER_H, flex: 'none', position: 'relative', borderBottom: '1px solid var(--line)', cursor: 'ew-resize', touchAction: 'none' }}>
             {ladder.ticks.map((t) => {
               const isLabel = Math.abs(t / ladder.labelStride - Math.round(t / ladder.labelStride)) < 1e-9;
               return (
@@ -486,22 +576,19 @@ export function Timeline({ timed }: { timed: boolean }) {
             />
           )}
           <div data-testid="timeline-tracks" onPointerDown={startScrub} style={{ flex: 1, position: 'relative', cursor: 'ew-resize', overflowY: 'auto', touchAction: 'none' }}>
-            {layers.map((el) => {
-              const color = colorForLayer(el.id);
-              if (!isPro) {
-                const leftPct = (el.anim.start / span) * 100;
-                const widthPct = (el.anim.duration / span) * 100;
-                return (
-                  <div key={el.id} style={{ height: CLIP_ROW_H, position: 'relative', borderBottom: '1px solid var(--line)' }}>
-                    <div style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top: 7, height: 16, borderRadius: 4, background: color, opacity: 0.35 }} />
-                    <div style={{ position: 'absolute', left: `calc(${leftPct}% + 8px)`, top: 7, height: 16, display: 'flex', alignItems: 'center', fontSize: 10, fontWeight: 500, color: 'var(--text)' }}>
-                      {L[`anim_${el.anim.preset}` as keyof typeof L] as string}
-                    </div>
-                  </div>
-                );
-              }
-              return <Clip key={el.id} el={el} color={color} expanded={expandedIds.has(el.id)} selectedKf={selectedKf} onSelectKf={setSelectedKf} />;
-            })}
+            {/* **البوّابةُ سقطت عن المقطع نفسه.** كان هذا الفرعُ يرسم في الوضع
+                البسيط شريطًا ساكنًا عند `opacity: .35` لا يُنقَل ولا يُقلَّم،
+                والوضعُ البسيط هو الافتراضيّ (`src/state/types.ts`) — فالمستندُ
+                المُوقَّت كان يُظهر شيئًا يُشبه المقطعَ ولا يَفعل ما يَفعله.
+                وهو البند ٧ في `docs/UX-AUDIT-2026-10-18.md` («وضعان يغيّران ما هو
+                موجود بصمت»)، مُغلَقٌ للخطّ الزمنيّ بعينه لا عمومًا.
+
+                و`pro` تَمرّ دعامةً لأنّ المفاتيحَ تبقى احترافيّة: الوضعُ البسيط
+                لا ماساتَ فيه ولا صفوفَ خصائصَ ولا زرَّ «مفتاح عند المؤشّر» —
+                وطريقُه إلى الحركة حركةُ الدخول، كما كان. انظر ترويسة `Clip`. */}
+            {layers.map((el) => (
+              <Clip key={el.id} el={el} color={colorForLayer(el.id)} expanded={expandedIds.has(el.id)} pro={isPro} selectedKf={selectedKf} onSelectKf={setSelectedKf} />
+            ))}
           </div>
           <div
             data-testid="timeline-playhead"

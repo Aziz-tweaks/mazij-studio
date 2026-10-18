@@ -18,12 +18,13 @@ import { initialStudioState } from './types';
 // من رحلة البوست (تلوين الشكل عبر كومة المظهر لا عبر الحقل القديم). لا تعارض في
 // النيّة — ملفٌّ واحد التقت عليه ثلاثة فروع.
 import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
-import { DEFAULT_IMAGE_CROP, cascadeEasingToTracks, defaultAnim, defaultTextStagger, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
+import { DEFAULT_IMAGE_CROP, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
 import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor } from '../lib/appearance';
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
 import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, frameDuration, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
+import { splitAt } from '../lib/timelineEdit';
 import { fetchAndRegisterFont } from '../lib/loadFont';
 import type { PersistedArtboard, PersistedDoc } from '../lib/persist';
 import { loadDoc, saveDoc } from '../lib/persist';
@@ -59,8 +60,28 @@ import { loadApiKey } from '../lib/aiKeyStore';
  *
  * `keyframes` is the legacy 0→1 progress pair `tracksFromPreset` maps through; a clip
  * that somehow lost it (fewer than the two endpoints a preset needs) is reseeded from
- * `defaultAnim` rather than silently producing a one-keyframe, frozen track. */
+ * `defaultAnim` rather than silently producing a one-keyframe, frozen track.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * **والحرسُ أدناه هو إصلاحُ عطلٍ لم يكن أحدٌ يَزعم أنه مُختبَر.**
+ *
+ * `tracksFromPreset` تُعيد بناءَ `tracks` **كلّها** من زوج `keyframes` القديم، فمسارُ
+ * `x` أو `rotation` بُني باليد كان يُباد بلا تحذيرٍ ولا تراجعٍ معلَن: نقرةٌ واحدة
+ * على «تلاشٍ» تُزيل عملَ ربع ساعة. وكانت `hasCustomAnimation` موجودةً فعلًا
+ * ومُستهلِكها **تلوينُ أيقونةِ ساعةٍ وحده**.
+ *
+ * وورقةُ محرّك حركةٍ مفتوح §9 تقول صريحةً إنها لا تدري أهذا مُختبَرٌ أم معروفٌ مقبولٌ أم
+ * غيرُ ملحوظ، ولا ترويسةَ مواصفةٍ تَزعمه — فيُعامَل **غيرَ ملحوظ** (§10.8).
+ *
+ * والحرسُ **رفضٌ معلَن لا صمت**: متى كانت المساراتُ مبنيّةً باليد تُعاد `anim` كما
+ * هي، ويُعلن السطحُ السببَ **قبل** الضغط — أزرارُ النمط معطَّلةٌ وتلميحُها يقول
+ * لماذا (`AnimPresetMenu`، والقاعدةُ نفسُها التي تَجعل المؤشّرةَ `not-allowed` على
+ * حافّةِ عنصرٍ مقفول). وهذا هو أدنى ما تطلبه الخطّة؛ وأعلاه — «يُضيف النمطُ مفاتيحَ
+ * عند المؤشّر» (محرّك حركةٍ مفتوح §7.4، `crates/engine/commands/anim_presets.rs:1-11`) —
+ * يَحتاج صيغةَ نمطٍ `[seconds, value]` نسبةً إلى المؤشّر، وهي المرحلة ٤، ولا تُشحَن
+ * نصفًا. */
 function withPreset(anim: ElementAnim, preset: AnimPreset): ElementAnim {
+  if (hasCustomAnimation(anim.tracks)) return anim;
   const keyframes = anim.keyframes.length >= 2 ? anim.keyframes : defaultAnim(preset, anim.start, anim.duration, anim.easing).keyframes;
   return { ...anim, preset, keyframes, tracks: tracksFromPreset(preset, keyframes, anim.easing, anim.bezier, anim.duration) };
 }
@@ -235,6 +256,26 @@ function docOf(s: StudioState): DocSnapshot {
   return { elements: s.elements, anim: s.anim, sizeIdx: s.sizeIdx, customW: s.customW, customH: s.customH, decorAccent: s.decorAccent, fps: s.fps, medium: s.medium };
 }
 
+/** **قاعدةُ التراجع، مكتوبةً في الكود سطرًا واحدًا** (فكرةٌ من محرّر خطٍّ زمنيٍّ مفتوح،
+ * `crates/engine/src/keyboard.rs:33-34`):
+ *
+ * > التنقّلُ والتحديدُ والمؤشّرُ الزمنيُّ لا تُسجَّل؛ وكلُّ ما يُغيّر المستند خطوةٌ
+ * > واحدةٌ مُسمّاة.
+ *
+ * وهذه الدالّةُ هي الموضعُ الوحيد الذي تُدفَع فيه خطوة، فالثلاثُ الحقائق —
+ * اللقطةُ واسمُها وإبطالُ المستقبل — تُكتَب معًا أو لا تُكتَب. ومن مرّ من هنا
+ * بلا اسمٍ تبقى خطوتُه مجهولةَ الاسم صريحًا (`''`)، فيعود تلميحُ الزرّ إلى
+ * «تراجع» العامّة — ولا اسمٌ مُختلَق. */
+function pushHistory(s: StudioState, label = ''): Pick<StudioState, 'historyPast' | 'historyLabels' | 'historyFuture' | 'historyFutureLabels' | 'dirty'> {
+  return {
+    historyPast: [...s.historyPast, docOf(s)],
+    historyLabels: [...s.historyLabels, label],
+    historyFuture: [],
+    historyFutureLabels: [],
+    dirty: true,
+  };
+}
+
 /** تبديلُ مقاسٍ، ومعه إعادةُ اشتقاق الطبيعة.
  *
  * دالّةٌ واحدة يمرّ بها كلُّ مسارِ تبديلٍ (`setSizeIdx`، `cycleSize`،
@@ -336,6 +377,8 @@ function startDoc(s: StudioState, doc: DocSnapshot, opts?: { paletteIdx?: number
     artboardDocs: {},
     historyPast: [],
     historyFuture: [],
+    historyLabels: [],
+    historyFutureLabels: [],
     sel,
     selectedIds: sel ? [sel] : [],
     editingTextId: null,
@@ -552,10 +595,20 @@ export interface StudioActions {
   alignSelected: (edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') => void;
   distributeSelected: (axis: 'x' | 'y') => void;
   deleteSelected: () => void;
-  beginElementEdit: () => void;
+  beginElementEdit: (label?: string) => void;
   commitElementEdit: () => void;
+  /** Escape أثناء السحب: يُعيد المستند إلى ما كان قبل الإيماءة ولا يُسجّل خطوة. */
+  cancelElementEdit: () => void;
   liveUpdateElements: (updater: (els: DocElement[]) => DocElement[]) => void;
-  commitElements: (updater: (els: DocElement[]) => DocElement[]) => void;
+  commitElements: (updater: (els: DocElement[]) => DocElement[], label?: string) => void;
+  /** **يُقسّم مقطعًا عند المؤشّر الزمنيّ، ويُبقي النصفَ الأيمن محدَّدًا** — قاعدةُ
+   * محرّر فيديو شائع، ومحرّر خطٍّ زمنيٍّ مفتوح تُقرّ بها على تطبيقِها نفسِه
+   * (`re-filmcraft-source.md:626`): الفعلُ التالي المعتاد على مقطعٍ قصيرٍ هو «أسقِط
+   * الذيل»، فـ`⌘B` ثم `Delete` يجب أن يعملا بلا إعادةِ تحديد.
+   *
+   * خطوةُ تراجعٍ **واحدة** مُسمّاة. ولا يفعل شيئًا إن لم يكن المؤشّر داخل المقطع
+   * بإطارٍ من كلّ جانب — وسطحُ التقسيم يقول ذلك قبل الضغط (`canSplitAt`). */
+  splitAtPlayhead: (id?: ElementId) => void;
   nudgeSelected: (dx: number, dy: number) => void;
   startTextEdit: (id: ElementId) => void;
   commitTextEdit: (id: ElementId, text: string) => void;
@@ -728,13 +781,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   }, []);
 
-  const commitElements = useCallback((updater: (els: DocElement[]) => DocElement[]) => {
+  const commitElements = useCallback((updater: (els: DocElement[]) => DocElement[], label = '') => {
     setState((s) => ({
       ...s,
       elements: updater(s.elements),
-      historyPast: [...s.historyPast, docOf(s)],
-      historyFuture: [],
-      dirty: true,
+      ...pushHistory(s, label),
     }));
   }, []);
 
@@ -743,8 +794,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   // snapshot to history only if the gesture actually changed something. A bare click
   // (pointerdown immediately followed by pointerup, no pointermove in between) never
   // calls liveUpdateElements, so the doc is byte-for-byte identical and nothing is pushed.
-  const beginElementEdit = useCallback(() => {
-    setState((s) => (s.pendingEditSnapshot ? s : { ...s, pendingEditSnapshot: docOf(s) }));
+  //
+  // والاسمُ يُوضَع **هنا**، في أوّل الإيماءة: عند الإفلات لم يبقَ من يعرف أيّ
+  // إيماءةٍ كانت — الحالةُ تقول «هذا مقطعٌ طولُه كذا» لا «قُلِّمت حافّتُه الأولى».
+  const beginElementEdit = useCallback((label = '') => {
+    setState((s) => (s.pendingEditSnapshot ? s : { ...s, pendingEditSnapshot: docOf(s), pendingEditLabel: label }));
   }, []);
 
   const commitElementEdit = useCallback(() => {
@@ -752,13 +806,62 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const before = s.pendingEditSnapshot;
       if (!before) return s;
       const changed = JSON.stringify(docOf(s)) !== JSON.stringify(before);
-      if (!changed) return { ...s, pendingEditSnapshot: null };
-      return { ...s, pendingEditSnapshot: null, historyPast: [...s.historyPast, before], historyFuture: [], dirty: true };
+      if (!changed) return { ...s, pendingEditSnapshot: null, pendingEditLabel: null };
+      return {
+        ...s,
+        pendingEditSnapshot: null,
+        pendingEditLabel: null,
+        historyPast: [...s.historyPast, before],
+        historyLabels: [...s.historyLabels, s.pendingEditLabel ?? ''],
+        historyFuture: [],
+        historyFutureLabels: [],
+        dirty: true,
+      };
+    });
+  }, []);
+
+  /** **يُلغي الإيماءةَ الجارية ويُعيد المستند إلى ما كان قبلها، ولا يُسجّل شيئًا.**
+   *
+   * هذا ما يَربطه زرُّ Escape أثناء السحب (`timeline.rs:2519-2546`, `:2681`): لا
+   * نصفَ تقليمٍ يُثبَّت، ولا خطوةَ تراجعٍ تُدفَع فيُضطرّ المصمّم إلى تراجعٍ
+   * ليُبطل إلغاءً. و`commitElementEdit` **لا تكفي** بديلًا: هي تقيس «أتغيّر
+   * المستند؟» على الحالة الراهنة، والحالةُ الراهنة أثناء السحب **متغيّرةٌ فعلًا** —
+   * فالإفلات بعدها كان سيدفع خطوةً صحيحةَ البنية خاطئةَ المعنى. */
+  const cancelElementEdit = useCallback(() => {
+    setState((s) => {
+      const before = s.pendingEditSnapshot;
+      if (!before) return s;
+      return { ...s, ...before, pendingEditSnapshot: null, pendingEditLabel: null };
     });
   }, []);
 
   const liveUpdateElements = useCallback((updater: (els: DocElement[]) => DocElement[]) => {
     setState((s) => ({ ...s, elements: updater(s.elements) }));
+  }, []);
+
+  /** انظر `splitAtPlayhead` في عقد الأفعال أعلى الملفّ لِمَ النصفُ الأيمن هو
+   * المحدَّد. ويُعرَّف هنا — لا داخل `actions` — لأنّ أثرَ لوحة المفاتيح
+   * (`⌘B`) ينادِيه، وثباتُه مطلوبٌ لقائمة اعتماده. */
+  const splitAtPlayhead = useCallback((id?: ElementId) => {
+    setState((s) => {
+      // مستندٌ ساكنٌ لا خطَّ زمنيَّ له، فلا تقسيمَ فيه — السطحُ **غائبٌ** لا
+      // معطَّل (المرحلة ١، §4.2)، والاختصارُ يَتبع سطحَه.
+      if (s.medium !== 'timed') return s;
+      const targetId = id ?? s.sel;
+      if (!targetId) return s;
+      const result = splitAt(s.elements, targetId, s.t, { fps: s.fps, newId: newElementId });
+      if (!result) return s;
+      // النصفُ الأيمن محدَّدًا — ومع مجموعته إن كان في واحدة، كما يفعل كلُّ
+      // تحديدٍ آخر في البرنامج (`expandGroups`).
+      const members = expandGroups([result.rightId], result.elements);
+      return {
+        ...s,
+        elements: result.elements,
+        selectedIds: members,
+        sel: members[0] ?? result.rightId,
+        ...pushHistory(s, s.lang === 'ar' ? 'تقسيم المقطع' : 'Split clip'),
+      };
+    });
   }, []);
 
   const patchDoc = useCallback((p: Partial<Pick<StudioState, 'anim' | 'sizeIdx' | 'customW' | 'customH' | 'decorAccent'>> | ((s: StudioState) => Partial<Pick<StudioState, 'anim' | 'sizeIdx' | 'customW' | 'customH' | 'decorAccent'>>)) => {
@@ -773,7 +876,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // computed transform at t=0.1s stayed `matrix(1,0,0,1,0,108)` — the 'slide'
       // value — after picking 'pop'.
       const elements = resolved.anim ? s.elements.map((e) => (e.id === 'head' ? { ...e, anim: withPreset(e.anim, resolved.anim!) } : e)) : s.elements;
-      return { ...s, ...resolved, elements, historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true };
+      return { ...s, ...resolved, elements, ...pushHistory(s) };
     });
   }, []);
 
@@ -826,6 +929,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         medium: active.doc.medium,
         historyPast: [],
         historyFuture: [],
+        historyLabels: [],
+        historyFutureLabels: [],
         dirty: false,
         activeArtboardId: active.id,
         postPalette: active.paletteIdx,
@@ -949,7 +1054,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         cmdOpen: false,
         cmdQuery: '',
         cmdSel: 0,
-        ...(hasDoc ? { historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true } : {}),
+        ...(hasDoc ? pushHistory(s) : {}),
       };
     });
   }, []);
@@ -981,7 +1086,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             aiTyping: false,
             ...rest,
             ...doc,
-            ...(hasDoc ? { historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true } : {}),
+            ...(hasDoc ? pushHistory(s) : {}),
           };
         });
       }, 900);
@@ -1232,6 +1337,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       if ((e.metaKey || e.ctrlKey) && (e.code === 'KeyK' || e.key.toLowerCase() === 'k')) {
         e.preventDefault();
         patch((s) => ({ cmdOpen: !s.cmdOpen, cmdQuery: '', cmdSel: 0 }));
+      } else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyB' && !e.shiftKey && !e.altKey) {
+        // **⌘B — تقسيمٌ عند المؤشّر، والنصفُ الأيمن محدَّد.**
+        //
+        // المطابقةُ على `e.code` لا `e.key`، للسبب المقيس في `Stage.tsx`: تحت لوحة
+        // مفاتيح عربيّة يصير `e.key` حرفًا عربيًّا ويبقى `e.code` على `KeyB` —
+        // فالربطُ بـ`e.key` كان سيشحن اختصارًا يعمل بالإنجليزيّة وحدها، وهذا
+        // برنامجٌ عربيٌّ أوّلًا.
+        //
+        // وحقلُ نصٍّ تحت المؤشّر يَملك مفتاحَه: `⌘B` في محرّرِ نصٍّ تعني «عريض».
+        // الشرطُ نفسُه الذي يَستعمله `Stage.tsx:1262`.
+        const t = e.target;
+        const editable = t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+        if (editable) return;
+        e.preventDefault();
+        splitAtPlayhead();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) redoRef.current();
@@ -1242,13 +1362,24 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [patch]);
+  }, [patch, splitAtPlayhead]);
 
   const undo = useCallback(() => {
     setState((s) => {
       if (!s.historyPast.length) return s;
       const prev = s.historyPast[s.historyPast.length - 1];
-      return { ...s, ...prev, historyPast: s.historyPast.slice(0, -1), historyFuture: [docOf(s), ...s.historyFuture], dirty: true };
+      // الاسمُ يسافر مع الخطوة في الاتجاهين: ما تراجعتَ عنه هو ما تُعيده الإعادة،
+      // فاسمُه واحد ولا يُعاد تخمينُه.
+      const label = s.historyLabels[s.historyPast.length - 1] ?? '';
+      return {
+        ...s,
+        ...prev,
+        historyPast: s.historyPast.slice(0, -1),
+        historyLabels: s.historyLabels.slice(0, -1),
+        historyFuture: [docOf(s), ...s.historyFuture],
+        historyFutureLabels: [label, ...s.historyFutureLabels],
+        dirty: true,
+      };
     });
   }, []);
 
@@ -1256,7 +1387,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setState((s) => {
       if (!s.historyFuture.length) return s;
       const [next, ...rest] = s.historyFuture;
-      return { ...s, ...next, historyPast: [...s.historyPast, docOf(s)], historyFuture: rest, dirty: true };
+      const [label = '', ...restLabels] = s.historyFutureLabels;
+      return {
+        ...s,
+        ...next,
+        historyPast: [...s.historyPast, docOf(s)],
+        historyLabels: [...s.historyLabels, label],
+        historyFuture: rest,
+        historyFutureLabels: restLabels,
+        dirty: true,
+      };
     });
   }, []);
 
@@ -1328,9 +1468,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           elements,
           selectedIds: [newId],
           sel: newId,
-          historyPast: [...s.historyPast, docOf(s)],
-          historyFuture: [],
-          dirty: true,
+          ...pushHistory(s),
         };
       });
     },
@@ -1359,7 +1497,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const elements = s.elements.map((e) =>
           e.id === id && e.type === 'image' ? { ...e, src: loaded.dataUrl, placeholder: false, naturalW: loaded.naturalW, naturalH: loaded.naturalH, ...DEFAULT_IMAGE_CROP } : e,
         );
-        return { ...s, elements, historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true };
+        return { ...s, elements, ...pushHistory(s) };
       });
     },
     [],
@@ -1405,9 +1543,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         elements: [...s.elements, el],
         selectedIds: [newId],
         sel: newId,
-        historyPast: [...s.historyPast, docOf(s)],
-        historyFuture: [],
-        dirty: true,
+        ...pushHistory(s),
       };
     });
   }, []);
@@ -1439,7 +1575,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const target = s.elements.find((e) => e.id === id);
       if (!target || target.type !== 'lottie') return s;
       const elements = s.elements.map((e) => (e.id === id && e.type === 'lottie' ? { ...e, data: loaded.json, naturalW: loaded.naturalW, naturalH: loaded.naturalH } : e));
-      return { ...s, elements, historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true };
+      return { ...s, elements, ...pushHistory(s) };
     });
   }, []);
 
@@ -1482,9 +1618,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         elements: [...s.elements, el],
         selectedIds: [newId],
         sel: newId,
-        historyPast: [...s.historyPast, docOf(s)],
-        historyFuture: [],
-        dirty: true,
+        ...pushHistory(s),
       };
     });
   }, []);
@@ -1605,7 +1739,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           ? { ...e, src: loaded.dataUrl, naturalW: loaded.naturalW, naturalH: loaded.naturalH, durationSec: loaded.durationSec, trimIn: 0, trimOut: loaded.durationSec, poster: loaded.poster }
           : e,
       );
-      return { ...s, elements, historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true };
+      return { ...s, elements, ...pushHistory(s) };
     });
   }, []);
 
@@ -1694,7 +1828,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             cmdOpen: false,
             cmdQuery: '',
             cmdSel: 0,
-            ...(hasDoc ? { historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true } : {}),
+            ...(hasDoc ? pushHistory(s) : {}),
           };
         });
       },
@@ -1734,9 +1868,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // «التحجيم الذكي» بابٌ رابعٌ لتبديل المقاس، فيمرّ بالمُشتِقّ نفسه —
             // وإلّا صار المستند مُوقَّتًا في الحقل وساكنًا في المقاس.
             ...withDerivedMedium(sizeIdx, sizeIdx === CUSTOM_SIZE_IDX ? to.w : s.customW, sizeIdx === CUSTOM_SIZE_IDX ? to.h : s.customH, s.medium),
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       setExportMagicResize: (exportMagicResize) => patch({ exportMagicResize }),
@@ -1758,6 +1890,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             ...incoming.doc,
             historyPast: incoming.historyPast,
             historyFuture: incoming.historyFuture,
+            historyLabels: incoming.historyPast.map(() => ''),
+            historyFutureLabels: incoming.historyFuture.map(() => ''),
             activeArtboardId: id,
             postPalette: meta.paletteIdx,
             artboardDocs: { ...restDocs, [s.activeArtboardId]: outgoing },
@@ -1785,6 +1919,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             ...newDoc,
             historyPast: [],
             historyFuture: [],
+            historyLabels: [],
+            historyFutureLabels: [],
             activeArtboardId: newId,
             artboards: [...s.artboards, { id: newId, name, paletteIdx: s.postPalette }],
             artboardDocs: { ...s.artboardDocs, [s.activeArtboardId]: outgoing },
@@ -1814,6 +1950,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             ...sourceDoc,
             historyPast: [],
             historyFuture: [],
+            historyLabels: [],
+            historyFutureLabels: [],
             activeArtboardId: newId,
             postPalette: meta.paletteIdx,
             artboards,
@@ -1849,6 +1987,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             ...incoming.doc,
             historyPast: incoming.historyPast,
             historyFuture: incoming.historyFuture,
+            historyLabels: incoming.historyPast.map(() => ''),
+            historyFutureLabels: incoming.historyFuture.map(() => ''),
             activeArtboardId: nextMeta.id,
             postPalette: nextMeta.paletteIdx,
             artboards: remaining,
@@ -1895,13 +2035,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return {
             ...s,
             elements: s.elements.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, tracks: { ...e.anim.tracks, [property]: nextTrack } } } : e)),
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s, (s.lang === 'ar' ? AR : EN).add_keyframe),
           };
         }),
       deleteTrackKeyframe: (id, property, kfId) =>
-        commitElements((els) =>
+        commitElements(
+          (els) =>
           els.map((e) => {
             if (e.id !== id) return e;
             const track = e.anim.tracks[property];
@@ -1912,6 +2051,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             else delete tracks[property];
             return { ...e, anim: { ...e.anim, tracks } };
           }),
+          (state.lang === 'ar' ? AR : EN).delete_keyframe,
         ),
       setTrackKeyframeValue: (id, property, kfId, value) =>
         commitElements((els) =>
@@ -1972,7 +2112,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         }),
       selectNone: () => patch({ selectedIds: [], sel: null }),
       setAnim: (anim) => patchDoc({ anim }),
-      setElementAnimPreset: (id, preset) => commitElements((els) => els.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e))),
+      setElementAnimPreset: (id, preset) =>
+        commitElements((els) => els.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e)), (state.lang === 'ar' ? AR : EN).entrance),
       setElementText: (id, text) => patchTextEl(id, { text }),
       setElementFont: (id, fontFamily) => patchTextEl(id, { fontFamily }),
       setElementFontSize: (id, px) => patchTextEl(id, { fontSize: clamp(px, 8, 400) }),
@@ -2174,9 +2315,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             elements,
             selectedIds: members.map((e) => e.id),
             sel: members[0]?.id ?? s.sel,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       ungroupSelected: () =>
@@ -2188,9 +2327,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return {
             ...s,
             elements: s.elements.map((e) => (e.groupId && gids.has(e.groupId) ? { ...e, groupId: null } : e)),
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       lockSelected: () =>
@@ -2204,9 +2341,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // على عنصرٍ لا يستجيب لها — وهي أوضح صورةٍ لـ«ضغطت فلم يحدث شيء».
             selectedIds: [],
             sel: null,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       toggleLocked: (id) =>
@@ -2220,9 +2355,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             elements: s.elements.map((e) => (ids.includes(e.id) ? { ...e, locked: nextLocked } : e)),
             selectedIds: nextLocked ? s.selectedIds.filter((x) => !ids.includes(x)) : s.selectedIds,
             sel: nextLocked && s.sel && ids.includes(s.sel) ? null : s.sel,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       unlockAll: () =>
@@ -2231,9 +2364,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return {
             ...s,
             elements: s.elements.map((e) => (e.locked ? { ...e, locked: false } : e)),
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       hideSelected: () =>
@@ -2246,9 +2377,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // المخفيّ يسقط من اختبار الإصابة (`Stage.tsx`) فلا يُنقَر — فلا يبقى محدَّدًا.
             selectedIds: [],
             sel: null,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       showAll: () =>
@@ -2257,9 +2386,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return {
             ...s,
             elements: s.elements.map((e) => (e.visible ? e : { ...e, visible: true })),
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       renameElement: (id, name) =>
@@ -2339,15 +2466,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             elements: s.elements.filter((e) => !ids.has(e.id)),
             selectedIds: [],
             sel: null,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       beginElementEdit,
       commitElementEdit,
+      cancelElementEdit,
       liveUpdateElements,
       commitElements,
+      splitAtPlayhead,
       nudgeSelected: (dx, dy) =>
         commitElements((els) => {
           const size = sizeAt(state.sizeIdx, state.customW, state.customH);
@@ -2363,9 +2490,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             ...s,
             editingTextId: null,
             elements: s.elements.map((e) => (e.id === id && e.type === 'text' ? { ...e, text } : e)),
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       addShapeElement: (kind, geoPx, opts) =>
@@ -2426,9 +2551,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // انتهى منه. وهو ما يقيسه محرّر فيديو شائع أيضًا: مفتّش مربوط بالتحديد
             // (`re-capcut-flows.md` §5.4).
             panel: 'props',
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       /** نقرة على بطاقة في لوح الأشكال: تضع الشكل فورًا — **بلا أي سحب**.
@@ -2484,9 +2607,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             panel: 'props',
             shapeDrawKind: recipe.kind,
             shapeDrawN: recipe.n ?? s.shapeDrawN,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       setShapeDrawN: (shapeDrawN) => patch({ shapeDrawN: clamp(shapeDrawN, MIN_SHAPE_N, MAX_SHAPE_N) }),
@@ -2534,9 +2655,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             selectedIds: [id],
             sel: id,
             tool: 'select',
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       penAddPoint: (x, y) => patch((s) => ({ penDraft: [...s.penDraft, { x, y }] })),
@@ -2600,9 +2719,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             selectedIds: [id],
             sel: id,
             tool: 'select',
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
 
@@ -2666,9 +2783,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             nodeEditSel: null,
             selectedIds: gone ? [] : s.selectedIds,
             sel: gone ? null : s.sel,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       insertPathPoint: (id, segIndex, t) =>
@@ -2683,9 +2798,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               e.id === id && e.type === 'shape' ? { ...e, points: next.points, cornerPoints: next.cornerPoints, handles: next.handles } : e,
             ),
             nodeEditSel: { index: segIndex + 1, part: 'anchor' },
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       applyBooleanOp: (op, ids) =>
@@ -2733,9 +2846,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             elements,
             selectedIds: [id],
             sel: id,
-            historyPast: [...s.historyPast, docOf(s)],
-            historyFuture: [],
-            dirty: true,
+            ...pushHistory(s),
           };
         }),
       convertTextToOutline: (id, outline, geo, fill) =>
@@ -2761,7 +2872,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             outline,
           };
           const elements = s.elements.map((e) => (e.id === id ? el : e));
-          return { ...s, elements, historyPast: [...s.historyPast, docOf(s)], historyFuture: [], dirty: true };
+          return { ...s, elements, ...pushHistory(s) };
         }),
       insertImageTool,
       insertImageFromFile,
@@ -2865,9 +2976,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           selectedIds: [],
           sel: null,
           templatesOpen: false,
-          historyPast: [...s.historyPast, docOf(s)],
-          historyFuture: [],
-          dirty: true,
+          ...pushHistory(s),
         }));
       },
       applyTemplateMotion: (templateId) => {
@@ -2906,9 +3015,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           // «مستندٌ جديد» بابٌ خامسٌ لتبديل المقاس، فيمرّ بالمُشتِقّ نفسه.
           ...withDerivedMedium(opts?.sizeIdx ?? s.sizeIdx, opts?.customW ?? s.customW, opts?.customH ?? s.customH, s.medium),
           fps: s.fps,
-          historyPast: [...s.historyPast, docOf(s)],
-          historyFuture: [],
-          dirty: true,
+          ...pushHistory(s),
         })),
       openMcp: () => patch({ mcpOpen: true }),
       closeMcp: () => patch({ mcpOpen: false }),
@@ -2929,6 +3036,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       liveUpdateElements,
       beginElementEdit,
       commitElementEdit,
+      cancelElementEdit,
+      splitAtPlayhead,
       togglePlay,
       addFont,
       sendAi,

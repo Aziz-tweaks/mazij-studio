@@ -5,7 +5,7 @@ import type { HAlign, VAlign } from '../../state/types';
 import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
 import { geoToPx } from '../../lib/geometry';
 import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
-import { ANIM_PROPERTIES, resolveTextColor } from '../../state/elements';
+import { ANIM_PROPERTIES, hasCustomAnimation, resolveTextColor } from '../../state/elements';
 import { keyframeAt } from '../../lib/animTimeline';
 import type { EasingId } from '../../lib/easing';
 import { EASE_LABEL_KEY } from '../timeline/EasingMenu';
@@ -330,6 +330,7 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
   const swatches = Array.from(new Set([pal.fg, pal.ac, pal.bg, '#FFFFFF', ...(pal.ac2 ? [pal.ac2] : [])]));
   const activeColor = el.color ?? pal.fg;
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
+  const presetBlocked = hasCustomAnimation(el.anim.tracks);
 
   // مسوّدة نصّيّة لحقل المقاس أثناء الكتابة — وإلا استحال **كتابة** مقاس أصلًا.
   //
@@ -508,17 +509,23 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
           بحركة». والنداء كان `actions.setAnim` العامّ، وهو يكتب حقل المستند ويَنسخ
           *اسم* النمط فقط إلى `'head'` بلا إعادة بناء `tracks` — فيُضيء الزرّ ولا
           يتحرّك شيء (قياسٌ: نفس `matrix(1,0,0,1,0,108)` قبل النقر وبعده). */}
+      {/* والحرسُ هنا كما هو في `AnimPresetMenu`: تطبيقُ نمطٍ جاهزٍ يُعيد بناء
+          `tracks` كلّها، فمسارٌ بُني باليد كان يُباد بنقرة. والرفضُ معلَنٌ —
+          أزرارٌ معطَّلةٌ بتلميحٍ يقول السببَ وما يُزيله — لا صامتٌ ولا زرٌّ ميت.
+          موضعانِ لأنّ للنمط مدخلَين، والحرسُ نفسُه في النموذج (`withPreset`). */}
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="mz-label">{L.animation}</div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div data-testid="props-anim-presets" data-preset-blocked={presetBlocked ? 'true' : 'false'} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {ANIMS.map((a) => {
             const active = el.anim.preset === a;
             return (
               <button
                 key={a}
                 data-testid={`props-anim-preset-${a}`}
+                disabled={presetBlocked}
+                title={presetBlocked ? L.preset_blocked : undefined}
                 onClick={() => actions.setElementAnimPreset(el.id, a)}
-                style={{ height: 30, padding: '0 12px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 12, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+                style={{ height: 30, padding: '0 12px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 12, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)', opacity: presetBlocked ? 0.4 : 1, cursor: presetBlocked ? 'not-allowed' : 'pointer' }}
               >
                 {L[`anim_${a}` as const]}
               </button>
