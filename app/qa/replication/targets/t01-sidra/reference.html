@@ -1,0 +1,100 @@
+<!doctype html>
+<!--
+  الهدف ٠١ — «مذاق السدرة».
+
+  هذا المرجع يُرسَم **خارج مزيج تمامًا**: HTML وCSS صِرفان يلتقطهما متصفّحٌ بلا
+  أيّ معرفةٍ بالتطبيق. وهذا شرطُ نزاهة الحلقة — لو رُسم المرجع بمزيج لكان السؤال
+  «أيُطابق مزيجٌ نفسَه» وهو سؤالٌ لا يكشف شيئًا.
+
+  اختيارُ الألوان متعمَّد: هي اللوحة الثالثة في `PALETTES` بالضبط
+  (#0F3D3E / #F1FAEE / #FFB703). الهدف الأول يجب أن يكون **قابلًا للإنجاز** حتى
+  تكون إشارتُه عن التخطيط والطباعة والأشكال، لا أن تغرق في عجزٍ معروفٍ مسبقًا عن
+  ضبط لونٍ مخصّص. ذلك العجز له هدفٌ لاحقٌ مخصّص له.
+
+  والمقاييس كلُّها مطلقةٌ بالبكسل على لوحة ١٠٨٠×١٠٨٠، فالمواصفة في `spec.json`
+  تشير إلى المواضع نفسها بنسبٍ مشتقّةٍ منها.
+-->
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;800&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1080px; overflow: hidden; }
+  body {
+    position: relative;
+    background: #0F3D3E;
+    font-family: Alexandria, system-ui, sans-serif;
+    color: #F1FAEE;
+  }
+
+  /* شارة دائريّة في الزاوية العليا اليسرى — مركزها (١٥٠،١٥٠) وقطرها ١٨٠. */
+  .badge {
+    position: absolute;
+    left: 60px;
+    top: 60px;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: #FFB703;
+    color: #0F3D3E;
+    display: grid;
+    place-items: center;
+    font-size: 58px;
+    font-weight: 800;
+  }
+
+  /* العنوان: محاذاةٌ إلى اليمين، حافّتُه اليمنى على بُعد ٩٠ من الحافّة. */
+  .head {
+    position: absolute;
+    right: 90px;
+    top: 430px;
+    width: 760px;
+    text-align: right;
+    font-size: 118px;
+    font-weight: 800;
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+  }
+
+  /* شريطٌ ذهبيّ تحت العنوان، محاذًى لليمين نفسه. */
+  .rule {
+    position: absolute;
+    right: 90px;
+    top: 624px;
+    width: 420px;
+    height: 14px;
+    border-radius: 7px;
+    background: #FFB703;
+  }
+
+  .sub {
+    position: absolute;
+    right: 90px;
+    top: 688px;
+    width: 760px;
+    text-align: right;
+    font-size: 44px;
+    font-weight: 400;
+    opacity: 0.92;
+  }
+
+  .foot {
+    position: absolute;
+    right: 90px;
+    top: 946px;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    opacity: 0.75;
+  }
+</style>
+</head>
+<body>
+  <div class="badge">٢٥٪</div>
+  <div class="head">مذاق السدرة</div>
+  <div class="rule"></div>
+  <div class="sub">افتتاح الفرع الجديد · حي الملقا</div>
+  <div class="foot">الرياض</div>
+</body>
+</html>

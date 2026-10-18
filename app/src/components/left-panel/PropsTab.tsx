@@ -1,0 +1,1911 @@
+import { useEffect, useState } from 'react';
+import { Icon } from '../Icon';
+import { PALETTES, sizeAt, seg } from '../../data/constants';
+import type { HAlign, VAlign } from '../../state/types';
+import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
+import { geoToPx } from '../../lib/geometry';
+import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
+import { ANIM_PROPERTIES, resolveTextColor } from '../../state/elements';
+import { keyframeAt, canKeyframeAtPlayhead } from '../../lib/animTimeline';
+import type { EasingId } from '../../lib/easing';
+import { EASE_LABEL_KEY } from '../timeline/EasingMenu';
+import { DEFAULT_MODEL_ID, downloadModel, getModelBytes, isModelDownloaded, modelById } from '../../lib/localModels';
+import { removeImageBackground } from '../../lib/backgroundRemoval';
+import { upscaleImage } from '../../lib/superResolution';
+import { isBooleanEligible } from '../../lib/pathBoolean';
+import { convertTextElementToOutline, isBuiltinFontFamily } from '../../lib/arabicShaping';
+import { buildCaptionElements, extractAudioSamples, transcribeAudio, whisperModelInfo } from '../../lib/autoCaptions';
+import { currentAppearance, normalizeHex, resolveLayerColor } from '../../lib/appearance';
+import type { AppearanceBlend, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, StrokePosition } from '../../state/elements';
+import { WIDTH_PROFILE_PRESETS, type StrokeWidthProfile } from '../../lib/variableStroke';
+
+const STAGGER_UNITS: StaggerUnit[] = ['char', 'word', 'line'];
+const STAGGER_DIRECTIONS: StaggerDirection[] = ['start', 'end', 'center', 'random'];
+const STAGGER_EFFECTS: StaggerEffect[] = ['fade', 'slide', 'scale', 'rotate'];
+const STAGGER_EASINGS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'back', 'bounce'];
+
+const WEIGHTS: Array<'regular' | 'medium' | 'bold'> = ['regular', 'medium', 'bold'];
+
+/** حدّا التتبُّع بالنسبة المئويّة من مقاس الخطّ. ‑٢٠٪ تُلصِق الحروف حدّ التداخل،
+ * و‎+٥٠٪ تفرّقها حدّ انقطاع الكلمة — وما وراءهما لا يُنتج طباعةً بل خللًا، وهو مدى
+ * أوسع ممّا تعرضه إنديزاين (‑١٠٪..+٢٠٪ في شريطها) عن قصد: الحدّ هنا للحماية من
+ * الخطأ لا لفرض ذوق. */
+const TRACKING_MIN = -20;
+const TRACKING_MAX = 50;
+const ANIMS: Array<'none' | 'fade' | 'slide' | 'pop'> = ['none', 'fade', 'slide', 'pop'];
+const TFIELDS: Array<{ k: string; prop: 'x' | 'y' | 'w' | 'h' | 'rotation' | 'opacity'; suffix?: string }> = [
+  { k: 'X', prop: 'x' },
+  { k: 'Y', prop: 'y' },
+  { k: 'W', prop: 'w' },
+  { k: 'H', prop: 'h' },
+  { k: '∠', prop: 'rotation', suffix: '°' },
+  { k: '◐', prop: 'opacity', suffix: '%' },
+];
+
+const ALIGN_BUTTONS: Array<{ d: string; kind: 'h' | 'v'; value: string }> = [
+  { d: 'M3 3v14M7 6h9M7 11h6', kind: 'h', value: 'start' },
+  { d: 'M10 3v14M4 7h12M6 12h8', kind: 'h', value: 'center' },
+  { d: 'M17 3v14M4 6h9M7 11h6', kind: 'h', value: 'end' },
+  { d: 'M3 3h14M6 7v9M11 7v6', kind: 'v', value: 'top' },
+  { d: 'M3 10h14M7 4v12M12 6v8', kind: 'v', value: 'middle' },
+  { d: 'M3 17h14M6 4v9M11 7v6', kind: 'v', value: 'bottom' },
+];
+
+const OBJECT_ALIGN: Array<{ d: string; edge: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom' }> = [
+  { d: 'M3 3v14M7 6h9M7 11h6', edge: 'left' },
+  { d: 'M10 3v14M4 7h12M6 12h8', edge: 'center' },
+  { d: 'M17 3v14M4 6h9M7 11h6', edge: 'right' },
+  { d: 'M3 3h14M6 7v9M11 7v6', edge: 'top' },
+  { d: 'M3 10h14M7 4v12M12 6v8', edge: 'middle' },
+  { d: 'M3 17h14M6 4v9M11 7v6', edge: 'bottom' },
+];
+
+export function PropsTab() {
+  const { state, actions, dict: L } = useStudio();
+  const isPen = state.tool === 'pen';
+  const isPro = state.mode === 'pro';
+  const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+  const el = firstSelectedElement(state);
+
+  // Clipping mask applies to a *pair* of any element kinds, as long as at least one of
+  // them is a shape (the mask). If both are shapes, the topmost (drawn last, matching
+  // أداة متّجهات's "top object = mask" convention) acts as the mask and the other is the
+  // clipped target — see docs/CONTROLS.md "قص بالشكل".
+  const pairSel = state.selectedIds.length === 2 ? selectedElements(state) : [];
+  let maskCandidate: { target: DocElement; mask: DocElement & { type: 'shape' } } | null = null;
+  if (pairSel.length === 2) {
+    const [a, b] = pairSel;
+    const shapes = pairSel.filter((e): e is DocElement & { type: 'shape' } => e.type === 'shape');
+    if (shapes.length === 1) {
+      const mask = shapes[0];
+      const target = pairSel.find((e) => e.id !== mask.id)!;
+      maskCandidate = { target, mask };
+    } else if (shapes.length === 2) {
+      const idxA = state.elements.findIndex((e) => e.id === a.id);
+      const idxB = state.elements.findIndex((e) => e.id === b.id);
+      const mask = (idxA > idxB ? a : b) as DocElement & { type: 'shape' };
+      const target = idxA > idxB ? b : a;
+      maskCandidate = { target, mask };
+    }
+  }
+
+  // Roadmap #12 — "نص على مسار": same pair-selection convention as the clipping mask
+  // above (select the text element + a candidate path shape together), rather than a
+  // separate dropdown — one text element, one path shape, order doesn't matter.
+  let pathCandidate: { text: DocElement & { type: 'text' }; path: DocElement & { type: 'shape' } } | null = null;
+  if (pairSel.length === 2) {
+    const texts = pairSel.filter((e): e is DocElement & { type: 'text' } => e.type === 'text');
+    const paths = pairSel.filter((e): e is DocElement & { type: 'shape' } => e.type === 'shape' && e.shape === 'path' && ((e.points?.length ?? 0) >= 2 || (e.subpaths?.length ?? 0) > 0));
+    if (texts.length === 1 && paths.length === 1) pathCandidate = { text: texts[0], path: paths[0] };
+  }
+
+  // Roadmap #10: any 2+-shape selection can attempt a boolean op — eligibility
+  // (closed paths only) is checked inside `BooleanOpsSection` itself, which disables
+  // rather than hides when something in the selection doesn't qualify.
+  const multiSel = state.selectedIds.length >= 2 ? selectedElements(state) : [];
+  const shapeSelection = multiSel.length >= 2 && multiSel.every((e) => e.type === 'shape') ? (multiSel as Array<DocElement & { type: 'shape' }>) : null;
+
+  return (
+    <div style={{ padding: '14px 14px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {isPen ? (
+        <PenProps />
+      ) : !el ? (
+        <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--muted)', fontSize: 12.5 }}>{L.no_selection}</div>
+      ) : (
+        <>
+          {maskCandidate && (
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="mz-label">{L.sec_mask}</div>
+              <p style={{ margin: 0, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.mask_hint}</p>
+              <button
+                onClick={() => actions.applyClippingMask(maskCandidate.target.id, maskCandidate.mask.id)}
+                style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}
+              >
+                {L.clip_mask}
+              </button>
+            </section>
+          )}
+          {el.maskId && !maskCandidate && (
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="mz-label">{L.sec_mask}</div>
+              <button
+                onClick={() => actions.releaseClippingMask(el.id)}
+                style={{ height: 30, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600 }}
+              >
+                {L.release_mask}
+              </button>
+            </section>
+          )}
+          {pathCandidate && (
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="mz-label">{L.sec_text_on_path}</div>
+              <p style={{ margin: 0, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.text_on_path_hint}</p>
+              <button
+                data-testid={`text-on-path-btn-${pathCandidate.text.id}`}
+                onClick={() => actions.setTextPathId(pathCandidate.text.id, pathCandidate.path.id)}
+                style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}
+              >
+                {L.text_on_path_btn}
+              </button>
+            </section>
+          )}
+          {el.type === 'text' && el.pathId && !pathCandidate && (
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div className="mz-label">{L.sec_text_on_path}</div>
+              <button
+                data-testid={`text-on-path-release-${el.id}`}
+                onClick={() => actions.setTextPathId(el.id, null)}
+                style={{ height: 30, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600 }}
+              >
+                {L.text_on_path_release}
+              </button>
+            </section>
+          )}
+          {el.type === 'text' && <TextProps el={el} />}
+          {el.type === 'shape' && <ShapeProps el={el} />}
+          {el.type === 'image' && <ImageProps el={el} />}
+          {el.type === 'lottie' && <LottieProps el={el} />}
+          {el.type === 'video' && <VideoProps el={el} />}
+          {el.type === 'video' && <AutoCaptionsSection el={el} />}
+
+          <OrganiseSection />
+
+          {isPro && (
+            <>
+              {state.selectedIds.length === 1 && <AppearanceSection el={el} />}
+              <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div className="mz-label" style={{ flex: 1 }}>{L.transform}</div>
+                  <button
+                    onClick={() => actions.setLockAspect(!state.lockAspect)}
+                    title={L.lock_aspect}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, height: 22, padding: '0 8px', border: `1px solid ${state.lockAspect ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.lockAspect ? 'var(--accentSoft)' : 'transparent', color: state.lockAspect ? 'var(--accent)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
+                  >
+                    <Icon size={12} path="M6 9V6a4 4 0 1 1 8 0v3M4 9h12v8H4z" />
+                    {L.lock_aspect}
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {TFIELDS.map((f) => {
+                    const box = geoToPx(el.geo, size);
+                    const raw = f.prop === 'rotation' ? el.geo.rotation : f.prop === 'opacity' ? el.opacity : (box as unknown as Record<string, number>)[f.prop];
+                    const disabled = state.selectedIds.length !== 1;
+                    return (
+                      <label key={f.k} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 4px 0 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
+                        <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 14, fontSize: 11 }}>{f.k}</span>
+                        <NumField
+                          disabled={disabled}
+                          value={raw}
+                          onCommit={(v) => {
+                            if (f.prop === 'opacity') actions.setElementOpacity(el.id, v);
+                            else if (f.prop === 'rotation') actions.setElementGeoPx(el.id, { rotation: v });
+                            else if (f.prop === 'x') actions.setElementGeoPx(el.id, { x: v });
+                            else if (f.prop === 'y') actions.setElementGeoPx(el.id, { y: v });
+                            else if ((f.prop === 'w' || f.prop === 'h') && state.lockAspect && box.w > 0 && box.h > 0) {
+                              const ratio = box.w / box.h;
+                              if (f.prop === 'w') actions.setElementGeoPx(el.id, { w: v, h: v / ratio });
+                              else actions.setElementGeoPx(el.id, { h: v, w: v * ratio });
+                            } else if (f.prop === 'w') actions.setElementGeoPx(el.id, { w: v });
+                            else actions.setElementGeoPx(el.id, { h: v });
+                          }}
+                          style={{ flex: 1, minWidth: 0, width: '100%', border: 0, background: 'transparent', outline: 0, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
+                        />
+                        {f.suffix && <span style={{ color: 'var(--muted)', fontSize: 11 }}>{f.suffix}</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+                {state.selectedIds.length === 1 && <KeyframeToggleRow el={el} />}
+              </section>
+
+              <ArrangeSection />
+              {shapeSelection && <BooleanOpsSection shapes={shapeSelection} />}
+
+              <section data-soon="blend" style={{ display: 'flex', flexDirection: 'column', gap: 10, opacity: 0.45, pointerEvents: 'none' }} aria-disabled title="قريبًا">
+                <div className="mz-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {L.blend} <SoonBadge />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'center' }}>
+                  <button disabled style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, textAlign: 'start' }}>
+                    <span style={{ flex: 1 }}>{L.blend_normal}</span>
+                    <Icon size={14} path="M5 8l5 5 5-5" />
+                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input type="range" defaultValue={100} disabled style={{ flex: 1, accentColor: 'var(--accent)' }} />
+                    <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', minWidth: 34, textAlign: 'end' }}>100%</span>
+                  </div>
+                </div>
+              </section>
+              <section data-soon="effects" style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.45, pointerEvents: 'none' }} aria-disabled title="قريبًا">
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span className="mz-label" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>{L.effects} <SoonBadge /></span>
+                  <button disabled style={{ height: 24, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>+ {L.add_fx}</button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
+                  <Toggle on />
+                  <span style={{ flex: 1 }}>{L.fx_shadow}</span>
+                  <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11 }}>0 · 12 · 40</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, color: 'var(--muted)' }}>
+                  <Toggle on={false} />
+                  <span style={{ flex: 1 }}>{L.fx_blur}</span>
+                </div>
+              </section>
+            </>
+          )}
+
+          {!isPro && (
+            <button
+              onClick={actions.setPro}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', border: '1px dashed var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', fontSize: 12 }}
+            >
+              <Icon size={14} path="M3 6h14M3 10h14M3 14h14M7 4.5v3M13 8.5v3M9 12.5v3" />
+              <span style={{ flex: 1, textAlign: 'start' }}>{L.more}</span>
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** One small per-property keyframe toggle per animatable property, right under the
+ * transform fields: filled + accent when the selected element has a real keyframe on
+ * that property at the current playhead, outline otherwise. Clicking stamps the
+ * property's *currently rendered* value as a keyframe at the playhead (so turning it
+ * on never causes a visual jump); clicking again removes that keyframe. Fine-tuning a
+ * keyframe's value/easing once it exists happens in the pro-mode timeline's expanded
+ * track rows (Timeline.tsx/Clip.tsx) — this row is only the quick add/remove + state
+ * indicator the task calls for, not a second copy of that editor. */
+function KeyframeToggleRow({ el }: { el: DocElement }) {
+  const { state, actions, dict: L } = useStudio();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+      {ANIM_PROPERTIES.map((p: AnimProperty) => {
+        const kf = keyframeAt(el.anim, p, state.t);
+        // «عند المؤشّر» يجب أن تكون صادقة. المؤشّر بعد نهاية المقطع يَمُدّ المقطع
+        // ليصله؛ والمؤشّر **قبل** بدايته وحده هو ما لا يمكن خدمته بلا نقل لحظة البدء،
+        // فيُعطَّل الزرّ بسببٍ مكتوب بدل أن يُنزل المعيَّن على حافّة المقطع صامتًا
+        // (انظر `canKeyframeAtPlayhead` في `lib/animTimeline.ts`). وحذف مفتاحٍ قائم
+        // يبقى متاحًا دائمًا — فذاك لا يحتاج موضعًا جديدًا.
+        const outside = !kf && !canKeyframeAtPlayhead(el.anim, state.t);
+        return (
+          <button
+            key={p}
+            data-testid={`kf-toggle-${el.id}-${p}`}
+            disabled={outside}
+            onClick={() => (kf ? actions.deleteTrackKeyframe(el.id, p, kf.id) : actions.addTrackKeyframeAtPlayhead(el.id, p))}
+            title={outside ? L.kf_outside_clip : `${L[`prop_${p}` as keyof typeof L] as string} · ${L.add_keyframe}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              height: 22,
+              padding: '0 7px',
+              border: `1px solid ${kf ? 'var(--accent)' : 'var(--line)'}`,
+              borderRadius: 999,
+              background: kf ? 'var(--accentSoft)' : 'transparent',
+              color: kf ? 'var(--accent)' : 'var(--muted)',
+              fontSize: 10.5,
+              fontWeight: 600,
+              opacity: outside ? 0.4 : 1,
+              cursor: outside ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <span style={{ width: 7, height: 7, transform: 'rotate(45deg)', background: kf ? 'var(--accent)' : 'transparent', border: `1.2px solid ${kf ? 'var(--accent)' : 'var(--muted)'}`, borderRadius: 1 }} />
+            {L[`prop_${p}` as keyof typeof L] as string}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
+  const { state, actions, dict: L } = useStudio();
+  const pal = PALETTES[state.postPalette];
+  const swatches = Array.from(new Set([pal.fg, pal.ac, pal.bg, '#FFFFFF', ...(pal.ac2 ? [pal.ac2] : [])]));
+  const activeColor = el.color ?? pal.fg;
+  const [fontPickerOpen, setFontPickerOpen] = useState(false);
+
+  // مسوّدة نصّيّة لحقل المقاس أثناء الكتابة — وإلا استحال **كتابة** مقاس أصلًا.
+  //
+  // الحقل مضبوط بالكامل (`value={el.fontSize}`) وكان `onChange` يُمرّر كل ضغطة
+  // زرّ إلى `setElementFontSize` التي تَقصُر القيمة على [٨، ٤٠٠] ثم تُعيدها إلى
+  // الحقل. فكتابة «١٤٠» تمرّ بثلاث حالات: «١» تُرفع إلى ٨، ثم تصير «٨٤»، ثم
+  // «٨٤٠» تُخفض إلى ٤٠٠ — فيستقرّ الحقل على ٤٠٠. وبالقياس: ٤٢ ← ٨٢، و٢٦ ← ٨٦.
+  // أي أن كل مقاس من رقمين أو ثلاثة يبدأ بأقلّ من ٨ كان يُفسَد، وهي أغلب مقاسات
+  // العناوين. وقد نجا هذا من ١٢٥٤ تأكيدًا لأن `controls.spec.mjs` يستعمل
+  // `fill('140')` — وهي تضع القيمة دفعةً واحدة فلا تمرّ بالحالات الوسيطة أبدًا،
+  // بينما المصمم يكتب رقمًا رقمًا.
+  //
+  // فالقصر يبقى، لكنه يُؤجَّل إلى لحظة الالتزام (خروج التركيز أو Enter)؛ وأثناء
+  // الكتابة تُلتزم القيم الصالحة فورًا ليبقى التحديث الحيّ على اللوحة كما هو.
+  const [sizeDraft, setSizeDraft] = useState<string | null>(null);
+  // المسوّدة تخصّ العنصر الذي كُتبت فيه: الانتقال إلى نصٍّ آخر يُسقطها، وإلا ظهر
+  // مقاسُ العنصر السابق في حقل عنصرٍ لم يُلمَس بعد.
+  useEffect(() => setSizeDraft(null), [el.id]);
+  const commitSize = () => {
+    if (sizeDraft !== null) {
+      const parsed = Number(sizeDraft);
+      if (sizeDraft.trim() !== '' && Number.isFinite(parsed)) actions.setElementFontSize(el.id, parsed);
+      setSizeDraft(null);
+    }
+  };
+  // نفس نمط مسوّدة المقاس أعلاه، ولنفس السبب المكتوب هناك.
+  const [trackingDraft, setTrackingDraft] = useState<string | null>(null);
+  useEffect(() => setTrackingDraft(null), [el.id]);
+  const commitTracking = () => {
+    if (trackingDraft !== null) {
+      const parsed = Number(trackingDraft);
+      if (trackingDraft.trim() !== '' && Number.isFinite(parsed)) actions.setElementTracking(el.id, parsed);
+      else actions.setElementTracking(el.id, 0);
+      setTrackingDraft(null);
+    }
+  };
+
+  return (
+    <>
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="mz-label">{L.sec_text}</div>
+        <input
+          value={el.text}
+          onChange={(e) => actions.setElementText(el.id, e.target.value)}
+          style={{ height: 34, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', outline: 0, width: '100%', fontWeight: 600 }}
+        />
+        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 76px', gap: 8 }}>
+          <button
+            onClick={() => setFontPickerOpen((v) => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, textAlign: 'start' }}
+          >
+            <span style={{ flex: 1, fontFamily: el.fontFamily }}>{el.fontFamily}</span>
+            <Icon size={14} path="M5 8l5 5 5-5" />
+          </button>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 32, padding: '0 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
+            <input
+              dir="ltr"
+              type="number"
+              min={8}
+              max={400}
+              value={sizeDraft ?? el.fontSize}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setSizeDraft(raw);
+                // القيمة الصالحة تُلتزم أثناء الكتابة (معاينة حيّة)؛ وغير الصالحة
+                // تبقى مسوّدةً حتى الالتزام بدل أن تُقصَر تحت الإصبع.
+                const parsed = Number(raw);
+                if (raw.trim() !== '' && Number.isFinite(parsed) && parsed >= 8 && parsed <= 400) {
+                  actions.setElementFontSize(el.id, parsed);
+                }
+              }}
+              onBlur={commitSize}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitSize();
+              }}
+              style={{ flex: 1, minWidth: 0, width: '100%', border: 0, background: 'transparent', outline: 0, fontSize: 12, textAlign: 'center' }}
+            />
+            <span style={{ color: 'var(--muted)', fontSize: 11 }}>px</span>
+          </label>
+          {fontPickerOpen && (
+            <div style={{ position: 'absolute', top: 36, insetInlineStart: 0, zIndex: 5, width: '100%', maxHeight: 180, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', boxShadow: 'var(--shadow)' }}>
+              {state.fonts.filter((f) => f.status === 'ready').map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => {
+                    actions.setElementFont(el.id, f.family);
+                    setFontPickerOpen(false);
+                  }}
+                  style={{ display: 'block', width: '100%', textAlign: 'start', padding: '8px 10px', border: 0, background: el.fontFamily === f.family ? 'var(--accentSoft)' : 'transparent', fontFamily: f.family, fontSize: 13 }}
+                >
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* تتبُّع الأحرف. صفٌّ مستقلّ تحت صفّ الخطّ/المقاس لأنه قرارٌ طباعيٌّ من
+            عائلتهما: الخطّ والمقاس والتتبُّع تُضبَط معًا حين يُركَّب عنوان.
+            والمسوّدة هنا ليست زينةً — الحقل يقبل السالب، و«‎-» وحدها ليست رقمًا،
+            فحقلٌ مضبوطٌ بالكامل بلا مسوّدة كان سيبتلع الإشارة قبل أن يُكتب الرقم
+            (نفس عطل حقل المقاس أعلاه بالضبط). */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
+          <span style={{ flex: 1, color: 'var(--muted)' }}>{L.tracking}</span>
+          <input
+            data-testid={`text-tracking-${el.id}`}
+            dir="ltr"
+            type="number"
+            min={TRACKING_MIN}
+            max={TRACKING_MAX}
+            step={0.5}
+            value={trackingDraft ?? el.tracking ?? 0}
+            onChange={(e) => {
+              const raw = e.target.value;
+              setTrackingDraft(raw);
+              const parsed = Number(raw);
+              if (raw.trim() !== '' && Number.isFinite(parsed) && parsed >= TRACKING_MIN && parsed <= TRACKING_MAX) {
+                actions.setElementTracking(el.id, parsed);
+              }
+            }}
+            onBlur={commitTracking}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTracking();
+            }}
+            style={{ width: 54, border: 0, background: 'transparent', outline: 0, fontSize: 12, textAlign: 'center' }}
+          />
+          <span style={{ color: 'var(--muted)', fontSize: 11 }}>%</span>
+        </label>
+        <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
+          {WEIGHTS.map((w) => {
+            const s = seg(el.weight === w);
+            return (
+              <button key={w} onClick={() => actions.setElementWeight(el.id, w)} style={{ flex: 1, height: 26, border: 0, borderRadius: 'calc(var(--rs) - 2px)', fontSize: 12, fontWeight: 500, background: s.bg, color: s.fg, boxShadow: s.sh }}>
+                {L[`w_${w}` as const]}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{L.color}</span>
+          {swatches.map((hex) => (
+            <button
+              key={hex}
+              title={hex}
+              onClick={() => actions.setElementColor(el.id, hex)}
+              style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${hex === activeColor ? 'var(--accent)' : 'var(--line)'}`, background: hex, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)' }}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="mz-label">{L.align}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
+          {ALIGN_BUTTONS.map(({ d, kind, value }) => {
+            const active = kind === 'h' ? el.halign === value : el.valign === value;
+            return (
+              <button
+                key={`${kind}-${value}`}
+                onClick={() => (kind === 'h' ? actions.setElementHAlign(el.id, value as HAlign) : actions.setElementVAlign(el.id, value as VAlign))}
+                style={{ height: 30, display: 'grid', placeItems: 'center', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--muted)' }}
+              >
+                <Icon size={16} path={d} />
+              </button>
+            );
+          })}
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)' }}>
+          <input data-testid="justify-kashida-toggle" type="checkbox" checked={!!el.justify} onChange={(e) => actions.setElementJustify(el.id, e.target.checked)} />
+          {L.justify_kashida}
+        </label>
+      </section>
+
+      {/* كان هذا القسم مشروطًا بـ`el.id === 'head'`، وهو معرّفٌ لا يوجد إلا في البوستر
+          التجريبي الجاهز — فأي نصٍّ يُنشئه المستخدم (معرّفه `text-<طابع زمني>`) لم يكن له
+          مدخلٌ إلى حركة الدخول إطلاقًا، وهذا ما كان يمنع تنفيذ أبسط موجز: «عنوان يدخل
+          بحركة». والنداء كان `actions.setAnim` العامّ، وهو يكتب حقل المستند ويَنسخ
+          *اسم* النمط فقط إلى `'head'` بلا إعادة بناء `tracks` — فيُضيء الزرّ ولا
+          يتحرّك شيء (قياسٌ: نفس `matrix(1,0,0,1,0,108)` قبل النقر وبعده). */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="mz-label">{L.animation}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {ANIMS.map((a) => {
+            const active = el.anim.preset === a;
+            return (
+              <button
+                key={a}
+                data-testid={`props-anim-preset-${a}`}
+                onClick={() => actions.setElementAnimPreset(el.id, a)}
+                style={{ height: 30, padding: '0 12px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 12, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+              >
+                {L[`anim_${a}` as const]}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <TextStaggerSection el={el} />
+      <TextOutlineSection el={el} />
+    </>
+  );
+}
+
+/** Roadmap #12 — real Arabic shaping pipeline (HarfBuzz + bidi-js), scoped per
+ * `docs/COMPETITIVE-ANALYSIS.md` §3.4 to the text paths that need per-glyph control.
+ * This is the highest-priority deliverable of that pipeline: converts the selected
+ * text element into real vector glyph outlines (see `src/lib/arabicShaping.ts`),
+ * which also makes it exportable as true SVG `<path>` data with no font dependency.
+ * Same local-state async-busy shape as `BackgroundRemovalSection` above: the heavy
+ * WASM shaping work happens here before calling the single-undo-step
+ * `actions.convertTextToOutline`. "نص على مسار منحني" (text-on-path, the pipeline's
+ * second deliverable) is a separate pair-selection action — see the `pathCandidate`
+ * section in `PropsTab()` above and `src/lib/textOnPath.ts` — reusing this same
+ * shaping pipeline's glyph outlines, just bent along a curve instead of laid flat. */
+function TextOutlineSection({ el }: { el: TextElement }) {
+  const { state, actions, dict: L } = useStudio();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const supported = isBuiltinFontFamily(el.fontFamily);
+
+  const run = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+      const dir: 'rtl' | 'ltr' = state.lang === 'ar' ? 'rtl' : 'ltr';
+      const { outline, geo } = await convertTextElementToOutline(el, size, dir);
+      const fill = resolveTextColor(el, PALETTES[state.postPalette]);
+      actions.convertTextToOutline(el.id, outline, geo, fill);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="mz-label">{L.text_outline_title}</div>
+      <button
+        data-testid={`text-outline-btn-${el.id}`}
+        onClick={run}
+        disabled={busy || !supported}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600, opacity: busy || !supported ? 0.6 : 1 }}
+      >
+        {busy ? L.text_outline_converting : L.text_outline_btn}
+      </button>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{supported ? L.text_outline_hint : L.text_outline_unsupported_font}</div>
+      {error && (
+        <div data-testid={`text-outline-error-${el.id}`} style={{ fontSize: 11, color: '#e5484d' }}>
+          {L.text_outline_error}: {error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Roadmap #6: splits the text element's own content into char/word/line units and
+ * reveals each with a sequential delay — a separate animation layer from the
+ * element-level `anim.tracks` section above (toggled per-property keyframes for the
+ * whole text box), composing with it rather than replacing it; see
+ * `TextStaggerAnim` in `state/elements.ts` and `docs/CONTROLS.md`. Available on every
+ * text element (not gated to the headline like the legacy preset chooser above). */
+function TextStaggerSection({ el }: { el: TextElement }) {
+  const { actions, dict: L } = useStudio();
+  const cfg = el.textAnim;
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="mz-label" style={{ flex: 1 }}>{L.text_stagger}</div>
+        <button
+          data-testid={`stagger-toggle-${el.id}`}
+          onClick={() => actions.setTextStagger(el.id, { enabled: !cfg.enabled })}
+          style={{ border: 0, background: 'transparent', padding: 0 }}
+        >
+          <Toggle on={cfg.enabled} />
+        </button>
+      </div>
+      {cfg.enabled && (
+        <>
+          <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
+            {STAGGER_UNITS.map((u) => {
+              const s = seg(cfg.unit === u);
+              return (
+                <button
+                  key={u}
+                  data-testid={`stagger-unit-${el.id}-${u}`}
+                  onClick={() => actions.setTextStagger(el.id, { unit: u })}
+                  style={{ flex: 1, height: 26, border: 0, borderRadius: 'calc(var(--rs) - 2px)', fontSize: 11.5, fontWeight: 500, background: s.bg, color: s.fg, boxShadow: s.sh }}
+                >
+                  {L[`stagger_unit_${u}` as const]}
+                </button>
+              );
+            })}
+          </div>
+          {cfg.unit === 'line' && <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.5 }}>{L.stagger_line_hint}</div>}
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {STAGGER_DIRECTIONS.map((d) => {
+              const active = cfg.direction === d;
+              return (
+                <button
+                  key={d}
+                  data-testid={`stagger-dir-${el.id}-${d}`}
+                  onClick={() => actions.setTextStagger(el.id, { direction: d })}
+                  style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+                >
+                  {L[`stagger_dir_${d}` as const]}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {STAGGER_EFFECTS.map((fx) => {
+              const active = cfg.effect === fx;
+              return (
+                <button
+                  key={fx}
+                  data-testid={`stagger-effect-${el.id}-${fx}`}
+                  onClick={() => actions.setTextStagger(el.id, { effect: fx })}
+                  style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+                >
+                  {L[`stagger_fx_${fx}` as const]}
+                </button>
+              );
+            })}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <span style={{ color: 'var(--muted)', minWidth: 70 }}>{L.stagger_delay}</span>
+            <input
+              dir="ltr"
+              type="range"
+              min={0}
+              max={300}
+              step={5}
+              value={Math.round(cfg.stagger * 1000)}
+              onChange={(e) => actions.setTextStagger(el.id, { stagger: Number(e.target.value) / 1000 })}
+              style={{ flex: 1, accentColor: 'var(--accent)' }}
+              data-testid={`stagger-delay-${el.id}`}
+            />
+            <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 42, textAlign: 'end', fontSize: 11 }}>{Math.round(cfg.stagger * 1000)}ms</span>
+          </label>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <span style={{ color: 'var(--muted)', minWidth: 70 }}>{L.stagger_unit_duration}</span>
+            <input
+              dir="ltr"
+              type="range"
+              min={50}
+              max={1000}
+              step={10}
+              value={Math.round(cfg.unitDuration * 1000)}
+              onChange={(e) => actions.setTextStagger(el.id, { unitDuration: Number(e.target.value) / 1000 })}
+              style={{ flex: 1, accentColor: 'var(--accent)' }}
+              data-testid={`stagger-duration-${el.id}`}
+            />
+            <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 42, textAlign: 'end', fontSize: 11 }}>{Math.round(cfg.unitDuration * 1000)}ms</span>
+          </label>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {STAGGER_EASINGS.map((id) => {
+              const active = cfg.easing === id;
+              return (
+                <button
+                  key={id}
+                  data-testid={`stagger-ease-${el.id}-${id}`}
+                  onClick={() => actions.setTextStagger(el.id, { easing: id })}
+                  style={{ height: 26, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', fontSize: 11, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+                >
+                  {L[EASE_LABEL_KEY[id] as keyof typeof L] as string}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
+  const { state, actions, dict: L } = useStudio();
+  const pal = PALETTES[state.postPalette];
+  const swatches = Array.from(new Set([pal.ac, pal.fg, pal.bg, '#FFFFFF', ...(pal.ac2 ? [pal.ac2] : [])]));
+  const activeFill = el.fill ?? pal[el.fillToken];
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.sec_shape}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{L.color}</span>
+        {swatches.map((hex) => (
+          <button
+            key={hex}
+            title={hex}
+            onClick={() => actions.setShapeFill(el.id, hex)}
+            style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${hex === activeFill ? 'var(--accent)' : 'var(--line)'}`, background: hex, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)' }}
+          />
+        ))}
+      </div>
+      {el.shape !== 'path' && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+          <span style={{ color: 'var(--muted)', flex: 1 }}>{L.radius}</span>
+          <input
+            dir="ltr"
+            type="range"
+            min={0}
+            max={50}
+            value={Math.round(el.radius * 100)}
+            disabled={el.shape === 'ellipse'}
+            onChange={(e) => actions.setShapeRadius(el.id, Number(e.target.value) / 100)}
+            style={{ flex: 1.4, accentColor: 'var(--accent)' }}
+          />
+        </label>
+      )}
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.stroke}</span>
+        <button
+          onClick={() => actions.setShapeStroke(el.id, el.stroke ? null : pal.fg)}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.stroke ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.stroke ? 'var(--accent)' : 'var(--muted)' }}
+        >
+          {el.stroke ? L.on_state : L.off_state}
+        </button>
+        {el.stroke && (
+          <input
+            dir="ltr"
+            type="number"
+            min={1}
+            max={40}
+            value={el.strokeWidth}
+            onChange={(e) => actions.setShapeStrokeWidth(el.id, Number(e.target.value) || 0)}
+            style={{ width: 44, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
+          />
+        )}
+      </label>
+      {el.shape === 'path' && el.points && el.points.length >= 2 && !el.subpaths?.length && <PathSmoothProps el={el} />}
+    </section>
+  );
+}
+
+/** Roadmap #11 — one global smoothing-amount slider for the whole path, plus a
+ * per-anchor corner/smooth toggle row. See `src/lib/pathSmoothing.ts` for the math;
+ * `smoothAmount` defaults to 0 so any path created before this existed (or never
+ * touched since) keeps rendering as plain straight segments. */
+function PathSmoothProps({ el }: { el: DocElement & { type: 'shape' } }) {
+  const { state, actions, dict: L } = useStudio();
+  const amount = el.smoothAmount ?? 0;
+  const points = el.points ?? [];
+  const editingNodes = state.nodeEditId === el.id;
+  return (
+    <>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.smooth_amount}</span>
+        <input
+          data-testid={`smooth-amount-${el.id}`}
+          dir="ltr"
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(amount * 100)}
+          // سحبة واحدة على الشريط = خطوة تراجع واحدة. `onChange` يُطلَق لكل خطوة من
+          // خطوات الشريط (18 خطوة في سحبة قصيرة قياسًا حقيقيًا)، فالكتابة الحيّة بلا
+          // تاريخ + لقطة واحدة في البداية هي ما يجعل الوعد في `docs/CONTROLS.md`
+          // صحيحًا فعلًا. `beginElementEdit` مُتعادِية الاستدعاء (لا تأخذ لقطة ثانية
+          // إن كانت واحدة معلّقة)، فنداؤها من `onChange` آمن ويغطّي تغيير الشريط
+          // بالسهمَين أيضًا — وهو مسار لا يمرّ بـ`onPointerDown` إطلاقًا.
+          onChange={(e) => {
+            actions.beginElementEdit();
+            actions.liveUpdateShapeSmoothAmount(el.id, Number(e.target.value) / 100);
+          }}
+          onPointerUp={() => actions.commitElementEdit()}
+          onKeyUp={() => actions.commitElementEdit()}
+          onBlur={() => actions.commitElementEdit()}
+          style={{ flex: 1.4, accentColor: 'var(--accent)' }}
+        />
+        <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11, minWidth: 30, textAlign: 'end' }}>
+          {Math.round(amount * 100)}%
+        </span>
+      </label>
+      <button
+        data-testid={`node-edit-${el.id}-toggle`}
+        onClick={() => (editingNodes ? actions.endNodeEdit() : actions.startNodeEdit(el.id))}
+        style={{
+          height: 30,
+          border: `1px solid ${editingNodes ? 'var(--accent)' : 'var(--line)'}`,
+          borderRadius: 'var(--rs)',
+          background: editingNodes ? 'var(--accentSoft)' : 'var(--surface2)',
+          color: editingNodes ? 'var(--accent)' : 'var(--text)',
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        {editingNodes ? L.node_edit_done : L.node_edit_start}
+      </button>
+      {editingNodes && <p style={{ margin: 0, fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.node_edit_hint}</p>}
+      {amount > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>{L.corner_points}</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {points.map((_, i) => {
+              const isCorner = !!el.cornerPoints?.[i];
+              return (
+                <button
+                  key={i}
+                  data-testid={`path-point-${el.id}-${i}`}
+                  title={isCorner ? L.point_corner : L.point_smooth}
+                  onClick={() => actions.toggleShapeCornerPoint(el.id, i)}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    border: `1px solid ${isCorner ? 'var(--accent)' : 'var(--line)'}`,
+                    borderRadius: isCorner ? 4 : 999,
+                    background: isCorner ? 'var(--accentSoft)' : 'var(--surface2)',
+                    color: isCorner ? 'var(--accent)' : 'var(--muted)',
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                  }}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ margin: 0, fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.corner_points_hint}</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ImageProps({ el }: { el: DocElement & { type: 'image' } }) {
+  const { state, actions, dict: L } = useStudio();
+  const pal = PALETTES[state.postPalette];
+  const cropping = state.cropEditingId === el.id;
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.sec_image}</div>
+      <button
+        onClick={() => actions.replaceImage(el.id)}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600 }}
+      >
+        {el.src ? L.replace_image : L.choose_image}
+      </button>
+
+      {el.src && (
+        <>
+          <BackgroundRemovalSection el={el} />
+          <UpscaleSection el={el} />
+
+          <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
+            {(['cover', 'contain', 'fill'] as const).map((f) => {
+              const s = seg(el.fit === f);
+              return (
+                <button key={f} onClick={() => actions.setImageFit(el.id, f)} style={{ flex: 1, height: 26, border: 0, borderRadius: 'calc(var(--rs) - 2px)', fontSize: 12, fontWeight: 500, background: s.bg, color: s.fg, boxShadow: s.sh }}>
+                  {f === 'cover' ? L.fit_cover : f === 'contain' ? L.fit_contain : L.fit_fill}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, border: `1px solid ${cropping ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{L.crop_frame}</span>
+              <button
+                onClick={() => (cropping ? actions.endCropEdit() : actions.startCropEdit(el.id))}
+                style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: cropping ? 'var(--accentSoft)' : 'var(--surface)', fontSize: 11, fontWeight: 600, color: cropping ? 'var(--accent)' : 'var(--text)' }}
+              >
+                {cropping ? L.crop_done : L.crop_start}
+              </button>
+            </div>
+            {cropping && <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.crop_hint}</p>}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+              <span style={{ color: 'var(--muted)', minWidth: 44 }}>{L.zoom}</span>
+              <input
+                dir="ltr"
+                type="range"
+                min={100}
+                max={400}
+                value={Math.round(el.cropScale * 100)}
+                onPointerDown={() => actions.beginElementEdit()}
+                onChange={(e) => actions.liveUpdateImageCrop(el.id, { cropScale: Number(e.target.value) / 100 })}
+                onPointerUp={() => actions.commitElementEdit()}
+                style={{ flex: 1, accentColor: 'var(--accent)' }}
+              />
+              <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11, minWidth: 34, textAlign: 'end' }}>{Math.round(el.cropScale * 100)}%</span>
+            </label>
+            <button
+              onClick={() => actions.resetImageCrop(el.id)}
+              style={{ height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', fontSize: 11 }}
+            >
+              {L.crop_reset}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => actions.setImageFlip(el.id, 'h')} style={{ flex: 1, height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.flipH ? 'var(--accentSoft)' : 'var(--surface2)', color: el.flipH ? 'var(--accent)' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Icon size={13} path="M10 3v14M5 6l-2 1v6l2 1M15 6l2 1v6l-2 1" />
+              {L.flip_h}
+            </button>
+            <button onClick={() => actions.setImageFlip(el.id, 'v')} style={{ flex: 1, height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.flipV ? 'var(--accentSoft)' : 'var(--surface2)', color: el.flipV ? 'var(--accent)' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Icon size={13} path="M3 10h14M6 5l1-2h6l1 2M6 15l1 2h6l1-2" />
+              {L.flip_v}
+            </button>
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+            <span style={{ color: 'var(--muted)', flex: 1 }}>{L.radius}</span>
+            <input
+              dir="ltr"
+              type="range"
+              min={0}
+              max={50}
+              value={Math.round(el.radius * 100)}
+              onChange={(e) => actions.setImageRadius(el.id, Number(e.target.value) / 100)}
+              style={{ flex: 1.4, accentColor: 'var(--accent)' }}
+            />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+            <span style={{ color: 'var(--muted)', flex: 1 }}>{L.stroke}</span>
+            <button
+              onClick={() => actions.setImageStroke(el.id, el.stroke ? null : pal.fg)}
+              style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.stroke ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.stroke ? 'var(--accent)' : 'var(--muted)' }}
+            >
+              {el.stroke ? L.on_state : L.off_state}
+            </button>
+            {el.stroke && (
+              <input
+                dir="ltr"
+                type="number"
+                min={1}
+                max={40}
+                value={el.strokeWidth}
+                onChange={(e) => actions.setImageStrokeWidth(el.id, Number(e.target.value) || 0)}
+                style={{ width: 44, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
+              />
+            )}
+          </label>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Roadmap #13: a Lottie element has no fit/crop/radius/stroke controls (unlike
+ * images) — it's a playback element, not a picture, so its only content-specific
+ * controls are swapping the animation and whether it loops. Transform (position/
+ * size/rotation/opacity) and entrance motion are already generic across every
+ * element kind (see the `isPro` section below this component's call site) and need
+ * nothing extra here. */
+function LottieProps({ el }: { el: DocElement & { type: 'lottie' } }) {
+  const { actions, dict: L } = useStudio();
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.sec_lottie}</div>
+      <button
+        onClick={() => actions.replaceLottie(el.id)}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600 }}
+      >
+        {L.replace_lottie}
+      </button>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.lottie_loop}</span>
+        <button
+          onClick={() => actions.setLottieLoop(el.id, !el.loop)}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.loop ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.loop ? 'var(--accent)' : 'var(--muted)' }}
+        >
+          {el.loop ? L.on_state : L.off_state}
+        </button>
+      </label>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.lottie_svg_note}</p>
+    </section>
+  );
+}
+
+/** Roadmap #14: trim (numeric in/out within the source, seconds), volume, mute, and
+ * loop — the properties a video clip needs beyond the generic transform/entrance
+ * controls every element already has. `loop` is a real, fully-wired visual effect
+ * (see `videoSourceTimeAt`); `volume`/`muted` are stored and will drive export audio
+ * once an audio pipeline exists (none does yet, for any element kind — see
+ * `video_audio_soon` below), so they're shown with an explicit "قريبًا" note rather
+ * than implying they already silence/adjust something today. */
+function VideoProps({ el }: { el: DocElement & { type: 'video' } }) {
+  const { actions, dict: L } = useStudio();
+  const duration = el.durationSec || 0;
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.sec_video}</div>
+      <button
+        data-testid={`replace-video-btn-${el.id}`}
+        onClick={() => actions.replaceVideo(el.id)}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600 }}
+      >
+        {L.replace_video}
+      </button>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)' }}>{L.video_trim_in}</span>
+        <input
+          data-testid={`video-trim-in-${el.id}`}
+          dir="ltr"
+          type="number"
+          min={0}
+          max={Math.max(0, el.trimOut - 0.1)}
+          step={0.1}
+          value={Math.round(el.trimIn * 100) / 100}
+          onChange={(e) => actions.setVideoTrim(el.id, Number(e.target.value) || 0, el.trimOut)}
+          style={{ width: 56, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
+        />
+        <span style={{ color: 'var(--muted)' }}>{L.video_trim_out}</span>
+        <input
+          data-testid={`video-trim-out-${el.id}`}
+          dir="ltr"
+          type="number"
+          min={el.trimIn + 0.1}
+          max={duration}
+          step={0.1}
+          value={Math.round(el.trimOut * 100) / 100}
+          onChange={(e) => actions.setVideoTrim(el.id, el.trimIn, Number(e.target.value) || duration)}
+          style={{ width: 56, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
+        />
+        <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11 }}>
+          / {duration.toFixed(1)}s
+        </span>
+      </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.video_volume}</span>
+        <input
+          data-testid={`video-volume-${el.id}`}
+          dir="ltr"
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(el.volume * 100)}
+          onChange={(e) => actions.setVideoVolume(el.id, Number(e.target.value) / 100)}
+          style={{ flex: 1.4, accentColor: 'var(--accent)' }}
+        />
+        <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11, minWidth: 30, textAlign: 'end' }}>
+          {Math.round(el.volume * 100)}%
+        </span>
+      </label>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.video_muted}</span>
+        <button
+          data-testid={`video-mute-${el.id}`}
+          onClick={() => actions.setVideoMuted(el.id, !el.muted)}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.muted ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.muted ? 'var(--accent)' : 'var(--muted)' }}
+        >
+          {el.muted ? L.on_state : L.off_state}
+        </button>
+      </label>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.video_loop}</span>
+        <button
+          data-testid={`video-loop-${el.id}`}
+          onClick={() => actions.setVideoLoop(el.id, !el.loop)}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.loop ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.loop ? 'var(--accent)' : 'var(--muted)' }}
+        >
+          {el.loop ? L.on_state : L.off_state}
+        </button>
+      </label>
+
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.video_audio_soon}</p>
+    </section>
+  );
+}
+
+/** Roadmap #9: runs entirely in this webview via onnxruntime-web (see
+ * src/lib/backgroundRemoval.ts for why — never Rust/a sidecar, so the QA harness
+ * driving the live UI at localhost:1420 can actually verify it). State machine is
+ * local to this button (not StudioContext) since it's pure UI progress, never
+ * persisted/undoable on its own — only the final `src` swap goes through
+ * `actions.setImageBackgroundRemoved`, which *is* a real undo step. */
+function BackgroundRemovalSection({ el }: { el: DocElement & { type: 'image' } }) {
+  const { actions, dict: L } = useStudio();
+  const [phase, setPhase] = useState<'idle' | 'downloading' | 'processing' | 'error'>('idle');
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!el.src) return;
+    setError(null);
+    try {
+      const model = modelById(DEFAULT_MODEL_ID)!;
+      if (!(await isModelDownloaded(model))) {
+        setPhase('downloading');
+        setProgress(0);
+        await downloadModel(model, (loaded, total) => setProgress(total ? loaded / total : 0));
+      }
+      setPhase('processing');
+      const bytes = await getModelBytes(model);
+      const result = await removeImageBackground(el.src, model, bytes);
+      actions.setImageBackgroundRemoved(el.id, result.dataUrl);
+      setPhase('idle');
+    } catch (err) {
+      setError((err as Error).message);
+      setPhase('error');
+    }
+  };
+
+  const busy = phase === 'downloading' || phase === 'processing';
+  const label = phase === 'downloading' ? `${L.bg_downloading} ${Math.round(progress * 100)}%` : phase === 'processing' ? L.bg_processing : L.bg_remove_btn;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        data-testid="remove-background-btn"
+        onClick={run}
+        disabled={busy}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600, opacity: busy ? 0.7 : 1 }}
+      >
+        {label}
+      </button>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.bg_local_badge}</div>
+      {phase === 'error' && error && (
+        <div data-testid="remove-background-error" style={{ fontSize: 11, color: '#e5484d' }}>
+          {error}
+        </div>
+      )}
+      {el.bgOriginalSrc && (
+        <button
+          data-testid="restore-background-btn"
+          onClick={() => actions.restoreImageBackground(el.id)}
+          style={{ height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', fontSize: 11 }}
+        >
+          {L.bg_restore_btn}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Roadmap #24-أ — same "local button-owned state machine, one undo step at the
+ * end" shape as `BackgroundRemovalSection` above: downloading/running the on-device
+ * super-resolution model (`src/lib/superResolution.ts`) is pure UI progress, never
+ * persisted on its own; only the final `setImageUpscaled` call (new `src` +
+ * `naturalW`/`naturalH`) is an undo step. Progress here is per-tile (real, not
+ * simulated) since the model tiles large images internally. */
+function UpscaleSection({ el }: { el: DocElement & { type: 'image' } }) {
+  const { actions, dict: L } = useStudio();
+  const [phase, setPhase] = useState<'idle' | 'downloading' | 'processing' | 'error'>('idle');
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!el.src) return;
+    setError(null);
+    try {
+      const model = modelById('realesr-general-x4v3')!;
+      if (!(await isModelDownloaded(model))) {
+        setPhase('downloading');
+        setProgress(0);
+        await downloadModel(model, (loaded, total) => setProgress(total ? loaded / total : 0));
+      }
+      setPhase('processing');
+      setProgress(0);
+      const bytes = await getModelBytes(model);
+      const result = await upscaleImage(el.src, model, bytes, (done, total) => setProgress(total ? done / total : 0));
+      actions.setImageUpscaled(el.id, result.dataUrl, result.width, result.height);
+      setPhase('idle');
+    } catch (err) {
+      setError((err as Error).message);
+      setPhase('error');
+    }
+  };
+
+  const busy = phase === 'downloading' || phase === 'processing';
+  const label = phase === 'downloading' ? `${L.upscale_downloading} ${Math.round(progress * 100)}%` : phase === 'processing' ? `${L.upscale_processing} ${Math.round(progress * 100)}%` : L.upscale_btn;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        data-testid="upscale-btn"
+        onClick={run}
+        disabled={busy}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600, opacity: busy ? 0.7 : 1 }}
+      >
+        {label}
+      </button>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.upscale_local_badge}</div>
+      {phase === 'error' && error && (
+        <div data-testid="upscale-error" style={{ fontSize: 11, color: '#e5484d' }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Roadmap #15 — same "local button-owned state machine, one undo step at the end"
+ * shape as `BackgroundRemovalSection` above: downloading the (multi-file) Whisper
+ * model and running inference are pure UI progress, never persisted on their own;
+ * only the final `commitElements` call that adds the real caption `TextElement`s is
+ * an undo step. See `src/lib/autoCaptions.ts` for why inference still goes through
+ * `onnxruntime-web` (via `@huggingface/transformers`) despite the higher-level API. */
+function AutoCaptionsSection({ el }: { el: DocElement & { type: 'video' } }) {
+  const { actions, dict: L } = useStudio();
+  const [phase, setPhase] = useState<'idle' | 'downloading' | 'extracting' | 'transcribing' | 'error'>('idle');
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!el.src) return;
+    setError(null);
+    try {
+      const model = whisperModelInfo();
+      if (!(await isModelDownloaded(model))) {
+        setPhase('downloading');
+        setProgress(0);
+        await downloadModel(model, (loaded, total) => setProgress(total ? loaded / total : 0));
+      }
+      setPhase('extracting');
+      const samples = await extractAudioSamples(el);
+      setPhase('transcribing');
+      const segments = await transcribeAudio(samples);
+      const newEls = buildCaptionElements(segments);
+      if (newEls.length === 0) {
+        setError(L.captions_none_found);
+        setPhase('error');
+        return;
+      }
+      actions.commitElements((els) => [...els, ...newEls]);
+      actions.selectElement(newEls[0].id);
+      setPhase('idle');
+    } catch (err) {
+      setError((err as Error).message);
+      setPhase('error');
+    }
+  };
+
+  const busy = phase === 'downloading' || phase === 'extracting' || phase === 'transcribing';
+  const label = phase === 'downloading' ? `${L.captions_downloading} ${Math.round(progress * 100)}%` : phase === 'extracting' ? L.captions_extracting : phase === 'transcribing' ? L.captions_transcribing : L.captions_btn;
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div className="mz-label">{L.captions_added}</div>
+      <button
+        data-testid="auto-captions-btn"
+        onClick={run}
+        disabled={busy}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600, opacity: busy ? 0.7 : 1 }}
+      >
+        {label}
+      </button>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.captions_local_badge}</div>
+      <p style={{ margin: 0, fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.captions_en_only}</p>
+      {phase === 'error' && error && (
+        <div data-testid="auto-captions-error" style={{ fontSize: 11, color: '#e5484d' }}>
+          {error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** تنظيم العناصر: تجميع · فكّ تجميع · قفل · إخفاء.
+ *
+ * **خارج بوّابة الوضع الاحترافي عمدًا.** «الترتيب» و«محاذاة العناصر» مُقتصران على
+ * الوضع الاحترافي، والوضع البسيط هو الافتراضي — فلو وُضعت هذه الأزرار معهما لما
+ * رآها أحدٌ لم يبدّل الوضع، وهو لا يعرف أصلًا أن هناك ما يُبدَّل (البند ٧ في
+ * `docs/UX-AUDIT-2026-10-18.md`). والتجميع والقفل ليسا تنقيحًا متقدّمًا: هما أول ما
+ * يفعله المصمّم بتصميمٍ من عدّة طبقات، وأقربُ علاجٍ لمشكلة «الخلفية تُمسَك بدل أن
+ * يُرسَم فوقها».
+ *
+ * والاختصار مكتوبٌ في تلميح كل زرّ ليُتعلَّم من مكان استعماله — نفس دور «شريط
+ * المساعدة» في أداة المتّجهات (`re-illustrator-flows.md` §7.4). */
+function OrganiseSection() {
+  const { state, actions, dict: L } = useStudio();
+  // الزرّان يُعطَّلان بدل أن يُخفَيا، فيبقى وجودُ القدرة مرئيًّا حتى حين لا ينطبق
+  // شرطها — وهو الفرق بين «غير متاح الآن» و«غير موجود»، والثاني هو ما شُكي منه.
+  const canGroup = state.selectedIds.length >= 2;
+  const canUngroup = state.selectedIds.some((id) => !!state.elements.find((e) => e.id === id)?.groupId);
+  const hasSelection = state.selectedIds.length > 0;
+  const anyHiddenOrLocked = state.elements.some((e) => e.locked || !e.visible);
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.organise}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        <button data-testid="group-btn" onClick={actions.groupSelected} disabled={!canGroup} title={`${L.group_selected} ⌘G`} style={{ ...arrangeBtnStyle, opacity: canGroup ? 1 : 0.4 }}>
+          <Icon size={14} path="M3 6h6v6H3zM8 8h6v6H8z" /> {L.group_selected}
+        </button>
+        <button data-testid="ungroup-btn" onClick={actions.ungroupSelected} disabled={!canUngroup} title={`${L.ungroup_selected} ⇧⌘G`} style={{ ...arrangeBtnStyle, opacity: canUngroup ? 1 : 0.4 }}>
+          <Icon size={14} path="M3 5h5v5H3zM11 10h5v5h-5z" /> {L.ungroup_selected}
+        </button>
+        <button data-testid="lock-btn" onClick={actions.lockSelected} disabled={!hasSelection} title={`${L.lock_layer} ⌘2`} style={{ ...arrangeBtnStyle, opacity: hasSelection ? 1 : 0.4 }}>
+          <Icon size={14} path="M5 9V6.5a5 5 0 0 1 10 0V9M4 9h12v8H4z" /> {L.lock_layer}
+        </button>
+        <button data-testid="hide-btn" onClick={actions.hideSelected} disabled={!hasSelection} title={`${L.hide_layer} ⌘3`} style={{ ...arrangeBtnStyle, opacity: hasSelection ? 1 : 0.4 }}>
+          <Icon size={14} path="M3 3l14 14M9.5 5.2A8 8 0 0 1 18 10s-1 1.8-2.8 3.2M5 6.5C3.4 7.7 2 10 2 10s3 5 8 5c1 0 1.9-.2 2.7-.5" /> {L.hide_layer}
+        </button>
+      </div>
+      {/* «فكّ قفل الكل» و«إظهار الكل» لا يمكن أن يكونا مشروطَين بتحديد: المقفل
+          والمخفيّ غير قابلَين للنقر أصلًا، فلو اشتُرط التحديد لصار كلاهما بابًا بلا
+          مفتاح. ويظهران فقط حين يكون لهما عملٌ فعليّ. */}
+      {anyHiddenOrLocked && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <button data-testid="unlock-all-btn" onClick={actions.unlockAll} title={`${L.unlock_all} ⌥⌘2`} style={arrangeBtnStyle}>
+            <Icon size={14} path="M5 9V6.5a5 5 0 0 1 9.6-2M4 9h12v8H4z" /> {L.unlock_all}
+          </button>
+          <button data-testid="show-all-btn" onClick={actions.showAll} title={`${L.show_all} ⌥⌘3`} style={arrangeBtnStyle}>
+            <Icon size={14} path="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5zM10 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" /> {L.show_all}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ArrangeSection() {
+  const { state, actions, dict: L } = useStudio();
+  const canDistribute = state.selectedIds.length >= 3;
+  return (
+    <>
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="mz-label">{L.arrange}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <button onClick={() => actions.bringForward(state.selectedIds)} style={arrangeBtnStyle}>
+            <Icon size={14} path="M10 4v10M6 10l4-4 4 4" /> {L.bring_forward}
+          </button>
+          <button onClick={() => actions.sendBackward(state.selectedIds)} style={arrangeBtnStyle}>
+            <Icon size={14} path="M10 16V6M6 10l4 4 4-4" /> {L.send_backward}
+          </button>
+        </div>
+      </section>
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="mz-label">{L.align_elements}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
+          {OBJECT_ALIGN.map(({ d, edge }) => (
+            <button key={edge} onClick={() => actions.alignSelected(edge)} style={{ height: 30, display: 'grid', placeItems: 'center', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', color: 'var(--muted)' }}>
+              <Icon size={16} path={d} />
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <button disabled={!canDistribute} onClick={() => actions.distributeSelected('x')} style={{ ...arrangeBtnStyle, opacity: canDistribute ? 1 : 0.4 }}>
+            {L.distribute_h}
+          </button>
+          <button disabled={!canDistribute} onClick={() => actions.distributeSelected('y')} style={{ ...arrangeBtnStyle, opacity: canDistribute ? 1 : 0.4 }}>
+            {L.distribute_v}
+          </button>
+        </div>
+      </section>
+    </>
+  );
+}
+
+const arrangeBtnStyle = { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 11.5, color: 'var(--text)' } as const;
+
+const layerRowStyle = { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' } as const;
+const iconBtnStyle = { display: 'grid', placeItems: 'center', width: 22, height: 22, border: 0, borderRadius: 4, background: 'transparent', color: 'var(--muted)', flexShrink: 0 } as const;
+
+/** حقلٌ رقميّ يَقبل الإشارة السالبة — ومسوّدةٌ محليّة لنفس سبب `HexField`.
+ *
+ * العطل الذي أوجده: الحقول الرقميّة كانت مضبوطةً بالكامل
+ * (`value={Math.round(raw)}`) وتُلزِم عند كل ضغطة بـ`Number(e.target.value) || 0`.
+ * و`<input type="number">` لا يُرجع من `.value` إلا رقمًا صالحًا، فالمحتوى «‑»
+ * وحده يُقرأ `""`، فيُلزَم صفرًا، فتُعيد React كتابة العقدة بـ«0» — فتُمحى
+ * الإشارة ويبقى صفرٌ تتراكم عليه الأرقام التالية. فكتابةُ «‑30» تُنتج «030» أي
+ * ‎+٣٠: الإشارة تُبتلع والمقدار يبقى، وهو ما يَبدو **قلبًا** للاتجاه وليس قلبًا.
+ *
+ * قيسَ هذا على الهدف المنشور الحقيقيّ: الشريط النعناعي يحتاج ‎‑٢٫٣°‏ فصار ‎+٢٫٣°‏،
+ * فمال إلى الجهة المعاكسة بنفس المقدار. وأُثبت أن النموذج والرسم بريئان: أسهمُ
+ * الحقل نفسها تَصِل إلى ‎‑٣°‏ وتُرسَم ‎‑٣°‏ على اللوحة وفي الملفّ المُصدَّر معًا.
+ *
+ * فالعلاج هو علاج `HexField` نفسه: تُحفظ مسوّدةُ المصمّم كما كتبها، ولا يُلزَم
+ * إلا ما يُقرأ رقمًا — فالحالات الوسيطة («‑»، «‑.»، الفراغ) لا تُكتب إلى المستند
+ * ولا تُمحى من الحقل. وتُطرح المسوّدة عند الخروج فيعود الحقل يعرض القيمة
+ * الفعليّة. والاتجاه نفسه لم يُمَسّ: موجبٌ = مع عقارب الساعة، كـCSS وSVG. */
+function NumField({
+  value,
+  onCommit,
+  disabled,
+  style,
+  testId,
+}: {
+  value: number;
+  onCommit: (v: number) => void;
+  disabled?: boolean;
+  style?: React.CSSProperties;
+  testId?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      data-testid={testId}
+      dir="ltr"
+      type="number"
+      disabled={disabled}
+      value={draft ?? String(Math.round(value))}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setDraft(raw);
+        // الفراغ ليس رقمًا: هو «‑» أو «2.» أو حقلٌ أُفرغ — حالةٌ وسيطة لا تُلزِم.
+        if (raw.trim() === '') return;
+        const v = Number(raw);
+        if (Number.isFinite(v)) onCommit(v);
+      }}
+      onBlur={() => setDraft(null)}
+      style={style}
+    />
+  );
+}
+
+/** حقلُ الستّ عشريّ النصّيّ المرافق لكل شريحة لونٍ في كومة المظهر.
+ *
+ * `<input type="color">` وحده يفتح حوار النظام ولا يُكتب فيه شيء، فكان لونُ
+ * العلامة التجاريّة — وهو رقمٌ يُنسخ من دليل الهويّة — بلا مدخلٍ في لوح
+ * الخصائص كلّه. أثبتت ذلك حلقة المحاكاة على الهدف المنشور الحقيقيّ: أربعةُ ألوانٍ
+ * لا تعطيها أيُّ لوحةٍ جاهزة ولا تصل إليها أيُّ شريحة.
+ *
+ * ومسوّدةٌ محليّة لا قيمةٌ مشتقّة: المصمّم يكتب «#1» ثم «#12» ثم «#123» …
+ * وكلّها حالاتٌ غير مكتملة، فلو كُتبت إلى المستند عند كل ضغطةٍ لقفز اللون
+ * وامتلأ تاريخ التراجع بخطواتٍ لا معنى لها. فلا يُلتزَم إلا بما اكتمل
+ * (`normalizeHex`)، وتُطرح المسوّدة عند الخروج من الحقل فيعود يعرض لون الطبقة
+ * الفعليّ. */
+function HexField({ testId, value, onCommit }: { testId: string; value: string; onCommit: (hex: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      data-testid={testId}
+      dir="ltr"
+      type="text"
+      spellCheck={false}
+      maxLength={7}
+      value={draft ?? value}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        const hex = normalizeHex(e.target.value);
+        if (hex) onCommit(hex);
+      }}
+      onBlur={() => setDraft(null)}
+      style={{ width: 74, height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}
+    />
+  );
+}
+
+/** Small shared row chrome every fill/stroke/shadow layer row uses: visibility eye,
+ * drag-free up/down reorder, duplicate, delete — the same four operations regardless
+ * of category, each a single `commitElements` call (one undo step) via the action
+ * passed in by the caller. */
+function LayerRowChrome({ visible, onToggleVisible, onUp, onDown, onDuplicate, onRemove, testId }: { visible: boolean; onToggleVisible: () => void; onUp: () => void; onDown: () => void; onDuplicate: () => void; onRemove: () => void; testId: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <button data-testid={`${testId}-visible`} onClick={onToggleVisible} style={iconBtnStyle} title="إخفاء/إظهار">
+        <Icon size={14} path={visible ? 'M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z M10 8a2 2 0 100 4 2 2 0 000-4z' : 'M3 3l14 14M9.5 5.2A8.6 8.6 0 0110 5c5 0 8 5 8 5a13 13 0 01-2.3 2.6M6.2 6.2C3.6 7.9 2 10 2 10s3 5 8 5a7.8 7.8 0 003.5-.8'} />
+      </button>
+      <button data-testid={`${testId}-up`} onClick={onUp} style={iconBtnStyle} title="أعلى">
+        <Icon size={14} path="M5 12l5-5 5 5" />
+      </button>
+      <button data-testid={`${testId}-down`} onClick={onDown} style={iconBtnStyle} title="أسفل">
+        <Icon size={14} path="M5 8l5 5 5-5" />
+      </button>
+      <button data-testid={`${testId}-duplicate`} onClick={onDuplicate} style={iconBtnStyle} title="تكرار">
+        <Icon size={14} path="M5 5h9v9H5zM8 2h9v9" />
+      </button>
+      <button data-testid={`${testId}-remove`} onClick={onRemove} style={{ ...iconBtnStyle, color: 'var(--danger, #e05252)' }} title="حذف">
+        <Icon size={14} path="M4 5h12M8 5V3h4v2M6 5l1 12h6l1-12" />
+      </button>
+    </div>
+  );
+}
+
+/** Roadmap #17 — "كومة المظهر": the layer-editor UI for an element's fill/stroke/
+ * shadow stack. Reads the *raw* stack via `currentAppearance` (not the resolved/
+ * painted values `resolveAppearance` returns — editing needs the original
+ * `colorToken`/gradient fields, not the final painted color), one category block
+ * per kind, each independently add/remove/duplicate/reorder/toggle-able with its
+ * own inline property editor. Every `actions.*Layer` call below already lazily
+ * materializes a real stack from legacy fields on first touch (see
+ * `StudioContext.tsx`), so this works identically on an element that's never been
+ * touched by this editor before. */
+/** صفُّ «تدرّج السُّمك» تحت طبقة الحدّ — ولا يظهر إلا لشكل مسار، لأن المَلمح
+ * يحتاج خطًّا مركزيًّا يُزاح لا محيطًا مغلقًا.
+ *
+ * والسطحُ قائمةٌ جاهزة + حقلَي نسبة، لا محرّرَ منحنى. وهذا اختيارٌ مقروءٌ من
+ * محرّك متّجهات مفتوح لا تقصيرًا: هو يشحن سبعةَ ملامح جاهزةٍ وقائمةً منسدلة، ولم يبنِ
+ * محرّر منحنى قطّ — أدواتُ العرض على اللوحة تكفي ما تعجز عنه القائمة
+ * (`docs/re-vectorcraft-source.md` §3.1). والقائمة تُفهَم من أول نظرة، والمنحنى
+ * لا يُفهَم.
+ *
+ * والحقلان **نسبةٌ مئويّة** من `width` لا بكسلات: فتبقى قيمةٌ واحدة (`width`)
+ * هي سُمك الخطّ، ويبقى المَلمح شكلًا بلا بُعد يصحّ تحت أيّ مقاس. */
+function StrokeTaperRow({ elId, s }: { elId: string; s: AppearanceStrokeLayer }) {
+  const { actions, dict: L } = useStudio();
+  const testId = `appearance-stroke-${elId}-${s.id}`;
+  const p = s.widthProfile ?? null;
+  const presetId = !p ? 'none' : (Object.keys(WIDTH_PROFILE_PRESETS).find((k) => {
+    const q = WIDTH_PROFILE_PRESETS[k];
+    return q.start === p.start && q.mid === p.mid && q.end === p.end;
+  }) ?? 'custom');
+
+  const pct = (v: number) => Math.round(v * 100);
+  const patchProfile = (next: Partial<StrokeWidthProfile>) =>
+    actions.updateStrokeLayer(elId, s.id, { widthProfile: { ...(p ?? WIDTH_PROFILE_PRESETS.taperEnd), ...next } });
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingInlineStart: 30 }}>
+      <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.stroke_taper}</span>
+      <select
+        data-testid={`${testId}-taper`}
+        value={presetId}
+        onChange={(e) =>
+          actions.updateStrokeLayer(elId, s.id, {
+            // «منتظم» يُزيل المَلمح لا يضبطه إلى ١/١: الغيابُ هو ما يُعيد مسارَ
+            // الحدِّ المرسوم بالحرف — وهو أسرعُ وأدقُّ تطابقًا مع ما يفهمه SVG
+            // أصلًا، ونفسُ تمييز محرّك متّجهات مفتوح بين `None` ومَلمحٍ منتظم.
+            widthProfile: e.target.value === 'none' ? null : (WIDTH_PROFILE_PRESETS[e.target.value] ?? null),
+          })
+        }
+        style={{ height: 22, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 10.5 }}
+      >
+        <option value="none">{L.stroke_taper_none}</option>
+        <option value="taperEnd">{L.stroke_taper_end}</option>
+        <option value="taperStart">{L.stroke_taper_start}</option>
+        <option value="lens">{L.stroke_taper_lens}</option>
+        <option value="pinch">{L.stroke_taper_pinch}</option>
+        {presetId === 'custom' && <option value="custom">{L.stroke_taper_custom}</option>}
+      </select>
+      {p && (
+        <>
+          <input
+            data-testid={`${testId}-taper-start`}
+            type="number"
+            dir="ltr"
+            min={0}
+            max={200}
+            value={pct(p.start)}
+            onChange={(e) => patchProfile({ start: Math.max(0, Number(e.target.value) || 0) / 100 })}
+            style={{ width: 38, height: 22, border: '1px solid var(--line)', borderRadius: 4, fontSize: 10.5, textAlign: 'center' }}
+          />
+          {/* النقطة الوسطى اختياريّة: حقلٌ فارغٌ = تدرّجٌ خطّيٌّ من طرفٍ إلى
+              طرف، ورقمٌ فيه = نقطةُ تحكّمٍ ثالثة عند منتصف طول القوس. وهي
+              **مثبَّتةٌ عند t=٠٫٥** لا حرّةَ الموضع، وهذا حدٌّ مقصود: منحنًى
+              انعطافُه عند ثلث طوله لا يُوصف بها (انظر تقرير الجولة). */}
+          <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>←</span>
+          <input
+            data-testid={`${testId}-taper-mid`}
+            type="number"
+            dir="ltr"
+            min={0}
+            max={200}
+            placeholder="—"
+            value={p.mid == null ? '' : pct(p.mid)}
+            onChange={(e) => patchProfile({ mid: e.target.value.trim() === '' ? null : Math.max(0, Number(e.target.value) || 0) / 100 })}
+            style={{ width: 38, height: 22, border: '1px solid var(--line)', borderRadius: 4, fontSize: 10.5, textAlign: 'center' }}
+          />
+          <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>←</span>
+          <input
+            data-testid={`${testId}-taper-end`}
+            type="number"
+            dir="ltr"
+            min={0}
+            max={200}
+            value={pct(p.end)}
+            onChange={(e) => patchProfile({ end: Math.max(0, Number(e.target.value) || 0) / 100 })}
+            style={{ width: 38, height: 22, border: '1px solid var(--line)', borderRadius: 4, fontSize: 10.5, textAlign: 'center' }}
+          />
+          <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>%</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AppearanceSection({ el }: { el: DocElement }) {
+  const { state, actions, dict: L } = useStudio();
+  const pal = PALETTES[state.postPalette];
+  const stack = currentAppearance(el);
+  const isPathShape = el.type === 'shape' && el.shape === 'path';
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="mz-label">{L.sec_appearance}</div>
+
+      {/* ---- Fills ---- */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>{L.appearance_fills}</span>
+          <button data-testid={`appearance-add-fill-${el.id}`} onClick={() => actions.addFillLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>
+            {L.appearance_add}
+          </button>
+        </div>
+        {stack.fills.length === 0 && <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{L.appearance_empty}</p>}
+        {stack.fills.map((f) => {
+          const swatch = resolveLayerColor(f.color, f.colorToken, pal);
+          const testId = `appearance-fill-${el.id}-${f.id}`;
+          return (
+            <div key={f.id} data-testid={testId} style={{ ...layerRowStyle, flexWrap: 'wrap' }}>
+              {/* `normalizeHex` لا الاختبار الخام: `<input type="color">` مضبوطٌ
+                  بالكامل، والمتصفّح **يُصغّر** قيمته دائمًا. وألوان `PALETTES`
+                  مكتوبةٌ بحرفٍ كبير (`#FFFFFF`)، فطبقةٌ تتبع رمز لوحةٍ كانت تُمرَّر
+                  إلى الحقل كبيرةً بينما يقرؤها الـDOM صغيرة — فيرى React في كل
+                  تصييرٍ فرقًا ويعيد كتابة القيمة، فلا يستقرّ الحقل أبدًا.
+                  والأثر لم يكن تجميليًّا: الحقل يسرق التركيز من جاره عند أوّل
+                  ضغطة مفتاح، فتذهب الحروف إلى النافذة وتصير اختصارات أدوات.
+                  ظهر هذا في حلقة المحاكاة — لون نصٍّ يتبع `fg` لا يُضبط أصلًا،
+                  بينما شكلٌ بلونٍ صريحٍ صغير يُضبط — ولم يكشفه أيُّ اختبارٍ قائم
+                  لأن `appearance-stack.spec.mjs` يَعُدّ الصفوف ولا يضبط لونًا. */}
+              <input
+                type="color"
+                data-testid={`${testId}-color`}
+                value={normalizeHex(swatch) ?? '#000000'}
+                onChange={(e) => actions.updateFillLayer(el.id, f.id, { color: e.target.value, colorToken: null })}
+                style={{ width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, background: 'transparent' }}
+              />
+              <HexField testId={`${testId}-hex`} value={swatch} onCommit={(hex) => actions.updateFillLayer(el.id, f.id, { color: hex, colorToken: null })} />
+              <select
+                data-testid={`${testId}-kind`}
+                value={f.kind}
+                onChange={(e) => actions.updateFillLayer(el.id, f.id, { kind: e.target.value as AppearanceFillLayer['kind'] })}
+                style={{ height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11 }}
+              >
+                <option value="solid">{L.appearance_solid}</option>
+                <option value="gradient">{L.appearance_gradient}</option>
+              </select>
+              <select
+                data-testid={`${testId}-blend`}
+                value={f.blend}
+                onChange={(e) => actions.updateFillLayer(el.id, f.id, { blend: e.target.value as AppearanceBlend })}
+                style={{ height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11 }}
+              >
+                {(['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten'] as AppearanceBlend[]).map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+              <input
+                data-testid={`${testId}-opacity`}
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={f.opacity}
+                onChange={(e) => actions.updateFillLayer(el.id, f.id, { opacity: Number(e.target.value) })}
+                style={{ flex: 1, minWidth: 40, accentColor: 'var(--accent)' }}
+              />
+              <LayerRowChrome
+                testId={testId}
+                visible={f.visible}
+                onToggleVisible={() => actions.updateFillLayer(el.id, f.id, { visible: !f.visible })}
+                onUp={() => actions.moveFillLayer(el.id, f.id, 'up')}
+                onDown={() => actions.moveFillLayer(el.id, f.id, 'down')}
+                onDuplicate={() => actions.duplicateFillLayer(el.id, f.id)}
+                onRemove={() => actions.removeFillLayer(el.id, f.id)}
+              />
+              {f.kind === 'gradient' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                  <input type="color" value={f.gradientFrom} onChange={(e) => actions.updateFillLayer(el.id, f.id, { gradientFrom: e.target.value })} style={{ width: 22, height: 22, border: 0, padding: 0 }} />
+                  <input type="color" value={f.gradientTo} onChange={(e) => actions.updateFillLayer(el.id, f.id, { gradientTo: e.target.value })} style={{ width: 22, height: 22, border: 0, padding: 0 }} />
+                  <input
+                    type="number"
+                    dir="ltr"
+                    value={f.gradientAngle}
+                    onChange={(e) => actions.updateFillLayer(el.id, f.id, { gradientAngle: Number(e.target.value) || 0 })}
+                    style={{ width: 52, height: 22, border: '1px solid var(--line)', borderRadius: 4, fontSize: 11, textAlign: 'center' }}
+                  />
+                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>°</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ---- Strokes ---- */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>{L.appearance_strokes}</span>
+          <button data-testid={`appearance-add-stroke-${el.id}`} onClick={() => actions.addStrokeLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>
+            {L.appearance_add}
+          </button>
+        </div>
+        {stack.strokes.length === 0 && <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{L.appearance_empty}</p>}
+        {stack.strokes.map((s) => {
+          const swatch = resolveLayerColor(s.color, s.colorToken, pal);
+          const testId = `appearance-stroke-${el.id}-${s.id}`;
+          return (
+            <div key={s.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div data-testid={testId} style={layerRowStyle}>
+              <input
+                type="color"
+                data-testid={`${testId}-color`}
+                value={normalizeHex(swatch) ?? '#000000'}
+                onChange={(e) => actions.updateStrokeLayer(el.id, s.id, { color: e.target.value, colorToken: null })}
+                style={{ width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, background: 'transparent' }}
+              />
+              <HexField testId={`${testId}-hex`} value={swatch} onCommit={(hex) => actions.updateStrokeLayer(el.id, s.id, { color: hex, colorToken: null })} />
+              <input
+                data-testid={`${testId}-width`}
+                type="number"
+                dir="ltr"
+                min={0}
+                value={s.width}
+                onChange={(e) => actions.updateStrokeLayer(el.id, s.id, { width: Number(e.target.value) || 0 })}
+                style={{ width: 44, height: 24, border: '1px solid var(--line)', borderRadius: 4, fontSize: 11, textAlign: 'center' }}
+              />
+              <select
+                data-testid={`${testId}-position`}
+                value={s.position}
+                onChange={(e) => actions.updateStrokeLayer(el.id, s.id, { position: e.target.value as StrokePosition })}
+                style={{ height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11 }}
+              >
+                <option value="inside">{L.stroke_pos_inside}</option>
+                <option value="center">{L.stroke_pos_center}</option>
+                <option value="outside">{L.stroke_pos_outside}</option>
+              </select>
+              <input
+                data-testid={`${testId}-opacity`}
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={s.opacity}
+                onChange={(e) => actions.updateStrokeLayer(el.id, s.id, { opacity: Number(e.target.value) })}
+                style={{ flex: 1, minWidth: 40, accentColor: 'var(--accent)' }}
+              />
+              <LayerRowChrome
+                testId={testId}
+                visible={s.visible}
+                onToggleVisible={() => actions.updateStrokeLayer(el.id, s.id, { visible: !s.visible })}
+                onUp={() => actions.moveStrokeLayer(el.id, s.id, 'up')}
+                onDown={() => actions.moveStrokeLayer(el.id, s.id, 'down')}
+                onDuplicate={() => actions.duplicateStrokeLayer(el.id, s.id)}
+                onRemove={() => actions.removeStrokeLayer(el.id, s.id)}
+              />
+            </div>
+            {isPathShape && <StrokeTaperRow elId={el.id} s={s} />}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ---- Shadows ---- */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>{L.appearance_shadows}</span>
+          <button data-testid={`appearance-add-shadow-${el.id}`} onClick={() => actions.addShadowLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>
+            {L.appearance_add}
+          </button>
+        </div>
+        {stack.shadows.length === 0 && <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)' }}>{L.appearance_empty}</p>}
+        {stack.shadows.map((sh) => {
+          const testId = `appearance-shadow-${el.id}-${sh.id}`;
+          return (
+            <div key={sh.id} data-testid={testId} style={{ ...layerRowStyle, flexWrap: 'wrap' }}>
+              <input
+                type="color"
+                data-testid={`${testId}-color`}
+                value={normalizeHex(sh.color) ?? '#000000'}
+                onChange={(e) => actions.updateShadowLayer(el.id, sh.id, { color: e.target.value })}
+                style={{ width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, background: 'transparent' }}
+              />
+              <HexField testId={`${testId}-hex`} value={sh.color} onCommit={(hex) => actions.updateShadowLayer(el.id, sh.id, { color: hex })} />
+              <select
+                data-testid={`${testId}-kind`}
+                value={sh.kind}
+                disabled={el.type === 'text'}
+                onChange={(e) => actions.updateShadowLayer(el.id, sh.id, { kind: e.target.value as AppearanceShadowLayer['kind'] })}
+                style={{ height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11 }}
+              >
+                <option value="outer">{L.shadow_kind_outer}</option>
+                <option value="inner">{L.shadow_kind_inner}</option>
+              </select>
+              {([['offsetX', 'X'], ['offsetY', 'Y'], ['blur', 'Blur'], ['spread', 'Spread']] as const).map(([key, label]) => (
+                <label key={key} dir="ltr" style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 10, color: 'var(--muted)' }}>
+                  {label}
+                  {/* الإزاحةُ السالبة هنا ليست حالةً نادرة بل نصفُ الاستعمال: ظلٌّ
+                      من اليمين إزاحتُه ‎‑X‏، ومن أعلى ‎‑Y‏. وكانت تُبتلع الإشارة
+                      كحقول التحويل تمامًا — انظر `NumField`. */}
+                  <NumField
+                    value={sh[key]}
+                    onCommit={(v) => actions.updateShadowLayer(el.id, sh.id, { [key]: v })}
+                    style={{ width: 40, height: 22, border: '1px solid var(--line)', borderRadius: 4, fontSize: 11, textAlign: 'center' }}
+                  />
+                </label>
+              ))}
+              <input
+                data-testid={`${testId}-opacity`}
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={sh.opacity}
+                onChange={(e) => actions.updateShadowLayer(el.id, sh.id, { opacity: Number(e.target.value) })}
+                style={{ flex: 1, minWidth: 40, accentColor: 'var(--accent)' }}
+              />
+              <LayerRowChrome
+                testId={testId}
+                visible={sh.visible}
+                onToggleVisible={() => actions.updateShadowLayer(el.id, sh.id, { visible: !sh.visible })}
+                onUp={() => actions.moveShadowLayer(el.id, sh.id, 'up')}
+                onDown={() => actions.moveShadowLayer(el.id, sh.id, 'down')}
+                onDuplicate={() => actions.duplicateShadowLayer(el.id, sh.id)}
+                onRemove={() => actions.removeShadowLayer(el.id, sh.id)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function PenProps() {
+  const { state, actions, dict: L } = useStudio();
+  const anchors = state.penDraft.length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="mz-label">{L.path}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 32, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
+          <span>{L.anchors}</span>
+          <span dir="ltr" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--muted)' }}>{anchors}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 32, padding: '0 10px', fontSize: 12 }}>
+          <span>{L.close_path}</span>
+          <button data-testid="pen-close-path-toggle" onClick={() => actions.setPenClosePath(!state.penClosePath)} style={{ border: 0, background: 'transparent', padding: 0 }}>
+            <Toggle on={state.penClosePath} />
+          </button>
+        </div>
+      </section>
+      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>{L.pen_hint}</div>
+      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.7 }}>{L.boolean_after_create_hint}</div>
+    </div>
+  );
+}
+
+function SoonBadge() {
+  return <span style={{ padding: '1px 7px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: 'var(--surface2)', color: 'var(--muted)' }}>قريبًا</span>;
+}
+
+function BoolButton({ label, path, fill, onClick, testId }: { label: string; path: string; fill?: boolean; onClick: () => void; testId: string }) {
+  return (
+    <button
+      data-testid={testId}
+      onClick={onClick}
+      style={{ height: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 11 }}
+    >
+      <Icon size={20} strokeWidth={1.4} fill={fill ? 'currentColor' : 'none'} path={path} />
+      {label}
+    </button>
+  );
+}
+
+/** Roadmap #10 — shown whenever 2+ selected elements are all shapes (any mix of
+ * rect/ellipse/closed path). An open pen path has no interior (see
+ * `isBooleanEligible`), so the section stays visible but disables its buttons with a
+ * real explanation rather than hiding — "never fake, never a silent no-op". */
+function BooleanOpsSection({ shapes }: { shapes: Array<DocElement & { type: 'shape' }> }) {
+  const { state, actions, dict: L } = useStudio();
+  // Document (back-to-front) order, not selection click order — `applyBooleanOp`
+  // treats the first entry as the bottom shape for `subtract`.
+  const ids = new Set(shapes.map((s) => s.id));
+  const ordered = state.elements.filter((e): e is DocElement & { type: 'shape' } => ids.has(e.id) && e.type === 'shape');
+  const orderedIds = ordered.map((e) => e.id);
+  const disabled = !ordered.every(isBooleanEligible);
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.boolean}</div>
+      {disabled && <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.boolean_open_path_hint}</p>}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, opacity: disabled ? 0.45 : 1, pointerEvents: disabled ? 'none' : 'auto' }} aria-disabled={disabled}>
+        <BoolButton testId="bool-union" label={L.union} path="M3 3h9v5h5v9H8v-5H3z" fill onClick={() => actions.applyBooleanOp('union', orderedIds)} />
+        <BoolButton testId="bool-subtract" label={L.subtract} path="M8 8h9v9H8z" onClick={() => actions.applyBooleanOp('subtract', orderedIds)} />
+        <BoolButton testId="bool-intersect" label={L.intersect} path="M3 3h9v9H3zM8 8h9v9H8z" onClick={() => actions.applyBooleanOp('intersect', orderedIds)} />
+        <BoolButton testId="bool-exclude" label={L.exclude} path="M3 3h9v9H3zM8 8h9v9H8z" onClick={() => actions.applyBooleanOp('exclude', orderedIds)} />
+      </div>
+    </section>
+  );
+}
+
+function Toggle({ on }: { on: boolean }) {
+  return (
+    <span style={{ width: 32, height: 18, borderRadius: 999, background: on ? 'var(--accent)' : 'var(--line)', position: 'relative', display: 'inline-block' }}>
+      <span style={{ position: 'absolute', top: 2, [on ? 'insetInlineEnd' : 'insetInlineStart']: 2, width: 14, height: 14, borderRadius: '50%', background: on ? 'var(--onAccent)' : 'var(--surface)', boxShadow: on ? 'none' : '0 1px 2px rgba(0,0,0,.2)' }} />
+    </span>
+  );
+}

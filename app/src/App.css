@@ -1,0 +1,91 @@
+@import './assets/fonts/fonts.css';
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #e9ecf1;
+  overflow: auto;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+input::placeholder {
+  color: inherit;
+  opacity: 0.45;
+}
+
+a {
+  color: inherit;
+}
+a:hover {
+  color: inherit;
+  opacity: 0.8;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.3);
+  border-radius: 8px;
+}
+
+@keyframes mz-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mz-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mz-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.mz-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.mz-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.mz-search:hover {
+  border-color: var(--accent);
+}

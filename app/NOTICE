@@ -1,0 +1,55 @@
+Third-party notices for مزيج / Mazij Studio
+=============================================
+
+This file lists third-party dependencies bundled with the app whose licenses
+require attribution. It is scoped to dependencies added alongside this entry;
+it does not claim to be an exhaustive audit of every package in package.json.
+
+lottie-web
+----------
+License: MIT
+Copyright (c) 2015 Hernan Torrisi
+Used for: importing and playing back Lottie (bodymovin) animations as a real
+element on the artboard (roadmap item #13), both in the live editor preview and
+when compositing PNG/video export frames.
+https://github.com/airbnb/lottie-web
+
+fflate
+------
+License: MIT
+Copyright (c) 2020 Arjun Barrett
+Used for: unzipping `.lottie` (dotLottie) animation containers to extract the
+embedded animation JSON and any bundled raster image assets.
+https://github.com/101arrowz/fflate
+
+harfbuzzjs
+----------
+License: MIT
+Copyright (c) 2019-2026 The harfbuzzjs project authors
+(a WebAssembly build of HarfBuzz itself, also MIT-licensed)
+Used for: real Arabic text shaping (joining forms, ligatures via GSUB, diacritic/mark
+placement via GPOS) and real glyph outline extraction (`Font.glyphToPath`), for the
+text paths that need per-glyph control — currently "convert text to outlines"
+(roadmap item #12). Plain text elsewhere in the app is left to the platform's own
+text engine, which already uses HarfBuzz internally.
+https://github.com/harfbuzz/harfbuzzjs
+
+bidi-js
+-------
+License: MIT
+Copyright (c) 2021 Jason Johnston
+Used for: the Unicode Bidirectional Algorithm (UAX #9) — resolving paragraph
+embedding levels and visual run order for mixed Arabic/Latin/digit text, run
+*before* HarfBuzz shaping (roadmap item #12) — see src/lib/arabicShaping.ts.
+https://github.com/lojjic/bidi-js
+
+woff2-encoder
+-------------
+License: MIT
+Copyright (c) 2023-present Kyedo
+Used for: decompressing this app's bundled `.woff2` font files into raw sfnt bytes
+for HarfBuzz (its WASM build has no WOFF2/Brotli decoder of its own) — only the
+`/decompress` subpath is imported, for a smaller bundle. (`wawoff2`, the more
+commonly cited package for this, was tried first but never completes its WASM
+runtime init under Vite/browser ESM — see the comment in `arabicShaping.ts`.)
+https://github.com/itskyedo/woff2-encoder

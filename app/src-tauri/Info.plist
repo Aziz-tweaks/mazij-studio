@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Tauri merges this file into the generated app bundle's Info.plist.
+
+  Only one key so far, and it is here for a concrete reason: roadmap #23's Live
+  Photo export can hand the finished JPEG+MOV pair to the macOS Photos library
+  (`lptool import`, src-tauri/native/livephoto/main.swift), which is the only
+  path that actually produces a real Live Photo rather than two loose files.
+  PhotoKit refuses to even show a permission prompt without this description —
+  the process is killed instead — so without this key the feature cannot work.
+
+  The wording is add-only on purpose, matching the `.addOnly` authorization the
+  tool requests: Mazij never reads the user's existing photos.
+-->
+<plist version="1.0">
+<dict>
+  <key>NSPhotoLibraryAddUsageDescription</key>
+  <string>لإضافة الصور الحية التي تصدّرها من مزيج إلى مكتبة الصور. مزيج يضيف فقط ولا يقرأ صورك.</string>
+</dict>
+</plist>

@@ -1,0 +1,47 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+
+# onnxruntime-web WASM runtime — staged from node_modules by
+# scripts/setup-onnxruntime-wasm.sh (roadmap #9), not committed (large binaries
+# already present in node_modules, same reasoning as src-tauri/binaries/ffmpeg).
+# public/ort-whisper/ is the second, separate runtime staged for roadmap #15.
+public/ort/
+public/ort-whisper/
+
+# حلقة المحاكاة — مراجعُ مملوكةٌ لجهةٍ خارجيّة: محليّةٌ لا تُرفَع.
+#
+# هدفا t02 وt03 تصميمان **منشوران فعلًا** تملكهما جهةٌ خارجيّة، سُلِّما هدفين
+# للحلقة. فلا المرجع يُنشَر، ولا الأصول الثلاثة المقصوصة منه مباشرةً، ولا
+# المحاولة التي تُعيد إنتاجه. والباقي في المستودع هو الحكم نفسه: `spec.json`
+# ببنوده، و`README.md` في كل مجلد هدفٍ يشرح ما ينقص وكيف تدور الحلقة بدونه.
+#
+# وt01 ليس منها: مرجعه `reference.html` داخل المستودع، مرسومٌ من الصفر لهذه
+# الحلقة — فـ`targets/t01-sidra/target.png` و`attempt-t01.png` يبقيان متتبَّعين.
+qa/replication/targets/t02-kashida/target.png
+qa/replication/targets/t03-store-card/target.png
+qa/replication/assets/
+qa/replication/attempt-t02.png
+qa/replication/attempt-t03.png
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
