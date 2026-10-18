@@ -19,7 +19,7 @@
 //     engine doesn't break the existing export pipeline).
 //
 // Run: node qa/magic-resize.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

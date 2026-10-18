@@ -22,7 +22,7 @@
 // by eye against a straight line), plus an `x` track with three keys placed at three
 // different playhead positions (so a migration that only handles two-key preset
 // tracks fails here).
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

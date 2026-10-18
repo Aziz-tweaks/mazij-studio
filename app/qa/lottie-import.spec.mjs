@@ -10,7 +10,7 @@
 // qa/anim-tracks.spec.mjs already established for the per-property track renderer.
 //
 // Run: node qa/lottie-import.spec.mjs   (dev server must be running on :1432)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { zipSync } from 'fflate';
 // NOTE (video branch, phase 1): this spec drives surfaces that exist only on a
 // **timed** document — the timeline's ruler/clips, the transport, the video tool, or

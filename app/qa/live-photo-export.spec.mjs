@@ -40,7 +40,7 @@
 // NOTE on the hardcoded port below: this file is committed pointing at :1420
 // (the shared dev port other worktrees/specs assume) even though this round
 // was developed running the dev server on :1433 — see docs/CONTROLS.md.
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';

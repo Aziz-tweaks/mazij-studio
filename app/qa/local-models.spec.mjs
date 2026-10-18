@@ -21,7 +21,7 @@
 //     path for an unresolvable target and for genuinely unsupported verbs.
 //
 // Run: node qa/local-models.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { bootDemo } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';

@@ -10,7 +10,7 @@
 // suite tests UI wiring, independent of the file-system-dependent Tauri paths).
 //
 // Run: node qa/video-export.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 // NOTE (video branch, phase 1): this spec drives surfaces that exist only on a
 // **timed** document — the timeline's ruler/clips, the transport, the video tool, or
 // MP4/GIF in the export dialog. The demo poster is 1080×1080, i.e. `SIZES[0]`, whose

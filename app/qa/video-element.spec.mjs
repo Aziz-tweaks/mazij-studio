@@ -17,7 +17,7 @@
 // — real, distinct, known content at known timestamps, not a claim.
 //
 // Run: node qa/video-element.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';

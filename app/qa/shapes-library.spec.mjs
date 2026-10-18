@@ -21,7 +21,7 @@
 // docs/re-illustrator-flows.md §2.4, docs/re-capcut-flows.md §2.1/§2.4/§2.6.
 //
 // Run: node qa/shapes-library.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { bootDemo, switchToTimed } from './helpers/boot.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || process.env.MAZIJ_URL || 'http://localhost:1420';

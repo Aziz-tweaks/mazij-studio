@@ -26,7 +26,7 @@
 // Plus the frame grid's own round-trip, which is what lets every epsilon be deleted.
 //
 // Run: QA_PORT=1443 node --import ./qa/helpers/port-redirect.mjs qa/phase1-representation.spec.mjs
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 

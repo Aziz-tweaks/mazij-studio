@@ -25,7 +25,7 @@
 // path and asserts the animation is identical at those 60 instants to within 1e-6.
 //
 // Run: QA_PORT=1443 node --import ./qa/helpers/port-redirect.mjs qa/migration-roundtrip.spec.mjs
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 
 const BASE_URL = `http://localhost:${process.env.QA_PORT || '1420'}`;

@@ -37,7 +37,7 @@
 // browser tab pointed at the dev server.
 //
 // Run: node qa/mcp-server.spec.mjs   (dev server must be running; see BASE_URL)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync, rmSync } from 'node:fs';

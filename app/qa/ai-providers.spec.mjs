@@ -38,7 +38,7 @@
 //     still round-trips byte-identically (same `persist.ts` path every import uses).
 //
 // Run: node qa/ai-providers.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
