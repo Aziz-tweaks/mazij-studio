@@ -8,7 +8,7 @@
 // this file does not duplicate.
 //
 // Run: node qa/timeline.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 // NOTE (video branch, phase 1): this spec drives the **timeline**, and the demo
 // poster is 1080×1080 — a still destination — so the timeline's time surfaces no
 // longer exist on it. `bootDemoTimed` opens the same demo document and then picks a

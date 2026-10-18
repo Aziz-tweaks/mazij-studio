@@ -38,7 +38,7 @@
 //     real slider drag, and an abandoned draft not leaking into the next path.
 //
 // Run: node qa/pen-smoothing.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { bootDemo, resumeAfterReload } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';

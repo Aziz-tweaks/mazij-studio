@@ -15,7 +15,7 @@
 // a pass; the delta has to be the delta that was asked for.
 //
 // Run: node qa/designer-flow.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 // NOTE (video branch, phase 1): §5 below drives the **transport**, which belongs to a
 // timed document now — `DocSnapshot.medium` gates it, which is the point of the
 // phase: the start screen already asked "image or video?" and the answer finally

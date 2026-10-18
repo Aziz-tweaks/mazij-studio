@@ -24,7 +24,7 @@
 //     أيّ مقاس — وهذا ما يجعل الحقل معاملًا لا بكسلات.
 //
 // التشغيل: node qa/variable-stroke-width.spec.mjs   (خادم التطوير يعمل على :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import { bootBlank, AUTOSAVE_KEY } from './helpers/boot.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || process.env.MAZIJ_URL || 'http://localhost:1420';

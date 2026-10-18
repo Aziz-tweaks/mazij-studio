@@ -8,7 +8,7 @@
 // شاشةٍ مضاعَفة لصار ٢١٦٠ ونجح/سقط بندُ المقاس لسببٍ لا علاقة له بالتطبيق.
 //
 // التشغيل: node qa/replication/render-target.mjs t01-sidra
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

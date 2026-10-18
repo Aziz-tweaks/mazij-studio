@@ -19,7 +19,7 @@
 // Usage: node --import ./qa/helpers/port-redirect.mjs qa/some.spec.mjs
 // Env:   QA_PORT (default 1443), QA_FROM_PORT (default 1420)
 
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 
 const FROM = process.env.QA_FROM_PORT || '1420';
 const TO = process.env.QA_PORT || '1443';

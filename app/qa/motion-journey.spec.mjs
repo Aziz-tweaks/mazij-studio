@@ -37,7 +37,7 @@
 //    default 2× a project whose card reads 1080 × 1920 produced a 2160 × 3840 file.
 //
 // Run: node qa/motion-journey.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 
 const BASE_URL = 'http://localhost:1420';
 const AUTOSAVE_KEY = 'mazij.autosave.v1';

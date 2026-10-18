@@ -3,7 +3,7 @@
 // effect — DOM state, app state, or a real file on disk — not just "didn't throw".
 //
 // Run: node qa/controls.spec.mjs   (dev server must be running on :1420)
-import { chromium } from '/private/tmp/iphone_mockup_inspect/node_modules/playwright/index.mjs';
+import { chromium } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
