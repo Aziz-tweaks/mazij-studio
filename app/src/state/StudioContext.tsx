@@ -276,6 +276,137 @@ function pushHistory(s: StudioState, label = ''): Pick<StudioState, 'historyPast
   };
 }
 
+/** يُثبِّت مسودّةَ القلم عنصرَ مسارٍ في المستند بخطوةِ تراجعٍ واحدة — أو يمسحها
+ * إن لم تكن مسارًا بعد (أقلّ من نقطتين).
+ *
+ * **لماذا صارت دالّةً مستقلّة.** كان هذا الجسمُ كلُّه داخل `penFinish` وحدها،
+ * فكان الموضعُ الوحيدُ الذي يُثبِّت مسودّةً هو ذاك — ومغادرةُ الأداة تَمسح
+ * (`penDraft: []`) بلا خطوةِ تراجعٍ تُعيد ما مُسِح. فمن وضع ثلاثَ نقاطٍ ثم ضغط
+ * `V` فقد الثلاث، ولا `⌘Z` يُرجعها: أكلها البرنامجُ أكلًا صامتًا.
+ *
+ * **والقاعدةُ المُقتبَسة** من `vectorcraft/crates/tools/src/pen.rs:355-366`
+ * (`deactivate`)، وتعليقُها الحاكمُ على `:360` بالحرف:
+ * «Finish the preview as it stands; clearing state alone leaves its transaction
+ * open.» — أي: **المغادرةُ تَختم العملَ ولا تُلقيه**، وعقدُ `switch_tool`
+ * (`crates/engine/src/tooling.rs:84-97`) معقودٌ كلُّه على أمانة الأداة في
+ * `deactivate`. والفكرةُ مأخوذةٌ والآليةُ مكتوبةٌ من جديد؛ لا سطرَ منسوخ.
+ *
+ * **ولا تُسمّي الأداةَ الجديدة.** `penFinish` تُرجع إلى «تحديد» بعد الإثبات،
+ * أمّا مسارُ تسليحِ أداةٍ أخرى فالوجهةُ عنده هي الأداةُ التي ضُغطت — فلو ثبَّتت
+ * هذه الدالّةُ `tool: 'select'` في جسمها لَسحبت القلمَ من يد من ضغط «نص».
+ * وهذا هو نفسُ ما يفعله المصدر: `deactivate` **لا تعرف إلى أين يُنتقَل** —
+ * توقيعُها بلا مُعامل `to` (`crates/tools/src/lib.rs:577`).
+ *
+ * **والعلّةُ التي كان المسحُ يتحاشاها لا تعود.** التعليقُ عند `setTool` أدناه
+ * يقول إنّ المسودّةَ المهجورةَ «تندمج نقاطُها في أوّل مسارٍ جديد» — وهي علّةٌ
+ * صحيحة، وعلاجُها عند المصدر `Commit` لا `clear`. والإثباتُ يُفرِغ `penDraft`
+ * كما يُفرِغه المسح، فالاندماجُ ممتنعٌ بحكم البناء؛ والفرقُ أنّ ما خرج من
+ * المسودّة صار عنصرًا في المستند بخطوةٍ تُعيده، لا عدمًا. */
+function commitPenDraft(s: StudioState, forceClosed?: boolean): StudioState {
+  const pts = s.penDraft;
+  if (pts.length < 2) return { ...s, penDraft: [] };
+  const closed = forceClosed ?? s.penClosePath;
+  // الصندوق المحيط يُحسَب على نقاط الربط **ونهايات مقابضها** معًا: هيكل نقاط
+  // التحكّم المحدّب يحوي المنحنى كله، فصندوق كهذا يحوي ما يراه المصمم فعلًا
+  // لا المضلّع وحده. وبدون ذلك يصير صندوق منحنى على ثلاث نقاط على استقامة
+  // واحدة بارتفاع بكسل واحد (`Math.max(..., 1)`)، فتخرج الكسور بأرقام بمئات
+  // الأضعاف ويصبح تحجيم العنصر بالمقابض غير متوقّع بالمرّة.
+  // التوسيع محايد هندسيًا تمامًا: ما دام كلٌّ من النقاط والمقابض يُقسَّم على
+  // أبعاد الصندوق النهائية نفسها، فموضع كل شيء بالبكسل يبقى كما هو بالحرف.
+  const hullX = pts.flatMap((p) => (p.h ? [p.x, p.x + p.h.x, p.x - p.h.x] : [p.x]));
+  const hullY = pts.flatMap((p) => (p.h ? [p.y, p.y + p.h.y, p.y - p.h.y] : [p.y]));
+  const minX = Math.min(...hullX);
+  const minY = Math.min(...hullY);
+  const w = Math.max(Math.max(...hullX) - minX, 1);
+  const h = Math.max(Math.max(...hullY) - minY, 1);
+  const size = sizeAt(s.sizeIdx, s.customW, s.customH);
+  const normalized = pts.map((p) => ({ x: (p.x - minX) / w, y: (p.y - minY) / h }));
+  const anyHandle = pts.some((p) => p.h);
+  const handles = anyHandle
+    ? pts.map((p) => (p.h ? { out: { x: p.h.x / w, y: p.h.y / h }, in: { x: -p.h.x / w, y: -p.h.y / h } } : null))
+    : undefined;
+  const id = newElementId('path');
+  const el: DocElement = {
+    id,
+    type: 'shape',
+    visible: true,
+    locked: false,
+    opacity: 100,
+    maskId: null,
+    geo: { x: minX / size.w, y: minY / size.h, w: w / size.w, h: h / size.h, rotation: 0 },
+    shape: 'path',
+    fill: closed ? null : 'transparent',
+    fillToken: 'ac',
+    stroke: null,
+    strokeWidth: 4,
+    radius: 0,
+    points: normalized,
+    closed,
+    ...(handles ? { handles } : {}),
+    anim: defaultAnim('none', 0, 0.6),
+  };
+  return {
+    ...s,
+    elements: [...s.elements, el],
+    penDraft: [],
+    selectedIds: [id],
+    sel: id,
+    ...pushHistory(s),
+  };
+}
+
+/** **المُوَدِّعُ الواحد: تسليحُ أداةٍ يَختم عملَ المُغادِرة ثم يُنزع التحديد.**
+ *
+ * هذا هو الموضعُ الوحيدُ الذي تُسلَّح فيه أداة، ويَعبُره الشريطُ والاختصارُ
+ * بحرفٍ واحدٍ ولوحةُ الأوامر جميعًا — وهو مقصودٌ بناءً على أقوى سطرٍ في ورقة
+ * الاستطلاع: **لا جدولَ انتقالاتٍ من كلّ أداةٍ إلى كلّ أداة، بل مُوَدِّعٌ واحدٌ
+ * لا يسأل عن الوجهة** (`vectorcraft/crates/engine/src/tooling.rs:84-97`
+ * و`crates/tools/src/lib.rs:577`). الجدولُ يَفسد عند الأداة التاسعة؛ والمُوَدِّعُ
+ * لا يَفسد.
+ *
+ * وثلاثةُ أفعالٍ بالترتيب، والترتيبُ هو القاعدة:
+ *
+ * ١. **العملُ المُعلَّق يُثبَّت** — `commitPenDraft` أعلاه. قبل الهدم، لا بعده.
+ * ٢. **أوضاعُ التحرير تُهدَم** — `nodeEditId`/`nodeEditSel`. والسببُ مكتوبٌ عند
+ *    `setTool` أدناه: المقابضُ المرسومةُ على اللوحة لا معنى لها مع أداةٍ أخرى.
+ * ٣. **والتحديدُ يُنزَع عن كلّ شيء** — وهذا قرارُ المالك صريحًا، وهو **خلافُ**
+ *    ما يفعله المصدر: `switch_tool` هناك لا تَمسّ التحديد، ولا تستطيع، لأن
+ *    التحديدَ يسكن في `DocState` والأدواتُ تَراه قراءةً فقط
+ *    (`crates/tools/src/lib.rs:224`). فهذا سطرُنا لا سطرُهم، ويُعلَن كذلك.
+ *
+ * **والثلاثةُ مشروطةٌ بتغيُّرٍ فعليٍّ في الأداة** — `s.tool !== tool`. وقاعدةُ
+ * «إعادةُ ضغطِ الأداة نفسِها لا تفعل شيئًا» مأخوذةٌ من `tooling.rs:86-88`، وهناك
+ * **عودةٌ مبكّرةٌ صريحة** قبل التوديع: `if self.tool.id() == id { return Ok(()) }`.
+ *
+ * **وقد جُرِّب النزعُ غيرَ مشروط أوّلًا، ونُقض بالقياس — والقياسُ مُسمًّى.**
+ * الحرفُ الظاهرُ لأمر المالك («تسليحُ أيّ أداةٍ») يحتمل أن تَنزع الضغطةُ على
+ * الأداة **المسلَّحة أصلًا** التحديدَ كذلك. فبُنيَ كذلك، فسقط
+ * `qa/appearance-stack.spec.mjs:180`: يرسم الاختبارُ شكلًا بالسحب ثم يضغط زرَّ
+ * «تحديد» — وهو مسلَّحٌ أصلًا بحكم الارتداد — فيفقد الشكلَ المرسومَ لتوّه،
+ * فيَخلو محرّرُ الطبقات فلا يجد `appearance-fill-…` صفًّا واحدًا. وذلك ليس عطلًا
+ * في الاختبار بل **إعلانٌ عن سلوكٍ أسوأ ممّا يُصلحه**: يحدّد المصمّمُ شكلًا، ثم
+ * يضغط زرَّ «تحديد» — وهي إيماءةٌ بلا معنًى يفعلها الناسُ كلَّ يوم — فيفقد
+ * تحديدَه بلا سببٍ يراه. وهو الضررُ نفسُه الذي يحرسه `keepSelection` في
+ * الارتداد، داخلًا من بابٍ آخر.
+ *
+ * **وقرارُ المالك قائمٌ بحرفه حيث له معنًى:** كلُّ **تبديلٍ** لأداةٍ يَنزع
+ * التحديدَ عن كلّ شيء — وهو ما وصفه («أضغط زرّ القلم فينلغي التحديد»)، فالضغطُ
+ * على أداةٍ غيرِ المسلَّحة تبديلٌ دائمًا. والضغطةُ على المسلَّحة ليست تسليحًا بل
+ * لا شيء، ولا شيءَ لا يَنزع شيئًا.
+ *
+ * **و`keepSelection` بابٌ واحدٌ مُعلَن، لقدرةٍ كان النزعُ سيقتلها.** انظر
+ * `Stage.tsx` عند الخمسة مواضع التي تُناديه. */
+function armTool(s: StudioState, tool: StudioState['tool'], opts?: { keepSelection?: boolean }): StudioState {
+  if (s.tool === tool) return s;
+  return {
+    ...commitPenDraft(s),
+    tool,
+    nodeEditId: null,
+    nodeEditSel: null,
+    ...(opts?.keepSelection ? {} : { selectedIds: [], sel: null }),
+  };
+}
+
 /** تبديلُ مقاسٍ، ومعه إعادةُ اشتقاق الطبيعة.
  *
  * دالّةٌ واحدة يمرّ بها كلُّ مسارِ تبديلٍ (`setSizeIdx`، `cycleSize`،
@@ -442,7 +573,9 @@ export interface StudioActions {
   toggleLang: () => void;
   setSimple: () => void;
   setPro: () => void;
-  setTool: (tool: StudioState['tool']) => void;
+  /** `keepSelection` للمسارات التي تُعيد الأداةَ إلى «تحديد» **بعد إنشاء عنصر**،
+   * فالعنصرُ الجديدُ محدَّدٌ لتوّه ونزعُه عنه يُفقِد قدرةً. انظر `armTool`. */
+  setTool: (tool: StudioState['tool'], opts?: { keepSelection?: boolean }) => void;
   setShapeDrawKind: (k: ShapeDrawKind) => void;
   openCmd: () => void;
   closeCmd: () => void;
@@ -1781,26 +1914,36 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         }),
       resumeOpenProject: () => patch({ screen: 'editor', cmdOpen: false }),
       toggleLang: () => patch((s) => ({ lang: s.lang === 'ar' ? 'en' : 'ar' })),
-      setSimple: () =>
-        patch((s) => ({
-          mode: 'simple',
-          tool: ['pen', 'audio'].includes(s.tool) ? 'select' : s.tool,
-        })),
+      // الرجوعُ إلى الوضع البسيط يَنزع أدواتَ الوضع الاحترافيّ من اليد، **فهو
+      // بابٌ ثالثٌ تُغادَر منه أداةُ القلم** — ولم يكن يَعبُر المُوَدِّع. وأثرُه
+      // أسوأُ من المسح: الأداةُ تصير «تحديد» و`penDraft` يبقى بنقاطه، وهي بعينها
+      // «المسودّةُ المهجورة» التي يُحذِّر منها تعليقُ `setTool` أدناه. فيَعبُر
+      // `armTool` كغيره، فيُثبَّت ما رُسِم. ومن بقي على أداةٍ بسيطة لا يتغيّر
+      // عنده شيء: `armTool` بالأداة نفسِها لا تُثبِّت ولا تَهدم.
+      setSimple: () => patch((s) => ({ ...armTool(s, ['pen', 'audio'].includes(s.tool) ? 'select' : s.tool), mode: 'simple' })),
       setPro: () => patch({ mode: 'pro' }),
-      // مغادرة أداة القلم تُلغي المسودّة الجارية بدل تركها معلّقة في الحالة: معاينة
-      // المسودّة مشروطة بـ`tool === 'pen'`، فمسودّة مهجورة تختفي عن الشاشة لكنها تبقى
-      // في `penDraft` — فتظهر فجأة عند الرجوع للقلم، والأسوأ: تندمج نقاطها في أول
-      // مسار جديد يرسمه المصمم بعدها. مغادرة أداة ما تُخرِج أيضًا من وضع تحرير العقد،
-      // لأن المقابض المرسومة على اللوحة لا معنى لها مع أداة رسم أخرى نشِطة.
+      // مغادرةُ أداة القلم **تُثبِّت** المسودّةَ الجارية ولا تُلقيها، ولا تتركها
+      // معلّقةً في الحالة كذلك. والعلّةُ التي من أجلها كانت تُمسَح باقيةٌ على
+      // صحّتها: معاينةُ المسودّة مشروطةٌ بـ`tool === 'pen'`، فمسودّةٌ مهجورةٌ تختفي
+      // عن الشاشة وتبقى في `penDraft` — فتظهر فجأةً عند الرجوع للقلم، والأسوأ:
+      // تندمج نقاطُها في أوّل مسارٍ جديد. والإثباتُ يُفرِغ `penDraft` كما يُفرِغه
+      // المسحُ، فتلك العلّةُ ممتنعةٌ بحكم البناء — والفرقُ أنّ العملَ صار عنصرًا
+      // في المستند بخطوةٍ تُعيده لا عدمًا. التفصيلُ والمصدرُ عند `commitPenDraft`
+      // و`armTool` في أعلى هذا الملفّ.
+      //
+      // ومغادرةُ أداةٍ ما تُخرِج أيضًا من وضع تحرير العقد، لأن المقابض المرسومة
+      // على اللوحة لا معنى لها مع أداة رسم أخرى نشِطة. **وتنزع التحديد عن كل
+      // شيء** — قرارُ المالك، وهو سطرُنا لا سطرُ المصدر؛ الدليلُ والاستثناءُ
+      // الوحيدُ له عند `armTool`.
       //
       // اختيار أداةٍ يُعيد اللوح إلى «التصميم» متى كانت الأداة ليست مكتبة — أي
       // «تحديد» وحدها اليوم. وهذا ليس تجميلًا: بدونه يبقى لوح المكتبة معروضًا بعد
       // أن ينتهي المصمم من الرسم، فلا يجد خصائص ما حدّده للتوّ. فتح المكتبة يمرّ
       // بـ`openToolLibrary` لا من هنا، فيبقى `setTool` صالحًا كما كان لكل نداء
       // برمجي قائم (مُفسِّر الأوامر، لوحة الأوامر، MCP).
-      setTool: (tool) =>
+      setTool: (tool, opts) =>
         patch((s) => ({
-          ...(s.tool === tool ? { tool } : { tool, penDraft: [], nodeEditId: null, nodeEditSel: null }),
+          ...armTool(s, tool, opts),
           ...(TOOL_LIBRARY[tool] === 'none' && s.panel === 'library' ? { panel: 'props' as PanelId } : {}),
         })),
       setShapeDrawKind: (shapeDrawKind) => patch({ shapeDrawKind }),
@@ -1821,14 +1964,25 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           const result = c.run(s);
           const { doc, rest } = splitDocPatch(result);
           const hasDoc = Object.keys(doc).length > 0;
+          // **لوحةُ الأوامر بابٌ ثالثٌ يُسلِّح أداة.** «إضافة نص» تُرجِع
+          // `{ tool: 'text', panel: 'props' }` (`data/constants.ts`)، فتصل
+          // الأداةُ إلى الحالة **بدمجِ رُقعةٍ** لا بنداء `setTool` — فكانت تَعبُر
+          // المُوَدِّعَ من تحته: تُسلَّح الأداةُ ويبقى التحديدُ، وتبقى مسودّةُ
+          // القلم. والقاعدةُ واحدةٌ لفعلٍ واحد: ما سلَّح أداةً يَعبُر `armTool`،
+          // من أيّ بابٍ جاء — وإلّا صار للبرنامج سلوكان لأمرٍ واحد.
+          const armed = typeof rest.tool === 'string' && rest.tool !== s.tool ? armTool(s, rest.tool as StudioState['tool']) : s;
           return {
-            ...s,
+            ...armed,
             ...rest,
             ...doc,
             cmdOpen: false,
             cmdQuery: '',
             cmdSel: 0,
-            ...(hasDoc ? pushHistory(s) : {}),
+            // اللقطةُ من `armed` لا من `s`: لو كان المُوَدِّعُ قد أثبت مسودّةَ
+            // قلمٍ فقد دفع خطوتَه بنفسه، فلقطةٌ محسوبةٌ على الحالة الأصليّة
+            // كانت ستَكتب فوق تلك الخطوة وتُفقِد المسارَ المُثبَّت من السجلّ.
+            // و«قبلَ التغيير» الصحيحةُ لأمرِ المستند هي الحالةُ بعد الإثبات.
+            ...(hasDoc ? pushHistory(armed) : {}),
           };
         });
       },
@@ -2660,10 +2814,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
        * (قاعدة أداة المتّجهات) — فلا يحتاج المصمم أن يعرف أيّهما كان يقصد. */
       openToolLibrary: (tool) =>
         patch((s) => ({
-          tool,
-          penDraft: s.tool === tool ? s.penDraft : [],
-          nodeEditId: s.tool === tool ? s.nodeEditId : null,
-          nodeEditSel: s.tool === tool ? s.nodeEditSel : null,
+          // المُوَدِّعُ الواحد: إثباتُ المسودّة، وهدمُ أوضاع التحرير، ونزعُ
+          // التحديد. وكان هذا المسارُ يُكرّر الشرطَ الثلاثيّ بنفسه — وهو **المسارُ
+          // الذي يُنادِيه الشريطُ والاختصارُ بحرفٍ واحد**، أي طريقُ المصمّم
+          // الحقيقيّ إلى تسليح أداة، فلا يُترك على نسخةٍ ثانيةٍ من القاعدة.
+          ...armTool(s, tool),
           // أداةٌ بلا مكتبة («تحديد») لا تَرِث تبويب «العناصر»: لو كتبت نفسها في
           // `libraryTool` لصار التبويب يعرض «تحديد — قريبًا»، وهو هراء — التحديد
           // ليس محتوًى يُستعرَض. فيبقى التبويب على آخر مكتبةٍ حقيقيّة زارها
@@ -2712,60 +2867,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         }),
       penCancel: () => patch({ penDraft: [] }),
       setPenClosePath: (v) => patch({ penClosePath: v }),
-      penFinish: (forceClosed) =>
-        setState((s) => {
-          const pts = s.penDraft;
-          if (pts.length < 2) return { ...s, penDraft: [] };
-          const closed = forceClosed ?? s.penClosePath;
-          // الصندوق المحيط يُحسَب على نقاط الربط **ونهايات مقابضها** معًا: هيكل نقاط
-          // التحكّم المحدّب يحوي المنحنى كله، فصندوق كهذا يحوي ما يراه المصمم فعلًا
-          // لا المضلّع وحده. وبدون ذلك يصير صندوق منحنى على ثلاث نقاط على استقامة
-          // واحدة بارتفاع بكسل واحد (`Math.max(..., 1)`)، فتخرج الكسور بأرقام بمئات
-          // الأضعاف ويصبح تحجيم العنصر بالمقابض غير متوقّع بالمرّة.
-          // التوسيع محايد هندسيًا تمامًا: ما دام كلٌّ من النقاط والمقابض يُقسَّم على
-          // أبعاد الصندوق النهائية نفسها، فموضع كل شيء بالبكسل يبقى كما هو بالحرف.
-          const hullX = pts.flatMap((p) => (p.h ? [p.x, p.x + p.h.x, p.x - p.h.x] : [p.x]));
-          const hullY = pts.flatMap((p) => (p.h ? [p.y, p.y + p.h.y, p.y - p.h.y] : [p.y]));
-          const minX = Math.min(...hullX);
-          const minY = Math.min(...hullY);
-          const w = Math.max(Math.max(...hullX) - minX, 1);
-          const h = Math.max(Math.max(...hullY) - minY, 1);
-          const size = sizeAt(s.sizeIdx, s.customW, s.customH);
-          const normalized = pts.map((p) => ({ x: (p.x - minX) / w, y: (p.y - minY) / h }));
-          const anyHandle = pts.some((p) => p.h);
-          const handles = anyHandle
-            ? pts.map((p) => (p.h ? { out: { x: p.h.x / w, y: p.h.y / h }, in: { x: -p.h.x / w, y: -p.h.y / h } } : null))
-            : undefined;
-          const id = newElementId('path');
-          const el: DocElement = {
-            id,
-            type: 'shape',
-            visible: true,
-            locked: false,
-            opacity: 100,
-            maskId: null,
-            geo: { x: minX / size.w, y: minY / size.h, w: w / size.w, h: h / size.h, rotation: 0 },
-            shape: 'path',
-            fill: closed ? null : 'transparent',
-            fillToken: 'ac',
-            stroke: null,
-            strokeWidth: 4,
-            radius: 0,
-            points: normalized,
-            closed,
-            ...(handles ? { handles } : {}),
-            anim: defaultAnim('none', 0, 0.6),
-          };
-          return {
-            ...s,
-            elements: [...s.elements, el],
-            penDraft: [],
-            selectedIds: [id],
-            sel: id,
-            tool: 'select',
-            ...pushHistory(s),
-          };
-        }),
+      // الجسمُ كلُّه صار `commitPenDraft` في أعلى هذا الملفّ، لأن **موضعَين**
+      // يُثبِّتان المسودّةَ الآن لا موضعٌ واحد: الاختتامُ الصريح (مفتاح `Enter`،
+      // ونقرةٌ مزدوجة، وإغلاقُ المسار على نقطته الأولى) ومغادرةُ الأداة. وما
+      // تُضيفه هذه الدالّةُ فوق المُثبِّت هو **الوجهة** وحدها: الاختتامُ الصريح
+      // يُرجِع إلى «تحديد» والمسارُ محدَّد — وهو عقدُها القائم، ولم يتغيّر حرفًا.
+      // ومسارُ المغادرة وجهتُه الأداةُ التي ضُغطت، فلا تُسمّيها المُثبِّتة.
+      penFinish: (forceClosed) => setState((s) => (s.penDraft.length < 2 ? { ...s, penDraft: [] } : { ...commitPenDraft(s, forceClosed), tool: 'select' })),
 
       // --- وضع تحرير العقد (بند #11، تكملة) ------------------------------------
       // كل سحبة (نقطة ربط أو مقبض) تمرّ بـ`beginElementEdit` ثم `liveUpdate*` لكل
