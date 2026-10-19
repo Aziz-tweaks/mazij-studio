@@ -87,6 +87,26 @@ export function withBaseLayerColor(el: DocElement, hex: string): AppearanceStack
   return a;
 }
 
+/** الشطرُ **القارئ** من عقد `withBaseLayerColor` أعلاه: يُرجع لونَ الطبقة التي
+ * تكتب فيها تلك الدالّة بالضبط — لا طبقةً أخرى، ولا حقلًا موازيًا.
+ *
+ * **سبب وجوده.** صفُّ «اللون» صار له مُنتقِي ألوانٍ حرّ وحقلٌ ستّ عشريّ، وكلُّ
+ * حقلٍ مضبوطٍ (`value={…}`) يحتاج أن يقرأ **ما يُرسَم**، وإلّا عرَض لونًا والشكلُ
+ * على الشاشة بلونٍ آخر. وقاعدةُ «أيُّ طبقةٍ هي القاعديّة» ليست بديهيّة — فهي
+ * `fills[0]` إن وُجدت تعبئة، و`strokes[0]` إن كان الشكل مفتوحًا (خطّ/سهم) فكومتُه
+ * حدٌّ بلا تعبئة — ولو كُتبت تلك القاعدة مرّةً ثانيةً في `PropsTab` لانفصل
+ * القارئُ عن الكاتب عند أوّل تعديلٍ على أحدهما. فهي مكتوبةٌ هنا مرّةً واحدة،
+ * بجوار الكاتب، وهذا هو كلُّ الغرض.
+ *
+ * ويُرجع `null` لِما لا كومةَ له بعد — فيرجع المُنادي إلى الحقل القديم
+ * (`el.fill ?? pal[el.fillToken]`)، وهو ما كان يقرؤه الصفُّ وحده قبل اليوم. */
+export function baseLayerColorOf(el: DocElement): { color: string; colorToken: string | null } | null {
+  const a = el.appearance;
+  if (!hasAnyLayer(a)) return null;
+  const layer = a.fills[0] ?? a.strokes[0];
+  return layer ? { color: layer.color, colorToken: layer.colorToken } : null;
+}
+
 /** يضبط **طبقةَ الحدّ القاعديّة** في كومةٍ مُجسَّدة سلفًا: لونًا صريحًا وسُمكًا،
  * ويُنشئها إن لم يكن في الكومة حدٌّ بعد. ويُرجع `el.appearance` بلا تغيير إن لم
  * تكن هناك كومة، فيبقى المسار القديم (`migrateAppearance` من `stroke`) هو العامل

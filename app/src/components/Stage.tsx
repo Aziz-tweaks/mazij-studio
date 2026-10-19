@@ -436,7 +436,16 @@ export function Stage() {
           // مسلَّحة بعد الرسم لوجد المصمم نفسه عاجزًا عن تحديد ما رسمه للتوّ بلا
           // سببٍ ظاهر. والارتداد مشروطٌ بنجاح الإنشاء، فالسحبة الصغيرة العابرة
           // لا تنزع الأداة من يده.
-          actionsRef.current.setTool('select');
+          //
+          // **و`keepSelection` هنا شرطُ بقاءِ قدرةٍ، لا تفصيل.** تسليحُ أداةٍ صار
+          // ينزع التحديدَ عن كل شيء (`armTool` في `StudioContext.tsx`)، وهذا
+          // النداءُ ليس تسليحًا بل **ارتدادٌ بعد إنشاء**: `addShapeElement`
+          // حدَّدت الشكلَ الذي رسمه المصمّم للتوّ، فنزعُه هنا كان سيُنتج أسوأَ
+          // ممّا يُصلحه — يرسم الشكلَ فلا يجده محدَّدًا، ولا مقابضَ عليه، ولوحُ
+          // الخصائص فارغٌ عن شيءٍ صنعه قبل جزءٍ من الثانية. والمواضعُ الخمسةُ
+          // التي تَرتدّ في هذا الملفّ (هنا، والنصُّ، والصورةُ، واللوتي، والفيديو)
+          // كلُّها على هذه القاعدة بعينها.
+          actionsRef.current.setTool('select', { keepSelection: true });
         } else if (drag.shapeHitId) {
           // سحبةٌ لم تتحرّك = **نقرة**. وأداةُ الأشكال تُنشئ بالسحب لا بالنقر،
           // فالنقرة فارغةُ المعنى لها — وتُفسَّر على ما تعنيه في كل محرّر: «حدِّد
@@ -754,7 +763,12 @@ export function Stage() {
       dblClickPointRef.current = null;
       selectAllOnEditRef.current = true;
       actions.startTextEdit(id);
-      actions.setTool('select');
+      // `keepSelection`: ارتدادٌ بعد إنشاء، لا تسليح — انظر الموضعَ الأوّل أعلاه.
+      // وللنصّ عليه حِملٌ زائد: `editingTextId` مضبوطٌ على هذا العنصر لتوّه، فنزعُ
+      // تحديده كان يُنتج «تحريرَ نصٍّ غيرِ محدَّد» — وهي الحالةُ التي يُسمّيها
+      // تعليقُ `vectorcraft/crates/tools/src/text.rs:671-681` ويَختم التحريرَ
+      // عندها. أي أنّ النزعَ كان سيُطفئ المؤشّرَ الذي وُضع في السطر الذي قبله.
+      actions.setTool('select', { keepSelection: true });
       return;
     }
     // وموضع النقرة يمرّ معها — كما يمرّ مع النصّ أعلاه بالضبط.
@@ -764,14 +778,18 @@ export function Stage() {
     // أكثر من صورة: ثلاث صورٍ مكدّسةٍ في المنتصف لا تُفرَّق إلا بكتابة أربعة
     // أرقامٍ لكلّ واحدة في لوح التحويل. والقدرة مبنيّةٌ أصلًا — السحب والإفلات
     // يمرّر نقطته منذ البداية — فالنقص كان في التمرير لا في النموذج.
+    //
+    // والثلاثةُ تُمرّر `keepSelection` كالموضعَين أعلاه: ارتدادٌ بعد إنشاء، لا
+    // تسليح. وهي **آخرُ ثلاثةٍ من خمسة**، وليس في البرنامج سادسٌ — شُرِط ذلك
+    // بجردِ كلّ نداءٍ لـ`setTool`/`openToolLibrary` في `src/`.
     if (state.tool === 'image') {
-      actions.insertImageTool({ x: p.x, y: p.y }).then(() => actions.setTool('select'));
+      actions.insertImageTool({ x: p.x, y: p.y }).then(() => actions.setTool('select', { keepSelection: true }));
     }
     if (state.tool === 'lottie') {
-      actions.insertLottieTool({ x: p.x, y: p.y }).then(() => actions.setTool('select'));
+      actions.insertLottieTool({ x: p.x, y: p.y }).then(() => actions.setTool('select', { keepSelection: true }));
     }
     if (state.tool === 'video') {
-      actions.insertVideoTool({ x: p.x, y: p.y }).then(() => actions.setTool('select'));
+      actions.insertVideoTool({ x: p.x, y: p.y }).then(() => actions.setTool('select', { keepSelection: true }));
     }
   };
 
