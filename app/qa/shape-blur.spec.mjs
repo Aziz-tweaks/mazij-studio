@@ -477,13 +477,24 @@ try {
     const mod = await import('/src/lib/persist.ts');
     return { v: mod.SCHEMA_VERSION, migs: [...mod.DOC_MIGRATIONS] };
   });
+  // ورتبةُ البند لا موضعُه من الذيل، وهذا هو العلاجُ الذي أُجري على أربعةِ بنودٍ
+  // من هذا الشكل في `qa/independent-wh-anim.spec.mjs` (`7c6f77b`): جدولُ
+  // الترحيلات قائمةٌ **يُقصَد لها أن تَنمو**، فـ«آخرُ بند» يَقيس يومَ كُتِب لا ما
+  // يَعنيه — ويَسقط بحكم البناء عند أوّل بندٍ يُضاف بعده، وسقوطُه حينها لا يَدلّ
+  // على عطل.
+  //
+  // أمّا الرتبةُ فثابتةٌ تحت الإضافة بالذيل: `DOC_MIGRATIONS[i]` يَرفع `i+1` إلى
+  // `i+2` (`src/lib/persist.ts:45-46`)، فرتبةُ بندٍ قائمٍ **هي النسخةُ التي
+  // يَرفعها** ولا تتغيّر بما يُضاف بعده. و`element-blur` في الرتبة ٢ — أي يَرفع
+  // النسخةَ ٣ إلى ٤.
+  const blurRank = expectedVer.migs.indexOf('element-blur');
   assert(
-    ver === expectedVer.v && expectedVer.migs.includes('element-blur'),
-    `ورُفِعت النسخةُ إلى ${ver} ببندِ ترحيلٍ باسمه (${expectedVer.migs[expectedVer.migs.length - 1]}) — لا لأنه يُحوِّل بايتًا بل كي يَرفض بناءٌ أقدمُ الملفَّ صراحةً بدل أن يَرسمه حادًّا في صمت ثم يَحذف مسارَه عند أوّل ضغطةٍ على منحنى التخفيف`,
+    ver === expectedVer.v && blurRank !== -1,
+    `ورُفِعت النسخةُ إلى ${ver} ببندِ ترحيلٍ باسمه (${blurRank === -1 ? 'مفقودٌ من الجدول' : expectedVer.migs[blurRank]}) — لا لأنه يُحوِّل بايتًا بل كي يَرفض بناءٌ أقدمُ الملفَّ صراحةً بدل أن يَرسمه حادًّا في صمت ثم يَحذف مسارَه عند أوّل ضغطةٍ على منحنى التخفيف`,
   );
   assert(
-    expectedVer.migs.indexOf('element-blur') === expectedVer.migs.length - 1 && expectedVer.v === expectedVer.migs.length + 1,
-    `والبندُ آخرُ القائمة و\`SCHEMA_VERSION\` مشتقٌّ من طولها (${expectedVer.v} = ${expectedVer.migs.length} + 1) — فلا رقمَ مكتوبًا بيدٍ يَسهو`,
+    blurRank === 2 && expectedVer.v === expectedVer.migs.length + 1,
+    `والبندُ قائمٌ في **رتبته** (${blurRank === -1 ? `مفقودٌ من الجدول — وفي الرتبة ٢ اليومَ: ${expectedVer.migs[2] ?? 'لا شيء'}` : `الرتبة ${blurRank}: ${expectedVer.migs[blurRank]}`}) — أي يَرفع النسخةَ ٣ إلى ٤، وهي رتبةٌ لا تتغيّر بما يُضاف بعده. و\`SCHEMA_VERSION\` مشتقٌّ من طول الجدول (${expectedVer.v} = ${expectedVer.migs.length} + 1) — فلا رقمَ مكتوبًا بيدٍ يَسهو. وكانت تُقاس هنا «آخرُ بندٍ في الجدول»، فتُحمِّر هذا البندَ عند أوّل ترحيلٍ يُضاف بعده ولو بقيت الدعوى صادقة`,
   );
 
   await page.reload({ waitUntil: 'networkidle' });
