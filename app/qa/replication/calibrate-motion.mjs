@@ -61,7 +61,7 @@ import { parseHex } from './lib/png.mjs';
 // البنودُ تُستورَد ولا تُعاد كتابتُها: المعايرةُ تُثبت صلاحَ **المحكّم** لا صلاحَ
 // نسخةٍ منه. ولو كُتب هنا منطقٌ ثانٍ لصار في المستودع مقياسان، ولصحّ أحدُهما
 // وسقط الآخرُ يومًا بلا أن يُنبّه أحد.
-import { evalTemporalCriterion, measureAxisSmear } from './lib/score-video.mjs';
+import { evalTemporalCriterion, measureAxisSmear, measurePositionTrack } from './lib/score-video.mjs';
 import { GROUND_TRUTH } from './make-video-controls.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -483,15 +483,17 @@ function smearBiasCalibration(open, bg) {
   console.log('      الشاهد                  │ خامًّا     │ مُصحَّحةً   │ الباقي  │ الحكم');
   const rows = [];
   for (const name of ['motion-blur-off', 'motion-blur-on', 'motion-blur-wrong-place', 'motion-linear']) {
-    const r = evalTemporalCriterion(dirDown, open(name), bg);
-    const mRaw = r.got.match(/من ([+−][\d.]+)px/);
-    const mNew = r.got.match(/^إزاحة ([+−][\d.]+)px/);
-    const toNum = (t) => (t ? Number(t.replace('−', '-').replace('+', '')) : null);
-    const corrected = toNum(mNew && mNew[1]);
-    const raw = mRaw ? toNum(mRaw[1]) : corrected;
-    rows.push({ name, raw, corrected, ok: r.ok });
-    console.log(`      ${name.padEnd(23)} │ ${raw.toFixed(2).padStart(9)} │ ${corrected.toFixed(2).padStart(9)}`
-      + ` │ ${(corrected - 800).toFixed(2).padStart(7)} │ ${r.ok ? '✅ يمرّ' : '❌ يسقط'}`);
+    const fsx = open(name);
+    // والحكمُ من البند، والرقمان من قياسِه — لا من تحليلِ نصِّ تقريره. وكان
+    // يُنتزَعان بتعبيرٍ نمطيٍّ على جملةٍ عربيّةٍ مكتوبةٍ للقارئ، وذلك يفشل
+    // **صامتًا**: جملةٌ تتغيّر صياغتُها تُخرج `null` فيُقرأ الخامُّ مساويًا
+    // للمُصحَّح، فيَطبع هذا القسمُ فرقًا صفرًا ويُسمّيه دعوًى مُثبَتة.
+    const r = evalTemporalCriterion(dirDown, fsx, bg);
+    const t = measurePositionTrack(fsx, bg, dirDown);
+    rows.push({ name, raw: t.travelRaw, corrected: t.travel, ok: r.ok });
+    console.log(`      ${name.padEnd(23)} │ ${t.travelRaw.toFixed(2).padStart(9)} │ ${t.travel.toFixed(2).padStart(9)}`
+      + ` │ ${(t.travel - 800).toFixed(2).padStart(7)} │ ${r.ok ? '✅ يمرّ' : '❌ يسقط'}`
+      + (t.smearBreach ? '  ⟵ تصحيحُ المسحة مُمتنَع' : ''));
   }
   const off = rows.find((r) => r.name === 'motion-blur-off');
   const on = rows.find((r) => r.name === 'motion-blur-on');
@@ -557,36 +559,54 @@ function runControls() {
   // ── المقيسُ الخام، قبل أيّ حكم ───────────────────────────────────────────
   // يُطبَع أوّلًا لأن العتبةَ تُشتَقّ منه: من قرأ العتبةَ قبل المقيس قرأ رقمًا
   // بلا مصدر.
-  console.log('\n(أ) المقيسُ الخام على الشواهد — **قبل تصحيح انزياحِ المسحة** — ومنه تُشتَقّ كلُّ عتبةٍ أدناه');
-  console.log('    (ومُضبَّبُ هذا الجدولِ يُقرأ مُزاحًا بحكم البناء: انظر القسمَ (هـ) أدناه)');
+  // ── والقياسُ هنا هو البندُ نفسُه، لا نسخةٌ منه ─────────────────────────────────
+  // كان هذا القسمُ يَحسب مركزَ الثقلِ والتجاوزَ والرجوعَ والنسبةَ **بكودٍ مكتوبٍ
+  // فيه**، فصارت في المستودع قراءتان لكمّيّةٍ واحدة: هذا القسمُ يقرأ الخامَّ
+  // والقسمُ (ج) يقرأ ما يقرؤه البند. وذلك خلافُ القاعدة المكتوبة في رأس هذا
+  // الملفّ — «البنودُ تُستورَد ولا تُعاد كتابتُها... ولو كُتب هنا منطقٌ ثانٍ لصار
+  // في المستودع مقياسان، ولصحّ أحدُهما وسقط الآخرُ يومًا بلا أن يُنبّه أحد».
+  //
+  // **ووُحِّدت القراءتان بعد أن قيس ثمنُ التوحيد، لا قبله.** والذي أخّره أن عتبات
+  // القسم (ب) مشتقّةٌ من القراءة الخامّة، فتوحيدٌ يُحرّكها كان سيكون تعديلَ مقياسٍ
+  // لمصلحة تسليم. فقيست العتباتُ الأربعُ بالقراءتين، وهي **ثابتةٌ كلُّها**:
+  //
+  //   | العتبة | وسطٌ هندسيٌّ خامًّا | وسطٌ هندسيٌّ بالبند | المستعملة |
+  //   |---|---|---|---|
+  //   | نسبةُ ذروةِ السرعة | ١٫٨١٨ | ١٫٨٢١ | ١٫٨٢ |
+  //   | موضعُ الذروة | ٠٫٠٩٨ | ٠٫٠٩٨ | ٠٫١ |
+  //   | التجاوز | ٠٫٤٣٨ | ٠٫٤٣٥ | ١٫٥ |
+  //   | الرجوع | ٣٫٦٦٦ | ٣٫٦٧٠ | ٢ |
+  //
+  // فلا عتبةَ تحرّكت، ولا رقمَ مُعايَرٌ انحرف — والتوحيدُ مجّانيٌّ بالقياس. والذي
+  // تحرّك قراءاتٌ ثلاثٌ **كانت الورقةُ تَحملها بوصفها «بخطأٍ صفر»**، وهي الآن
+  // تُقرأ من البند: تجاوزُ `motion-overshoot` ٤٫٠٠٠ ← ٣٫٩٤٦، ورجوعُ
+  // `motion-detour` ٢٨٠٫٠٠ ← ٢٨٠٫٦١، ونسبةُ `motion-spike` ١٫٠٨٠ ← ١٫٠٨٦. وتلك
+  // فروقٌ تحت تسامحِ كلِّ بندٍ يقرؤها بمراتب.
+  //
+  // وعمودُ «خامًّا» يبقى — فهو شرطُ الدعوى في القسم (هـ) — لكنه يُقرأ الآن من
+  // `travelRaw` الذي يُخرجه البندُ نفسُه، لا من حسابٍ ثانٍ.
+  console.log('\n(أ) المقيسُ على الشواهد **بالبند نفسِه** — ومنه تُشتَقّ كلُّ عتبةٍ أدناه');
+  console.log('    (ومُضبَّبُ هذا الجدولِ يُقرأ مُصحَّحًا: خامُّه في القسم (هـ) أدناه)');
   console.log('    الشاهد             │ إزاحة   │ تجاوز  │ رجوع   │ نسبة  │ خامّة │ ذروةٌ عند');
   const raw = {};
   for (const name of CONTROLS.slice(2)) {
     const fsx = open(name);
-    const s = frameSeries(fsx, 1.0, 2.6, (i) => {
-      const c = inkCentroid(fsx.full(i), REG, bg, 60);
-      return c ? c.y : null;
-    });
-    const p = s.smooth;
-    const rest = median3Filter(p.slice(-3))[1];
-    const travel = p[p.length - 1] - p[0];
-    const dir = Math.sign(travel) || 1;
-    let over = -Infinity;
-    for (const q of p) over = Math.max(over, dir * (q - rest));
-    let run = -Infinity;
-    let back = 0;
-    for (const q of p) { run = Math.max(run, dir * q); back = Math.max(back, run - dir * q); }
-    const central = [];
-    for (let i = 1; i < s.raw.length - 1; i++) central.push((s.raw[i + 1] - s.raw[i - 1]) / 2);
-    const v = median3Filter(central);
-    const mean = Math.abs(travel) / (p.length - 1);
-    const peak = Math.max(...v.map(Math.abs));
-    const peakRaw = Math.max(...central.map(Math.abs));
-    const at = (v.map(Math.abs).indexOf(peak) + 1) / (p.length - 1);
-    raw[name] = { travel, over, back, ratio: peak / mean, ratioRaw: peakRaw / mean, at };
+    const t = measurePositionTrack(fsx, bg, { axis: 'y', region: REG, t0: 1.0, t1: 2.6 });
+    raw[name] = {
+      travel: t.travel,
+      travelRaw: t.travelRaw,
+      over: t.overshoot,
+      back: t.backtrack,
+      ratio: t.peakRatio,
+      ratioRaw: t.peakRatioRaw,
+      at: t.peakAt,
+      breach: t.smearBreach,
+    };
     console.log(
-      `    ${name.padEnd(23)} │ ${travel.toFixed(1).padStart(7)} │ ${over.toFixed(2).padStart(6)}`
-      + ` │ ${back.toFixed(2).padStart(6)} │ ${(peak / mean).toFixed(3)} │ ${(peakRaw / mean).toFixed(3)} │ ${at.toFixed(3)}`,
+      `    ${name.padEnd(23)} │ ${t.travel.toFixed(1).padStart(7)} │ ${t.overshoot.toFixed(2).padStart(6)}`
+      + ` │ ${t.backtrack.toFixed(2).padStart(6)} │ ${t.peakRatio.toFixed(3)} │ ${t.peakRatioRaw.toFixed(3)}`
+      + ` │ ${t.at === null ? '  —  ' : t.peakAt.toFixed(3)}`
+      + (t.smearBreach ? '  ⟵ تصحيحُ المسحة مُمتنَع' : ''),
     );
   }
   console.log('    ⇐ عمودُ «خامّة» هو النسبةُ بلا مُرشِّحِ الوسيط. وانظر `motion-spike`:');
