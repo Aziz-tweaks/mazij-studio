@@ -73,3 +73,9 @@ qa/replication/attempt-t04.mp4
 qa/replication/targets/t05-update-card/target.mp4
 qa/replication/targets/t05-update-card/adv-*.mp4
 qa/replication/attempt-t05.mp4
+qa/replication/attempt-t05.doc.json
+# وحروفُ ذلك العمل وعلامتُه معه. فالهندسةُ والزمنُ واللونُ والحركةُ في
+# `build-t05.mjs` متتبَّعةٌ لأنها ما تَختبره الحلقة؛ وهذا الملفُّ وحدَه هويّةُ
+# صاحبه. فمن يَملكه يُعيد إنتاج المرجع، ومن استنسخ المستودعَ بناه بمحتوًى محايدٍ
+# — **ويَعمل** (`NEUTRAL` في `build-t05.mjs`).
+qa/replication/targets/t05-update-card/content.local.json
