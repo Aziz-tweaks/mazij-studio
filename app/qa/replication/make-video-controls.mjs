@@ -227,6 +227,27 @@ const BLUR = {
   region: MOVE.region,
 };
 
+// ── شاهدُ «مُضبَّبٌ ومواضعُه خطأ» — ولماذا خطؤه ٢٥ بكسلًا بالضبط ───────────────
+// الشاهدان أعلاه يُثبتان أن البندَ **لا يُسقط** عملًا صحيحًا مُضبَّبًا. ولا يُثبتان
+// أنه ما زال يُسقط عملًا خاطئًا — وبندٌ كَفَّ عن السقوط لم يُصلَح بل عُطِّل.
+//
+// فهذا الشاهدُ مُضبَّبٌ بالغالق نفسِه، ويَنزل إلى `y1 + δ` لا إلى `y1`. و`δ` ليست
+// رقمًا مريحًا: هي **انزياحُ مركزِ الثقل نفسُه** `L/2 = s·(N−1)/(2N)`. فيكون
+// المقياسُ الأعمى عن المسحة يقرأ إزاحتَه `(800 + δ) − δ = 800` — أي **يُجيزه
+// مئةً بالمئة**. فالانزياحُ ليس علّةً من جهةٍ واحدةٍ تُسقط الصحيح، بل عدسةٌ
+// تُسقط الصحيحَ **وتُجيز الخطأ بالمقدار نفسِه**، وهذا الشاهدُ هو الذي يقيس الجهةَ
+// الثانية.
+//
+// وتُحسَب δ من شاهدِ المرجع (٨٠٠ بكسلًا في رُبع ثانية) لا من مسار هذا الشاهد —
+// وإلّا دارت الصيغةُ على نفسها: مسارٌ أطولُ أسرعُ فمسحتُه أوسعُ فـδ أكبرُ فالمسارُ
+// أطول. ومسحةُ هذا الشاهد أوسعُ قليلًا (٨٢٥ ÷ ٧٫٥ إطارًا = ١١٠ بكسل/إطار) وذلك
+// يُقال ويُقاس، لا يُخفى.
+const BLUR_WRONG_PX = (() => {
+  const pxPerFrame = (MOVE.y1 - MOVE.y0) / ((BLUR.t1 - BLUR.t0) * COMP.fps);
+  const smear = pxPerFrame * (BLUR.angle / 360);
+  return (smear * (BLUR.samples - 1) / BLUR.samples) / 2;
+})();
+
 /** تغطيةُ كلّ صفٍّ بحبر الكتلة بعد تجميع `samples` عيّنةً — متوسّطٌ بأوزانٍ
  * متساوية، وهو نفسُ ما يفعله `renderArtboardFrames` في التطبيق.
  *
@@ -277,9 +298,11 @@ function renderBlurFrame(t, yAt, samples) {
   return buf;
 }
 
-/** شاهدُ ضبابٍ كاملٌ من عددِ عيّنات — والمسارُ واحدٌ للشاهدين. */
-function blurMode(file, label, samples) {
-  const yAt = (t) => MOVE.y0 + (MOVE.y1 - MOVE.y0) * clamp01((t - BLUR.t0) / (BLUR.t1 - BLUR.t0));
+/** شاهدُ ضبابٍ كاملٌ من عددِ عيّنات — والمسارُ واحدٌ للشاهدين، و`to` تُزيح
+ * **الوِجهة** وحدها: فشاهدُ «المواضعُ خطأ» لا يختلف عن الصحيح في غالقٍ ولا نافذةٍ
+ * ولا منحنى. */
+function blurMode(file, label, samples, to = MOVE.y1) {
+  const yAt = (t) => MOVE.y0 + (to - MOVE.y0) * clamp01((t - BLUR.t0) / (BLUR.t1 - BLUR.t0));
   return {
     label,
     file,
@@ -529,6 +552,17 @@ const MODES = {
     BLUR.samples,
   ),
 
+  // ــ الشاهدُ الذي يُثبت أن البندَ ما زال يَعضّ ــــــــــــــــــــــــــــــــــ
+  // مُضبَّبٌ بالغالق نفسِه، ونازلٌ إلى ١٤٢٥ لا ١٤٠٠. والخمسةُ والعشرون هي انزياحُ
+  // مركزِ الثقل بعينه، فالمقياسُ الأعمى يقرأ إزاحتَه ٨٠٠ ويُجيزها.
+  'motion-blur-wrong-place': blurMode(
+    'motion-blur-wrong-place.mp4',
+    `مُضبَّبٌ ومواضعُه خطأ — ينزل إلى ${(MOVE.y1 + BLUR_WRONG_PX).toFixed(1)} لا ${MOVE.y1}`
+    + ` (‎+${BLUR_WRONG_PX.toFixed(2)}px = انزياحُ المسحة نفسُه، فالمقياسُ الأعمى يقرأ ٨٠٠ ويُجيزه)`,
+    BLUR.samples,
+    MOVE.y1 + BLUR_WRONG_PX,
+  ),
+
   'motion-linear': moveMode(
     'motion-linear.mp4',
     'خطٌّ مستقيم — سرعةٌ ثابتة، نسبةُ الذروة ١٫٠ بحكم البناء',
@@ -735,6 +769,25 @@ export const GROUND_TRUTH = {
     get smearPx() { return this.pxPerFrame * (BLUR.angle / 360); },
     get inkedExtentPx() { return MOVE.h + this.smearPx; },
     get solidExtentPx() { return MOVE.h - this.smearPx; },
+    /** **الزيادةُ في مدى السَّند** — وهي الكمّيّةُ المقيسةُ التي يُشتَقّ منها
+     * انزياحُ مركزِ الثقل، لا المسحةُ المتّصلة.
+     *
+     * اتّحادُ العيّنات k = 0 … N−1 يمتدّ من `y` إلى `y + h + s·(N−1)/N`: العيّنةُ
+     * الأولى عند t بعينه فطرفُه الخلفيُّ **لا يتزحزح**، والأخيرةُ عند
+     * `(N−1)/N · φΔ` فطرفُه الأماميُّ يتقدّم. فالزيادةُ `s·(N−1)/N` لا `s`. */
+    get supportExcessPx() { return this.smearPx * (BLUR.samples - 1) / BLUR.samples; },
+    /** **انزياحُ مركزِ الثقل — الصيغةُ المُغلَقة.** متوسّطُ مواضعِ العيّنات
+     * `y + s·k/N` هو `y + s·(N−1)/(2N)`، وهو نصفُ `supportExcessPx` بالضبط.
+     *
+     * والنصفُ هو كلُّ الكسب: **انزياحٌ = نصفُ كمّيّةٍ تُقاس من الإطار نفسِه**، فلا
+     * يحتاج المحكّمُ إلى N ولا φ ولا v — وليس واحدٌ منها في الملفّ.
+     *
+     * وكانت `spec.json` كتبت الانزياحَ `s/2` = ٢٦٫٦٧، وهو **الحدُّ المتّصل**
+     * (N→∞). والمبنيُّ عند N=16 هو ٢٥٫٠٠، والمقيسُ ٢٤٫٦. فالفارقُ `s/(2N)` حدٌّ
+     * مُهمَلٌ في الصيغة المتّصلة لا ضجيجٌ في القياس. */
+    get centroidBiasPx() { return this.supportExcessPx / 2; },
+    /** وانزياحُ شاهدِ «المواضعُ خطأ» — يُطبَع لأنه δ المبنيّة فيه. */
+    get wrongPlacePx() { return BLUR_WRONG_PX; },
     /** حصّةُ البكسلات الجزئيّة من المُحبَّر — القيمةُ المبنيّةُ التي يُقاس عليها
      * البند. مُغلَقةُ الشكل: `2·smear / (h + smear)`. */
     get softInkShare() { return (2 * this.smearPx) / this.inkedExtentPx; },
@@ -778,6 +831,10 @@ function printTruth() {
   console.log(`             مسحةٌ ${bl.smearPx.toFixed(3)}px · مُحبَّرٌ ${bl.inkedExtentPx.toFixed(3)}px · مصمتٌ ${bl.solidExtentPx.toFixed(3)}px`);
   console.log(`             حصّةُ الحافّة خامًّا ${bl.softInkShare.toFixed(4)} · **بقناع البند ${bl.softInkShareMasked.toFixed(4)}** · حادٌّ ≤ ${bl.softInkShareSharp.toFixed(4)}`);
   console.log(`             وتُقاس عند ${BLUR.t}ث — والمقيسُ يُقارَن بالثاني لا بالأوّل`);
+  console.log(`الانزياح     مدى السَّند يزيد ${bl.supportExcessPx.toFixed(4)}px = s·(N−1)/N`
+    + `  ⇒ مركزُ الثقل يُزاح ${bl.centroidBiasPx.toFixed(4)}px = نصفُها`);
+  console.log(`             (والحدُّ المتّصل s/2 = ${(bl.smearPx / 2).toFixed(4)}px — أعلى بـ s/(2N) = ${(bl.smearPx / (2 * BLUR.samples)).toFixed(4)}px)`);
+  console.log(`             وشاهدُ «المواضعُ خطأ» ينزل ‎+${bl.wrongPlacePx.toFixed(4)}px بعد الوِجهة — الانزياحُ نفسُه`);
   console.log('\nنسبةُ ذروةِ السرعة ÷ متوسّطها، مُشتقّةً من المنحنى:');
   for (const [k, v] of Object.entries(g.peakRatio)) {
     const at = g.peakAt[k];
