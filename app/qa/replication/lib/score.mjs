@@ -150,6 +150,51 @@ export function inkFraction(img, region, bg, minDistance) {
   return n ? ink / n : 0;
 }
 
+/** مركزُ ثقلِ الحبر داخل منطقة — موضعُ الكتلة عددًا واحدًا لكلّ محور.
+ *
+ * ولماذا مركزُ ثقلٍ لا حافّة: الحافّةُ (`findEdge`) تُرجع **أوّلَ** بكسلٍ يبتعد عن
+ * الخلفيّة، فدقّتُها بكسلٌ واحدٌ لا أكثر وتقفز بكسلًا كاملًا حين يتزحزح التنعيم.
+ * ومركزُ الثقل متوسّطٌ على آلاف البكسلات، فيَقرأ الكسر: كتلةٌ تنزل ٠٫٤ بكسل
+ * تُحرّك مركزَها ٠٫٤ بكسل لأن صفَّها الجزئيَّ الأعلى يفقد والأسفلَ يكسب. وهذا
+ * شرطُ قياسِ تجاوزٍ مقداره أربعةُ بكسلاتٍ أو انجرافٍ مقداره أربعةُ أعشار.
+ *
+ * والقناعُ هو قناعُ `inkFraction` نفسُه — «أبعدُ من `minDistance` عن الخلفيّة» —
+ * فلا تعريفَ ثانيًا للحبر في المستودع. وثمنُ ذلك يُقال: القناعُ ثُنائيّ، فالصفُّ
+ * الجزئيُّ يُحسَب أو لا يُحسَب عند تغطيةٍ نحو السُّدس على ألوان هذه الشواهد،
+ * فتكون خُطوةُ المركز نحو عُشرَي البكسل. وذلك أصغرُ من كلّ ما يُقاس به هنا
+ * بعشرين ضعفًا، والرقمُ مقيسٌ لا مُقدَّرٌ في `calibrate-motion.mjs`.
+ *
+ * ويُرجَع `null` إن لم يكن في المنطقة حبرٌ أصلًا — ولا يُقرَأ صفرًا: الصفرُ موضعٌ
+ * والعَدَمُ ليس موضعًا، ومن خلطهما قاس انتقالًا إلى أعلى اللوح حيث لا شيء. */
+export function inkCentroid(img, region, bg, minDistance = 60) {
+  const x0 = Math.round(region.x * img.width);
+  const y0 = Math.round(region.y * img.height);
+  const x1 = Math.min(img.width, Math.round((region.x + region.w) * img.width));
+  const y1 = Math.min(img.height, Math.round((region.y + region.h) * img.height));
+  let sx = 0;
+  let sy = 0;
+  let ink = 0;
+  let n = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = y * img.width * img.channels + x * img.channels;
+      const px = img.channels === 1
+        ? { r: img.pixels[i], g: img.pixels[i], b: img.pixels[i] }
+        : { r: img.pixels[i], g: img.pixels[i + 1], b: img.pixels[i + 2] };
+      n++;
+      if (colorDistance(px, bg) < minDistance) continue;
+      // مركزُ البكسل لا زاويتُه: بكسلٌ واحدٌ في الصفّ ٧ مركزُه ٧٫٥، وبدون النصف
+      // يُقرأ كلُّ موضعٍ أقلَّ بنصف بكسلٍ مُطّردًا. والمُطّردُ لا يَظهر في فرقٍ
+      // بين موضعين، لكنه يَظهر في تجاوزٍ يُقارَن بمستقرّ.
+      sx += x + 0.5;
+      sy += y + 0.5;
+      ink++;
+    }
+  }
+  if (!ink) return null;
+  return { x: sx / ink, y: sy / ink, inkPixels: ink, pixels: n, inkFraction: ink / n };
+}
+
 /** أوّل موضعٍ على مسحٍ أفقيّ (edgeX) أو رأسيّ (edgeY) يبتعد لونُه عن الخلفيّة —
  * يقيس «أين تبدأ هذه الكتلة»، وهو ما تعنيه المحاذاة عمليًّا. */
 function findEdge(img, c, bg) {
