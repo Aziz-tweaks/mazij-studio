@@ -67,5 +67,9 @@ qa/replication/attempt-t04.mp4
 *.sw?
 
 # (٣) `t05-update-card/target.mp4` مرجعُ جودةِ التصميم النهائيّ — عملٌ منشورٌ لا يملكه المستودع
+#     وشواهدُه السالبةُ `adv-*.mp4` حكمُها حكمُ شواهد t00: مُخرَجاتُ بناءٍ تُولَّد
+#     بأمرٍ واحدٍ من `make-t05-adversaries.mjs` المتتبَّع، والمحفوظُ في المستودع هو
+#     أرقامُها المقيسة في `README.md` الهدف.
 qa/replication/targets/t05-update-card/target.mp4
+qa/replication/targets/t05-update-card/adv-*.mp4
 qa/replication/attempt-t05.mp4
