@@ -11,6 +11,7 @@ import { documentDuration, effectiveScale, entranceVisualAt } from './animTimeli
 import { SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, type StaggerToken, type UnitVisual } from './textStagger';
 import { getLottieExportFrame, resetLottieExportEngine } from './lottieExportEngine';
 import { getVideoExportFrame, resetVideoExportEngine } from './videoExportEngine';
+import { normalizeShutter, runningMeanAlpha, shutterIsOpen, shutterSampleTimes, type ShutterSpec } from './motionBlur';
 import { shapeTextOnCurve } from './textOnPath';
 import { justifyWithKashida } from './kashidaJustify';
 import {
@@ -708,16 +709,77 @@ export async function renderArtboardPng(spec: ArtboardRenderSpec): Promise<Blob>
  * (just with a real `time` instead of the "settled" default), so a video frame and
  * a PNG export of the same instant are pixel-identical. Streams one blob at a time
  * via `onFrame` rather than collecting them all, so a long export doesn't hold every
- * frame's PNG bytes in memory at once. */
+ * frame's PNG bytes in memory at once.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * والغالقُ وعقدُ «الإطارُ كالـPNG عند اللحظة نفسِها»
+ * ─────────────────────────────────────────────────────────────────────────────
+ * العقدُ أعلاه مكتوبٌ على **لحظة**، وضبابُ الحركة يُحوّل الإطارَ إلى **فترة**. فظاهرُه
+ * أنهما لا يجتمعان. وقِيس الموضعُ بدل أن يُفترَض، فكان الجوابُ أضيقَ من الخوف:
+ *
+ * (أ) `opts.shutter` غائبٌ أو `samplesPerFrame = 1` ⇒ `shutterSampleTimes` تُرجع
+ *     `[t]` بعينها، ويُؤخَذ المسارُ القديمُ بسطره. فكلُّ تصديرٍ قائمٍ **لم يتغيّر
+ *     بتّةً واحدة**، لا «تقريبًا».
+ *
+ * (ب) و`renderArtboardPng` تُصدَّر دائمًا عند `settledTimeOf(spec)` — الوحيدُ الذي
+ *     يُناديها `StudioContext.tsx:1407` وهو لا يُمرّر `time` أصلًا. وعند زمن
+ *     الاستقرار **كلُّ مقطعٍ قد انتهى**، فسرعةُ كلّ عنصرٍ صفرٌ، فالعيّناتُ `N`
+ *     متطابقةٌ واحدةً واحدة، ومتوسّطُ المتطابقات هو هي. فالتطابقُ البكسليُّ عند زمن
+ *     الاستقرار **قائمٌ بالبناء لا بالحظّ** — ومقيسٌ في `qa/motion-blur.spec.mjs` §٢.
+ *
+ * فالموضعُ الوحيدُ الذي ينكسر فيه العقدُ هو PNG يُطلَب عند زمنٍ **غيرِ** زمن
+ * الاستقرار وفيه عنصرٌ يتحرّك. ولا سبيلَ في الواجهة كلِّها إلى طلب ذلك اليوم.
+ * والتفصيلُ كلُّه في `docs/DECISION-motion-blur-parity.md`. */
 export async function renderArtboardFrames(
   spec: Omit<ArtboardRenderSpec, 'time'>,
   frameTimes: number[],
   onFrame: (blob: Blob, index: number) => Promise<void> | void,
+  opts: { shutter?: ShutterSpec; frameInterval?: number } = {},
 ): Promise<void> {
   const { canvas, ctx, w, h } = await prepareArtboardCanvas(spec);
+  const shutter = normalizeShutter(opts.shutter);
+  const frameInterval = opts.frameInterval ?? 0;
+  // لوحةُ العيّنات تُخصَّص **مرّةً واحدةً**، ولا تُخصَّص أصلًا متى كان الغالقُ
+  // مُطفأً — للسبب نفسه الذي جمع `prepareArtboardCanvas` تخصيصَ اللوحة وانتظارَ
+  // الخطوط في موضعٍ واحد: تصديرُ ثلاثمئة إطارٍ لا يُعيد تخصيصَ لوحةٍ لكلّ إطار.
+  const open = shutterIsOpen(shutter) && frameInterval > 0;
+  let sampleCtx: CanvasRenderingContext2D | null = null;
+  if (open) {
+    const sampleCanvas = document.createElement('canvas');
+    sampleCanvas.width = w;
+    sampleCanvas.height = h;
+    sampleCtx = sampleCanvas.getContext('2d');
+    if (!sampleCtx) throw new Error('تعذر إنشاء سطح عيّنات الغالق (canvas 2D context)');
+  }
   try {
     for (let i = 0; i < frameTimes.length; i++) {
-      await paintArtboardFrame(ctx, { ...spec, time: frameTimes[i] }, w, h);
+      if (!open || !sampleCtx) {
+        await paintArtboardFrame(ctx, { ...spec, time: frameTimes[i] }, w, h);
+      } else {
+        const times = shutterSampleTimes(frameTimes[i], frameInterval, shutter);
+        for (let k = 0; k < times.length; k++) {
+          await paintArtboardFrame(sampleCtx, { ...spec, time: times[k] }, w, h);
+          // أوّلُ عيّنةٍ تَحُلّ محلَّ ما كان لا تُركَّب فوقه. و`clearRect` في
+          // `paintArtboardFrame` يَمسح لوحةَ العيّنات وحدَها لا لوحةَ التجميع،
+          // فالمسحُ هنا شرطٌ لا تكرار.
+          //
+          // **وأثرُه يَظهر في التصدير الشفّاف وحدَه، وهذا قيس.** رُفع هذا السطرُ
+          // فبقي المُخرَجُ مطابقًا بايتًا ببايت على مستندٍ معتم: العيّنةُ المعتمةُ
+          // تُغطّي كلَّ بكسلٍ بـ`source-over` عند `globalAlpha = 1`، فتَمحو ما
+          // تحتها بلا مسح. أمّا مع `transparent: true` — وهو مسارُ GIF — فبكسلٌ
+          // شفّافٌ لا يَمحو ما تحته، فيَتسرّب الإطارُ السابقُ بوزن ½ إلى الذي
+          // بعده. والقياسُ في `qa/motion-blur.spec.mjs` §٢، على مستندٍ شفّافٍ
+          // قصدًا: على المعتم لا قدرةَ للاختبار على رؤية هذا السطر أصلًا.
+          if (k === 0) {
+            ctx.globalAlpha = 1;
+            ctx.clearRect(0, 0, w, h);
+          } else {
+            ctx.globalAlpha = runningMeanAlpha(k);
+          }
+          ctx.drawImage(sampleCtx.canvas, 0, 0);
+        }
+        ctx.globalAlpha = 1;
+      }
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('فشل إنشاء إطار'))), 'image/png');
       });

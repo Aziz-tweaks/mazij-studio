@@ -198,6 +198,9 @@ export interface StudioState {
   exportQuality: 'high' | 'med';
   exportTransparent: boolean;
   exportFps: number;
+  /** عددُ عيّنات الغالق لكلّ إطارٍ مُصدَّر. `1` يعني «بلا ضباب» وهو الافتراضُ —
+   * فلا مستندٌ قائمٌ يُصدَّر اليوم غيرَ ما كان يُصدَّر أمس. */
+  exportShutterSamples: number;
   exportError: string | null;
   exportedPaths: string[];
   /** Per-target outcome of the current/last batch export, in request order — lets
@@ -411,6 +414,7 @@ export const initialStudioState: StudioState = {
   exportQuality: 'high',
   exportTransparent: false,
   exportFps: 30,
+  exportShutterSamples: 1,
   exportError: null,
   exportedPaths: [],
   exportResults: [],

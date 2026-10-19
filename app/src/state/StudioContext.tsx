@@ -35,6 +35,7 @@ import { STARTER_TEMPLATES } from '../lib/starterTemplates';
 import type { ReferenceVideoStructure } from '../lib/referenceVideo';
 import { buildReferenceVideoTemplate } from '../lib/referenceVideo';
 import { renderArtboardPng, renderArtboardSvg } from '../lib/exportArtboard';
+import { DEFAULT_SHUTTER_ANGLE } from '../lib/motionBlur';
 import { shapeTextOnCurve } from '../lib/textOnPath';
 import { justifySvgTextElement } from '../lib/kashidaJustify';
 import { LIVE_PHOTO_DEFAULT_DURATION } from '../lib/livePhotoExport';
@@ -848,6 +849,7 @@ export interface StudioActions {
   setExportQuality: (q: 'high' | 'med') => void;
   setExportTransparent: (on: boolean) => void;
   setExportFps: (fps: number) => void;
+  setExportShutterSamples: (samples: number) => void;
   startExport: () => void;
   setHomePrompt: (text: string) => void;
   startFromPrompt: () => void;
@@ -1364,7 +1366,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               path = await exportVideoTarget(
                 // الفيديو بدقّة اللوحة نفسها — انظر `effectiveExportScale`.
                 { ...common, scale: effectiveExportScale(fmt, state.exportScale), transparent: fmt === 'gif' && state.exportTransparent },
-                { format: fmt, fps: state.exportFps, quality: state.exportQuality, transparent: fmt === 'gif' && state.exportTransparent, durationSeconds: abDuration },
+                {
+                  format: fmt,
+                  fps: state.exportFps,
+                  quality: state.exportQuality,
+                  transparent: fmt === 'gif' && state.exportTransparent,
+                  durationSeconds: abDuration,
+                  shutter: { samplesPerFrame: state.exportShutterSamples, angle: DEFAULT_SHUTTER_ANGLE },
+                },
                 `mazij-${resultId}-${Date.now()}.${fmt}`,
                 (fraction) => patch({ exportProgress: ((step + fraction) / totalSteps) * 100 }),
               );
@@ -1460,6 +1469,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     state.exportScale,
     state.exportQuality,
     state.exportFps,
+    state.exportShutterSamples,
     state.lang,
     state.sizeIdx,
     state.customW,
@@ -3106,6 +3116,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setExportQuality: (exportQuality) => patch({ exportQuality }),
       setExportTransparent: (exportTransparent) => patch({ exportTransparent }),
       setExportFps: (exportFps) => patch({ exportFps }),
+      setExportShutterSamples: (exportShutterSamples) => patch({ exportShutterSamples }),
       startExport,
       setHomePrompt: (homePrompt) => patch({ homePrompt }),
       startFromPrompt: () => patch({ screen: 'editor', panel: 'ai' }),
