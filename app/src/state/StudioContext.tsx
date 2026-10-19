@@ -2207,8 +2207,31 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setImageFlip: (id, axis) =>
         commitElements((els) => els.map((e) => (e.id === id && e.type === 'image' ? { ...e, [axis === 'h' ? 'flipH' : 'flipV']: !e[axis === 'h' ? 'flipH' : 'flipV'] } : e))),
       setImageRadius: (id, r) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'image' ? { ...e, radius: clamp(r, 0, 0.5) } : e))),
-      setImageStroke: (id, hex) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'image' ? { ...e, stroke: hex } : e))),
-      setImageStrokeWidth: (id, w) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'image' ? { ...e, strokeWidth: Math.max(0, w) } : e))),
+      // وحدُّ **الصورة** كان متروكًا على المسار الميّت نفسِه الذي تُرك عليه حدُّ
+      // الشكل: يكتب الحقلَ القديم وحده، والكومةُ المُجسَّدةُ تسبقه في
+      // `currentAppearance` فلا يصل التغييرُ إلى ما يُرسَم. والثلاثُ مساعداتٍ
+      // تُطبَّق كما هي بلا تعديلِ حرف — `withBaseStroke` و`withBaseStrokeWidth`
+      // و`withBaseStrokeHidden` في `lib/appearance.ts` تَقبل أيَّ `DocElement`
+      // أصلًا، ولم يَمنع الصورةَ منها إلا أنّ أحدًا لم يُنادِها.
+      //
+      // والسُّمكُ يُرفَع من الصفر عند الإيقاد بالقاعدة نفسها، ولها هنا سببٌ أقوى
+      // منه في الشكل: الصورةُ تُولَد **دائمًا** بـ`strokeWidth: 0` (أعلاه في هذا
+      // الملفّ) — لا «أحيانًا» كالشكل المفتوح — فالإيقادُ بلا رفعٍ كان يُنتج
+      // «نشِط» بلا بكسلٍ واحدٍ على الشاشة في كلّ مرّة.
+      setImageStroke: (id, hex) =>
+        commitElements((els) =>
+          els.map((e) => {
+            if (e.id !== id || e.type !== 'image') return e;
+            if (hex === null) return { ...e, stroke: null, appearance: withBaseStrokeHidden(e) };
+            const pageW = sizeAt(state.sizeIdx, state.customW, state.customH).w;
+            const width = e.strokeWidth > 0 ? e.strokeWidth : Math.max(2, Math.round(pageW * LINE_WIDTH_FRACTION));
+            return { ...e, stroke: hex, strokeWidth: width, appearance: withBaseStroke(e, hex, width) };
+          }),
+        ),
+      setImageStrokeWidth: (id, w) =>
+        commitElements((els) =>
+          els.map((e) => (e.id === id && e.type === 'image' ? { ...e, strokeWidth: Math.max(0, w), appearance: withBaseStrokeWidth(e, Math.max(0, w)) } : e)),
+        ),
       addFillLayer: (id) =>
         commitElements((els) => els.map((e) => (e.id === id ? { ...e, appearance: { ...currentAppearance(e), fills: [...currentAppearance(e).fills, newFillLayer()] } } : e))),
       removeFillLayer: (id, layerId) =>

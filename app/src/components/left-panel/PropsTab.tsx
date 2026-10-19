@@ -15,7 +15,7 @@ import { upscaleImage } from '../../lib/superResolution';
 import { isBooleanEligible } from '../../lib/pathBoolean';
 import { convertTextElementToOutline, isBuiltinFontFamily } from '../../lib/arabicShaping';
 import { buildCaptionElements, extractAudioSamples, transcribeAudio, whisperModelInfo } from '../../lib/autoCaptions';
-import { currentAppearance, normalizeHex, resolveLayerColor } from '../../lib/appearance';
+import { baseLayerColorOf, currentAppearance, normalizeHex, resolveLayerColor } from '../../lib/appearance';
 import type { AppearanceBlend, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, StrokePosition } from '../../state/elements';
 import { WIDTH_PROFILE_PRESETS, type StrokeWidthProfile } from '../../lib/variableStroke';
 
@@ -723,7 +723,10 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
   const { state, actions, dict: L } = useStudio();
   const pal = PALETTES[state.postPalette];
   const swatches = Array.from(new Set([pal.ac, pal.fg, pal.bg, '#FFFFFF', ...(pal.ac2 ? [pal.ac2] : [])]));
-  const activeFill = el.fill ?? pal[el.fillToken];
+  // لونُ صفّ «اللون»: الطبقةُ القاعديّة التي تكتب فيها `setShapeFill` إن وُجدت
+  // كومة، وإلّا الحقلُ القديم. انظر التعليقَ عند الصفّ نفسِه أدناه.
+  const baseFill = baseLayerColorOf(el);
+  const fillHex = baseFill ? resolveLayerColor(baseFill.color, baseFill.colorToken, pal) : (el.fill ?? pal[el.fillToken]);
   // الطبقةُ القاعديّة هي ما يُرسَم (انظر التعليق عند صفّ الحدّ أدناه).
   const baseStroke = currentAppearance(el).strokes[0] ?? null;
   const strokeOn = !!baseStroke && baseStroke.visible && baseStroke.width > 0;
@@ -733,16 +736,48 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div className="mz-label">{L.sec_shape}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* **الشرائحُ تبقى، ويُضاف إليها فضاءُ اللونِ كلُّه.**
+       *
+       * الشرائحُ خمسٌ من اللوحة المطبَّقة، وهي الطريقُ السريع: ضغطةٌ واحدة تُعطي
+       * لونًا متناغمًا مع بقيّة البوست بلا تفكير. ومُنتقِي اللونِ الحرُّ طريقٌ آخر
+       * لا بديل: لونُ العلامة التجاريّة رقمٌ لا تعطيه أيُّ لوحة — قيسَ ذلك على
+       * هدفٍ منشورٍ حقيقيّ، وألوانُه الأربعة لا توجد في `PALETTES` (انظر
+       * `normalizeHex` في `lib/appearance.ts`). فالصفُّ طريقان لا طريقٌ واحد،
+       * ولا يُنزَع سريعٌ ليُضاف بطيء.
+       *
+       * والحقلان كما في صفّ الحدّ أدناه بالحرف: مُدخَلُ لونٍ للاختيار بالعين،
+       * وحقلُ ستّ عشريٍّ **يُكتَب** فيه — ولمَ لا يكفي الأوّل وحده مكتوبٌ عند
+       * `normalizeHex`: `<input type="color">` يفتح حوارَ النظام ولا يُلصَق فيه
+       * رقمٌ من دليل هويّة.
+       *
+       * **والمقروءُ هو ما يُرسَم.** `baseLayerColorOf` تُرجع لونَ الطبقة التي
+       * تكتب فيها `setShapeFill` بعينها (عبر `withBaseLayerColor`) — فالقارئ
+       * والكاتب قاعدةٌ واحدة في ملفٍّ واحد. والحقلُ القديم يبقى مرجعَ ما لا كومةَ
+       * له (شكلٌ مرسومٌ بالسحب). ولولا ذلك لعرَض الحقلُ المضبوطُ لونًا والشكلُ
+       * بلونٍ آخر — وهو العطلُ الذي أُصلِح للحدّ في `withBaseStroke`. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, rowGap: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{L.color}</span>
         {swatches.map((hex) => (
           <button
             key={hex}
             title={hex}
             onClick={() => actions.setShapeFill(el.id, hex)}
-            style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${hex === activeFill ? 'var(--accent)' : 'var(--line)'}`, background: hex, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)' }}
+            style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${hex.toLowerCase() === fillHex.toLowerCase() ? 'var(--accent)' : 'var(--line)'}`, background: hex, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)' }}
           />
         ))}
+        {/* `normalizeHex` لا القيمةُ الخام، للسبب المقيس عند صفّ الحدّ أدناه:
+            المتصفّح يُصغّر قيمةَ مُدخَلِ اللون دائمًا وألوانُ `PALETTES` بحرفٍ
+            كبير، فالفرقُ في كل تصييرٍ يَسرق التركيز من جار الحقل. */}
+        <input
+          data-testid={`shape-fill-color-${el.id}`}
+          type="color"
+          title={L.color}
+          aria-label={L.color}
+          value={normalizeHex(fillHex) ?? '#000000'}
+          onChange={(e) => actions.setShapeFill(el.id, e.target.value)}
+          style={{ width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, background: 'transparent' }}
+        />
+        <HexField testId={`shape-fill-hex-${el.id}`} value={fillHex} onCommit={(hex) => actions.setShapeFill(el.id, hex)} />
       </div>
       {el.shape !== 'path' && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
@@ -917,6 +952,12 @@ function ImageProps({ el }: { el: DocElement & { type: 'image' } }) {
   const { state, actions, dict: L } = useStudio();
   const pal = PALETTES[state.postPalette];
   const cropping = state.cropEditingId === el.id;
+  // صفُّ حدّ الصورة يقرأ ما يُرسَم ويكتب فيه — نفسُ عقد صفّ حدّ الشكل بالحرف.
+  // التفصيلُ والقياسُ عند الصفّ نفسِه أدناه.
+  const baseStroke = currentAppearance(el).strokes[0] ?? null;
+  const strokeOn = !!baseStroke && baseStroke.visible && baseStroke.width > 0;
+  const strokeHex = baseStroke ? resolveLayerColor(baseStroke.color, baseStroke.colorToken, pal) : pal.fg;
+  const strokeWidth = baseStroke ? baseStroke.width : el.strokeWidth;
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1001,24 +1042,67 @@ function ImageProps({ el }: { el: DocElement & { type: 'image' } }) {
               style={{ flex: 1.4, accentColor: 'var(--accent)' }}
             />
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+          {/* **حدُّ الصورة كان على المسار الميّت نفسِه الذي كان عليه حدُّ الشكل،
+            * وبعطبٍ ثالثٍ فوقه: لا لونَ يُختار أصلًا.**
+            *
+            * وثلاثةُ أعطالٍ مقيسةٍ في سطرٍ واحد (`setImageStroke(el.id, el.stroke
+            * ? null : pal.fg)`):
+            *
+            *   (أ) **اللونُ مثبَّتٌ في الكود** على `pal.fg`. فلا سطحَ في البرنامج
+            *       كلِّه يُختار فيه لونُ حدِّ صورة — ومحرّرُ الطبقات محجوبٌ خلف
+            *       `isPro` والوضعُ البسيط هو الافتراضيّ.
+            *
+            *   (ب) **الصورةُ تُولَد بـ`strokeWidth: 0`** (`StudioContext.tsx:1458`).
+            *       فالإيقادُ يُنتج طبقةَ حدٍّ بسُمك صفر، و`legacyBorderCss`
+            *       (`lib/appearance.ts:545`) تُخرِج `0px solid …` — فالمفتاح يقول
+            *       «نشِط» ولا بكسلَ واحدٌ على الشاشة. وهذا يحدث **من أوّل ضغطة**،
+            *       بلا إعادةِ تحميل.
+            *
+            *   (ج) **وبعد أوّل دورةِ حفظٍ وفتح يموت اللون أيضًا.** `setImageStroke`
+            *       تكتب الحقلَ القديم `el.stroke` وحده، و`normalizeDoc` تُجسّد
+            *       كومةً لكلّ عنصر عند كل فتح (`StudioContext.tsx:178`) — فالكومةُ
+            *       المُجسَّدةُ تسبق الحقلَ القديم في `currentAppearance`، ومسارُ
+            *       التصيير (`ElementView.tsx:342`) يقرأ `resolveAppearance` وحدها.
+            *       فتغييرُ اللون بعدها لا يصل إلى ما يُرسَم.
+            *
+            * والعلاجُ هو عينُه الذي أُصلِح به حدُّ الشكل، **والثلاثُ مساعداتٍ
+            * تُطبَّق كما هي بلا حرفٍ جديد**: `withBaseStroke` و`withBaseStrokeWidth`
+            * و`withBaseStrokeHidden`. ولا نظامَ ثانيًا: هذا الصفُّ نافذةٌ على
+            * `strokes[0]` نفسِها التي يُحرّرها محرّرُ الطبقات.
+            *
+            * و«حدٌّ بسُمك صفر» ليس حدًّا — يُقرأ إطفاءً، كما في صفّ الشكل. */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, rowGap: 6, flexWrap: 'wrap', fontSize: 12 }}>
             <span style={{ color: 'var(--muted)', flex: 1 }}>{L.stroke}</span>
             <button
-              onClick={() => actions.setImageStroke(el.id, el.stroke ? null : pal.fg)}
-              style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.stroke ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.stroke ? 'var(--accent)' : 'var(--muted)' }}
+              data-testid={`image-stroke-toggle-${el.id}`}
+              onClick={() => actions.setImageStroke(el.id, strokeOn ? null : strokeHex)}
+              style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: strokeOn ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: strokeOn ? 'var(--accent)' : 'var(--muted)' }}
             >
-              {el.stroke ? L.on_state : L.off_state}
+              {strokeOn ? L.on_state : L.off_state}
             </button>
-            {el.stroke && (
-              <input
-                dir="ltr"
-                type="number"
-                min={1}
-                max={40}
-                value={el.strokeWidth}
-                onChange={(e) => actions.setImageStrokeWidth(el.id, Number(e.target.value) || 0)}
-                style={{ width: 44, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
-              />
+            {strokeOn && (
+              <>
+                <input
+                  data-testid={`image-stroke-color-${el.id}`}
+                  type="color"
+                  title={L.stroke}
+                  aria-label={L.stroke}
+                  value={normalizeHex(strokeHex) ?? '#000000'}
+                  onChange={(e) => actions.setImageStroke(el.id, e.target.value)}
+                  style={{ width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, background: 'transparent' }}
+                />
+                <HexField testId={`image-stroke-hex-${el.id}`} value={strokeHex} onCommit={(hex) => actions.setImageStroke(el.id, hex)} />
+                <input
+                  data-testid={`image-stroke-width-${el.id}`}
+                  dir="ltr"
+                  type="number"
+                  min={1}
+                  max={40}
+                  value={strokeWidth}
+                  onChange={(e) => actions.setImageStrokeWidth(el.id, Number(e.target.value) || 0)}
+                  style={{ width: 44, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
+                />
+              </>
             )}
           </label>
         </>
