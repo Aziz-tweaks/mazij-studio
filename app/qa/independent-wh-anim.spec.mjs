@@ -57,6 +57,20 @@ const HERE = new URL('.', import.meta.url).pathname;
 const PRECHANGE_JSON = readFileSync(`${HERE}migration/prechange-scale-autosave.json`, 'utf8');
 const PRECHANGE = JSON.parse(readFileSync(`${HERE}migration/prechange-scale-samples.json`, 'utf8'));
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ولِمَ يُقرَأ نصُّ `persist.ts` نفسُه، وهو الموضعُ الوحيدُ في الملفّ كلِّه الذي
+// يَقرأ مصدرًا كنصّ: الدعوى في القسم ٧ ليست «الرقمُ صحيحٌ اليوم» بل **«الرقمُ
+// مشتقٌّ ولا يُكتَب بيد»**، وهذه لا تُقاس من خارج الوحدة أصلًا. فمن كتب
+// `SCHEMA_VERSION = 4` بيده يُصادف الصوابَ اليومَ ويَمرّ من كلّ فحصٍ قيميّ، ثم
+// يَسهو عند أوّل بندٍ يُضاف. فالطرفان يُقاسان: القيمةُ من الوحدة، والاشتقاقُ من
+// التعريف.
+const PERSIST_SRC = readFileSync(`${HERE}../src/lib/persist.ts`, 'utf8');
+
+// الخمسُ التي كان عليها `AnimProperty` **مغلقًا** قبل هذا العمل — بأسمائها لا
+// بعددها. والدعوى المقيسةُ في القسم ١ أنّ الاتّحادَ **نَما ولم يُستبدَل**:
+// الخمسُ باقيةٌ كلُّها، والمحوران زيادةٌ عليها لا واحدٌ منها.
+const CLOSED_FIVE = ['opacity', 'x', 'y', 'scale', 'rotation'];
+
 let pass = 0;
 let fail = 0;
 const failures = [];
@@ -232,9 +246,15 @@ async function main() {
     };
   });
 
+  // وطولٌ مطلقٌ (`=== 7`) كان يَقيس يومَ كُتِب لا ما يَعنيه: الاتّحادُ قائمةٌ
+  // يُقصَد لها أن تَنمو، فيَسقط البندُ بحكم البناء عند أوّل خصيصةٍ تاليةٍ تُضاف،
+  // وسقوطُه حينها لا يَدلّ على عطل. والمقيسُ هنا الدعوى نفسُها في طرفَيها:
+  // الخمسُ المغلقةُ كلُّها باقيةٌ بأسمائها، والمحوران **زائدانِ عليها**.
+  const propSet = new Set(model.props);
+  const beyondFive = model.props.filter((p) => !CLOSED_FIVE.includes(p));
   assert(
-    model.props.includes('scaleX') && model.props.includes('scaleY') && model.props.length === 7,
-    `\`ANIM_PROPERTIES\` صارت سبعًا وفيها المحوران (${model.props.join(', ')}) — والاتّحادُ كان خمسةً مغلقة، فلا عبارةَ فيه لعرضٍ وارتفاعٍ مستقلَّين`,
+    CLOSED_FIVE.every((p) => propSet.has(p)) && beyondFive.includes('scaleX') && beyondFive.includes('scaleY'),
+    `\`ANIM_PROPERTIES\` تحمل المحورَين **زيادةً** على الخمس المغلقة التي كانت (${model.props.join(', ')}؛ والزائدُ عليها: ${beyondFive.join(', ') || 'لا شيء'}) — فلا الاتّحادُ خمسةٌ مغلقةٌ لا عبارةَ فيها لعرضٍ وارتفاعٍ مستقلَّين، ولا واحدةٌ من الخمس سقطت ليُفسَح للمحورَين`,
   );
   assert(
     model.defaults.scaleX === 1 && model.defaults.scaleY === 1 && model.defaults.scale === 1,
@@ -679,28 +699,40 @@ async function main() {
   // التي لا تَعرف المحورَين — فضغطةٌ على منحنى التخفيف تَحذفهما. وهذا بعينه ما
   // تَأمر به الخطّةُ في §1C.3: يُرفَض الملفُّ صراحةً لا يُفتَح بنصفه.
   console.log('\n٧. مغلّفُ النسخة');
-  const version = await page.evaluate(async () => {
+  // وجدولُ الترحيلات قائمةٌ يُقصَد لها أن تَنمو كذلك، فلا يُقاس منها عددٌ مطلقٌ
+  // ولا موضعُ «آخرِ بند»: كلاهما يَسقط عند أوّل بندٍ يُضاف، وسقوطُه حينها لا يَدلّ
+  // على عطل. والمقيسُ **رتبةُ البندِ في الجدول** — وهي ثابتةٌ تحت الإضافة
+  // بالذيل، إذ `DOC_MIGRATIONS[i]` يَرفع النسخة `i+1` إلى `i+2`، فرتبةُ بندٍ
+  // قائمٍ هي النسخةُ التي يَرفعها وهي لا تتغيّر — وما يُقاس من الأطوال يُقاس
+  // **مقارنةً بالجدول نفسِه** لا برقمٍ مكتوب.
+  const version = await page.evaluate(async (preJson) => {
     const m = await import('/src/lib/persist.ts');
     return {
       SCHEMA_VERSION: m.SCHEMA_VERSION,
       migrations: [...m.DOC_MIGRATIONS],
       currentRunsNone: m.migrationsFor(m.SCHEMA_VERSION).length,
       absentRunsAll: m.migrationsFor(0).length,
+      // أسماءُ ما يُشغَّل لا عددُه: «كلَّها» دعوى تطابقٍ مع الجدول، لا دعوى طول.
+      absentRunsAllNames: [...m.migrationsFor(0)],
+      // وما يُشغِّله مستندُ القسم ٤ بعينه، من نسخته المكتوبة في بايتاته.
+      prechangeRuns: [...m.migrationsFor(m.schemaVersionOf(JSON.parse(preJson)))],
       refusesNewer: m.isTooNew({ artboards: [], activeArtboardId: 'x', schemaVersion: m.SCHEMA_VERSION + 1 }),
       acceptsCurrent: m.isTooNew({ artboards: [], activeArtboardId: 'x', schemaVersion: m.SCHEMA_VERSION }),
     };
-  });
+  }, PRECHANGE_JSON);
+  const versionExpr = (/export const SCHEMA_VERSION\s*=\s*([^;\n]+);/.exec(PERSIST_SRC)?.[1] ?? '(لا تعريفَ أصلًا)').trim();
   assert(
-    version.SCHEMA_VERSION === version.migrations.length + 1 && version.migrations.length === 2,
-    `\`SCHEMA_VERSION\` (${version.SCHEMA_VERSION}) ما زالت مشتقّةً من طول جدول الترحيلات (${version.migrations.length}: ${version.migrations.join(', ')}) — فمن أضاف بندًا رفع النسخةَ بحكم البناء، ولا يَنحرف الرقمان`,
+    version.SCHEMA_VERSION === version.migrations.length + 1 && /^DOC_MIGRATIONS\.length\s*\+\s*1$/.test(versionExpr),
+    `\`SCHEMA_VERSION\` (${version.SCHEMA_VERSION}) ما زالت مشتقّةً من طول جدول الترحيلات (${version.migrations.length}: ${version.migrations.join(', ')}) — فمن أضاف بندًا رفع النسخةَ بحكم البناء، ولا يَنحرف الرقمان. والاشتقاقُ مقيسٌ في التعريف نفسِه «\`${versionExpr}\`» لا في قيمته وحدها: رقمٌ يُكتَب بيدٍ يُصادف الصوابَ يومَ كُتِب ويَمرّ من كلّ مقارنةٍ قيميّة، ثم يَسهو عند أوّل بندٍ يُضاف`,
+  );
+  const nusAt = version.migrations.indexOf('nonuniform-scale-tracks');
+  assert(
+    nusAt === 1 && version.prechangeRuns.includes('nonuniform-scale-tracks') && cssMismatch.length === 0,
+    `وبندُ هذا العمل قائمٌ في رتبته (${nusAt === -1 ? `مفقودٌ من الجدول — وفي الرتبة ١ اليومَ: ${version.migrations[1] ?? 'لا شيء'}` : `الرتبة ${nusAt}: ${version.migrations[nusAt]}`}) — أي يَرفع النسخةَ ٢ إلى ٣، وهي رتبةٌ لا تتغيّر بما يُضاف بعده. **وبندٌ لا يُحوِّل بايتًا**: مستندُ القسم ٤ نسختُه ٢ فيُشغِّله فعلًا (${version.prechangeRuns.join(', ')})، والنصُّ المُنبعِث منه بعد تشغيله هو نفسُه بايتًا ببايت عند الستّين لحظة (${cssMismatch.length} خلافًا) — غيابُ المسار هو المحايد. وهو موجودٌ ليرفع النسخةَ وحدها، فيَرفضَ بناءٌ أقدمُ ملفًّا يحمل محورًا بدل أن يَرسمه منتظمًا في صمت ثم يَحذفه عند أوّل تخفيفٍ متدرّج`,
   );
   assert(
-    version.migrations[version.migrations.length - 1] === 'nonuniform-scale-tracks',
-    `وآخرُ بندٍ فيه هو هذا العمل (${version.migrations[version.migrations.length - 1]}) — بندٌ لا يُحوِّل بايتًا: غيابُ المسار هو المحايد. وهو موجودٌ ليرفع النسخةَ وحدها، فيَرفضَ بناءٌ أقدمُ ملفًّا يحمل محورًا بدل أن يَرسمه منتظمًا في صمت ثم يَحذفه عند أوّل تخفيفٍ متدرّج`,
-  );
-  assert(
-    version.currentRunsNone === 0 && version.absentRunsAll === 2,
-    `ومستندُ اليوم لا يُشغِّل ترحيلًا (${version.currentRunsNone})، ومستندٌ بلا نسخةٍ يُشغِّل كلَّها (${version.absentRunsAll})`,
+    version.currentRunsNone === 0 && version.absentRunsAllNames.join('|') === version.migrations.join('|'),
+    `ومستندُ اليوم لا يُشغِّل ترحيلًا (${version.currentRunsNone})، ومستندٌ بلا نسخةٍ يُشغِّل **الجدولَ كلَّه بأسمائه وترتيبه** مهما طال (${version.absentRunsAll}: ${version.absentRunsAllNames.join(', ')}) — فبندٌ يُقفَز عنه، أو يُشغَّل مرّتَين، أو يُقدَّم على سابقه، يَظهر هنا؛ وعددٌ مطلقٌ كان يَسكت عن ذلك كلِّه متى صادف الطولَ`,
   );
   assert(
     version.refusesNewer === true && version.acceptsCurrent === false,
