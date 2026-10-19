@@ -3,6 +3,7 @@ import { mkdir, remove, writeFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 
 import { renderArtboardFrames, type ArtboardRenderSpec } from './exportArtboard';
+import type { ShutterSpec } from './motionBlur';
 
 export type VideoFormat = 'mp4' | 'gif';
 
@@ -16,6 +17,10 @@ export interface VideoExportOptions {
    * caller must pass `false` here when `format === 'mp4'` (ExportDialog disables the
    * transparent toggle for mp4 rather than silently dropping it here). */
   transparent: boolean;
+  /** ضبابُ الحركة. غيابُه — أو `samplesPerFrame = 1` — يُبقي المسارَ القديم
+   * بسطره، مقيسًا بايتًا ببايت. والثمنُ **دون الخطّيّ** (نحو نصفِ N) ومقيسٌ في
+   * `docs/DECISION-motion-blur-parity.md` §٦. */
+  shutter?: ShutterSpec;
 }
 
 const FRAME_DIGITS = 5;
@@ -93,12 +98,18 @@ export async function exportVideoTarget(
     const frameSpec = { ...spec, transparent: opts.format === 'gif' && spec.transparent };
 
     let rendered = 0;
+    // `frameInterval` يُمرَّر صراحةً ولا تَستنتجه `renderArtboardFrames` من فرق
+    // أوّل زمنين. والسببُ أن ذلك الاستنتاجَ **غيرُ معرَّفٍ على إطارٍ واحد**: جدولٌ
+    // طولُه واحدٌ لا فرقَ فيه، فتخرج فترةُ الغالق صفرًا ويُطفأ الضبابُ صامتًا.
+    // ومُنادو هذه الدالّة بجدولٍ قصيرٍ موجودون فعلًا (اختباراتُ الإطار الواحد في
+    // `qa/motion-blur.spec.mjs`). فالمعرفةُ بمعدّل الإطارات تبقى عند من يَملكها،
+    // كما بقيت المدّةُ في `opts` ولم تُقرأ من حالةٍ هنا.
     await renderArtboardFrames(frameSpec, frameTimes, async (blob, i) => {
       const bytes = new Uint8Array(await blob.arrayBuffer());
       await writeFile(await join(tmpDir, frameFileName(i)), bytes);
       rendered += 1;
       onProgress((rendered / frameCount) * 0.4);
-    });
+    }, { shutter: opts.shutter, frameInterval: 1 / opts.fps });
 
     const destPath = await join(exportsDir, destFileName);
     const inputPattern = await join(tmpDir, `frame-%0${FRAME_DIGITS}d.png`);

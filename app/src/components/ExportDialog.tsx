@@ -5,6 +5,7 @@ import { useStudio } from '../state/StudioContext';
 import type { ExportResult } from '../state/types';
 import { effectiveExportScale, estimateVideoExport } from '../lib/exportEstimate';
 import { documentDuration } from '../lib/animTimeline';
+import { SHUTTER_SAMPLE_OPTIONS } from '../lib/motionBlur';
 
 const IMG_FORMATS = ['png', 'jpg', 'svg'] as const;
 const VID_FORMATS = ['mp4', 'gif'] as const;
@@ -395,6 +396,43 @@ export function ExportDialog() {
                   <button key={f} onClick={() => actions.setExportFps(f)} style={qBtnStyle(state.exportFps === f)}>{f}</button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ضبابُ الحركة. الثمنُ مكتوبٌ **تحت المِقبض** لا في وثيقة: الخيارُ يُضاعف
+              زمنَ التصدير، ومن ضغط ١٦ يستحقّ أن يعرف ذلك قبل أن يَنتظر. والافتراضُ
+              `1` — فلا مستندٌ قائمٌ يَدفع ثمنًا لم يَطلبه. */}
+          {isVideoFormat && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <span className="mz-label">{L.ex_shutter}</span>
+              <div data-testid="export-shutter" dir="ltr" style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
+                {SHUTTER_SAMPLE_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    data-testid={`export-shutter-${n}`}
+                    data-on={state.exportShutterSamples === n}
+                    onClick={() => actions.setExportShutterSamples(n)}
+                    style={qBtnStyle(state.exportShutterSamples === n)}
+                  >{n === 1 ? L.ex_shutter_off : `${n}×`}</button>
+                ))}
+              </div>
+              {state.exportShutterSamples > 1 && (
+                <>
+                  <span data-testid="export-shutter-cost" dir="auto" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    {L.ex_shutter_cost} · ×{state.exportShutterSamples}
+                  </span>
+                  {/* **فارقُ المعاينة يُقال، لا يُترَك ليُكتشَف.** المعاينةُ شجرةُ
+                      عناصرِ DOM والتصديرُ قُماش، فلا سبيلَ في الأولى إلى تجميع N
+                      عيّنة. والعقدُ المكتوب في `animTimeline.ts:125-137` عقدُ
+                      **حالة** لا عقدُ بكسل، وهو محفوظٌ كما كان. لكنّ المصمّمَ لا
+                      يقرأ ذلك العقد — فما يراه أن ما صدّره ليس ما عايَنه.
+                      و`docs/DECISION-motion-blur-parity.md` يُقيس البديلَ ويوصي
+                      به؛ وإلى أن يَصِل، يُقال هنا. */}
+                  <span data-testid="export-shutter-preview-note" dir="auto" style={{ fontSize: 11, color: 'var(--muted)' }}>
+                    {L.ex_shutter_preview}
+                  </span>
+                </>
+              )}
             </div>
           )}
 

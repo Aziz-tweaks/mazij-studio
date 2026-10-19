@@ -186,6 +186,109 @@ const MOVE = {
   detourY: 1700,
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// شاهدا ضباب الحركة — ولا يختلفان إلّا في عدد العيّنات
+// ════════════════════════════════════════════════════════════════════════════
+// الظاهرةُ المقيسةُ في المرجع هي **أثرُ إطارٍ واحد**: عنصرٌ ممسوحٌ على اتّجاه سيره
+// وجارٌ له حادٌّ في الإطار نفسِه. فالشاهدان هنا لا يختلفان في منحنًى ولا في موضعٍ
+// ولا في زمن — كلاهما خطٌّ مستقيمٌ من y=٦٠٠ إلى y=١٤٠٠ — ولا يفصلهما إلّا
+// `samples`: واحدةٌ أو ستّ عشرة. فعطلٌ واحدٌ يُسمّيه بندٌ واحد، كبقيّة هذه الورقة.
+//
+// **والنافذةُ رُبعُ ثانيةٍ لا ثانيةً ونصفًا، وهذا شرطٌ لا تزيين.** نافذةُ `MOVE`
+// تُعطي ١٧٫٧٨ بكسلًا للإطار، فمسحةُ غالقٍ ١٨٠° منها ٨٫٨٩ بكسلًا على كتلةٍ طولُها
+// ١٦٠ — أي ٥٪، وهو فرقٌ يَغرق في أرضيّة المرمِّز. والمرجعُ الحقيقيُّ ليس في ذلك
+// النظام أصلًا: الظاهرةُ هناك مسحةٌ تُقارب حجمَ العنصر. فالشاهدُ يُمرِّن البندَ
+// **عند الحدّ الذي سيُستعمَل عنده** لا عند حدٍّ مريح — وهي قاعدةُ `overshootPx`
+// نفسُها أعلاه.
+//
+// والحقيقةُ الأرضيّةُ هنا **مُغلَقةُ الشكل**، وهذا ما يجعل الشاهدَ شاهدًا: الكتلةُ
+// مستطيلٌ مصمتٌ كاملُ العرض، والخلفيّةُ تحتها صافيةٌ (اللوحُ ينتهي عند y=٤٤٠
+// والمسحةُ كلُّها تحت y=٦٠٠)، فتغطيةُ كلّ صفٍّ تُحسَب حسابًا لا تُقدَّر:
+//
+//     المسحة      = السرعةُ للإطار × φ = 106.667 × 0.5 = 53.333 بكسلًا
+//     المدى المُحبَّر = h + المسحة          = 160 + 53.333 = 213.333
+//     المصمت      = h − المسحة          = 160 − 53.333 = 106.667
+//     حصّةُ الحافّة = المسحة×٢ ÷ المدى     = 106.667 ÷ 213.333 = **٠٫٥٠٠ بالضبط**
+//
+// فنصفُ حبر الكتلة المُضبَّبة حافّةٌ جزئيّة، ونصفُه مصمت. وفي الشاهد الحادّ لا
+// حافّةَ إلّا صفَّا التنعيم (٢ من ١٦٠ = ٠٫٠١٢٥ حدًّا أعلى، وصفرٌ متى وقع y صحيحًا).
+const BLUR = {
+  t0: 1.0,
+  // رُبعُ ثانيةٍ للمسافة نفسِها: ٨٠٠ ÷ ٧٫٥ إطارًا = ١٠٦٫٦٦٧ بكسل/إطار.
+  t1: 1.25,
+  samples: 16,
+  angle: 180,
+  // اللحظةُ التي يُقاس عندها البند. شرطُها أن تكون النافذةُ كلُّها — من t إلى
+  // t+φΔ — داخل زمن الحركة، وإلّا قيس غالقٌ نصفُه ساكنٌ فقُرئ ضبابٌ أقلُّ من
+  // المبنيّ ونُسِب النقصُ إلى المقياس.
+  t: 1.1,
+  // منطقةُ التتبّع نفسُها التي تَستعملها بقيّةُ شواهد الحركة — لا منطقةٌ خاصّة:
+  // منطقةٌ مفصّلةٌ على الضباب تُعاير البندَ على نفسها.
+  region: MOVE.region,
+};
+
+/** تغطيةُ كلّ صفٍّ بحبر الكتلة بعد تجميع `samples` عيّنةً — متوسّطٌ بأوزانٍ
+ * متساوية، وهو نفسُ ما يفعله `renderArtboardFrames` في التطبيق.
+ *
+ * وتُحسَب التغطيةُ وحدَها لا الإطارُ كلُّه: الخلفيّةُ واللوحُ ساكنان في كلّ عيّنة،
+ * ومتوسّطُ المتطابقات هو هي. فالاختصارُ **متطابقةٌ لا تقريب** — ولولاه لكان
+ * توليدُ ستّ عشرة نسخةً من ١٠٨٠×١٩٢٠ لكلّ إطارٍ ثمنًا بلا مقابل. */
+function blockRowCoverage(yAt, t, samples, angle) {
+  const span = (angle / 360) / COMP.fps;
+  const cov = new Map();
+  for (let k = 0; k < samples; k++) {
+    // `k / samples` لا `(k + ½) / samples` — المتطابقةُ نفسُها التي في
+    // `src/lib/motionBlur.ts`: عند `samples = 1` تُعطي العيّنةَ عند t بعينها،
+    // فالشاهدُ «بلا ضباب» هو الرسمُ القديمُ حرفًا بحرف لا تقريبًا منه.
+    const y = yAt(t + (k / samples) * span);
+    const yBot = y + MOVE.h;
+    for (let yy = Math.floor(y); yy < Math.ceil(yBot); yy++) {
+      const c = Math.max(0, Math.min(yy + 1, yBot) - Math.max(yy, y));
+      if (c > 0) cov.set(yy, (cov.get(yy) ?? 0) + c);
+    }
+  }
+  for (const [row, v] of cov) cov.set(row, v / samples);
+  return cov;
+}
+
+function renderBlurFrame(t, yAt, samples) {
+  const { width: W, height: H } = COMP;
+  const buf = Buffer.alloc(W * H * 3);
+  fillBackground(buf, COMP.bg);
+  const { plate } = COMP;
+  fillRect(buf, W, H, plate.x, plate.y, plate.w, plate.h, plate.color);
+  const cov = blockRowCoverage(yAt, t, samples, BLUR.angle);
+  const x0 = Math.max(0, Math.round(MOVE.x));
+  const x1 = Math.min(W, Math.round(MOVE.x + MOVE.w));
+  const [r, g, b] = MOVE.color;
+  const bg = COMP.bg;
+  for (const [yy, cover] of cov) {
+    if (yy < 0 || yy >= H) continue;
+    const cr = Math.round(bg[0] + (r - bg[0]) * cover);
+    const cg = Math.round(bg[1] + (g - bg[1]) * cover);
+    const cb = Math.round(bg[2] + (b - bg[2]) * cover);
+    let i = (yy * W + x0) * 3;
+    for (let xx = x0; xx < x1; xx++) {
+      buf[i++] = cr;
+      buf[i++] = cg;
+      buf[i++] = cb;
+    }
+  }
+  return buf;
+}
+
+/** شاهدُ ضبابٍ كاملٌ من عددِ عيّنات — والمسارُ واحدٌ للشاهدين. */
+function blurMode(file, label, samples) {
+  const yAt = (t) => MOVE.y0 + (MOVE.y1 - MOVE.y0) * clamp01((t - BLUR.t0) / (BLUR.t1 - BLUR.t0));
+  return {
+    label,
+    file,
+    width: COMP.width,
+    height: COMP.height,
+    frame: (i) => renderBlurFrame(i / COMP.fps, yAt, samples),
+  };
+}
+
 // المنحنيات. كلُّ واحدٍ دالّةٌ من f ∈ [0,1] إلى كسرِ المسافة، وهو **الحقيقةُ
 // الأرضيّةُ** التي يُقاس عليها البندُ الثالث.
 //
@@ -411,6 +514,21 @@ const MODES = {
   //
   // سرعتُه ثابتة، فنسبةُ ذروتِها إلى متوسّطها **واحدٌ بالضبط** بحكم البناء. وهو
   // الرقمُ الذي يجعل الحقلَ قابلًا للمعايرة: كلُّ منحنًى آخرَ أكبرُ منه.
+  // ــ شاهدا الضباب ــ لا يفصلهما إلّا `samples`: ١ أو ١٦ ــــــــــــــــــــــ
+  // `motion-blur-off` يُرضي بندَ «حادّ» ويُسقط بندَ «مُضبَّب»، و`motion-blur-on`
+  // عكسُه. وكلاهما يَمرّ على بنود الاتّجاه والمنحنى نفسِها — فالضبابُ لا يُغيّر
+  // أين العنصر، وهذا بالضبط ما يَعمى عنه كلُّ بندٍ قائم.
+  'motion-blur-off': blurMode(
+    'motion-blur-off.mp4',
+    'حركةٌ سريعةٌ بعيّنةٍ واحدةٍ للإطار — حوافُّ حادّة، حصّةُ الحافّة ٠٫٠١٢٥ حدًّا أعلى',
+    1,
+  ),
+  'motion-blur-on': blurMode(
+    'motion-blur-on.mp4',
+    'الحركةُ نفسُها بستّ عشرة عيّنةً — مسحةٌ ٥٣٫٣٣ بكسلًا، حصّةُ الحافّة ٠٫٥٠٠ بالضبط',
+    BLUR.samples,
+  ),
+
   'motion-linear': moveMode(
     'motion-linear.mp4',
     'خطٌّ مستقيم — سرعةٌ ثابتة، نسبةُ الذروة ١٫٠ بحكم البناء',
@@ -609,6 +727,37 @@ export const GROUND_TRUTH = {
   back: { c1: BACK_C1, c3: BACK_C3, peakF: BACK_PEAK_F, overshootPx: MOVE.overshootPx },
   /** مجموعُ الانجراف بالبكسل في شاهد الانجراف. */
   driftTotalPx: MOVE.driftPerFrame * Math.round((COMP.frames - 1 - MOVE.t1 * COMP.fps)),
+  /** ضبابُ الحركة — كلُّه مُشتقٌّ من `BLUR` لا مقيسٌ من ملفّ. */
+  blur: {
+    ...BLUR,
+    /** سرعةُ شاهدَي الضباب بالبكسل للإطار. */
+    pxPerFrame: (MOVE.y1 - MOVE.y0) / ((BLUR.t1 - BLUR.t0) * COMP.fps),
+    get smearPx() { return this.pxPerFrame * (BLUR.angle / 360); },
+    get inkedExtentPx() { return MOVE.h + this.smearPx; },
+    get solidExtentPx() { return MOVE.h - this.smearPx; },
+    /** حصّةُ البكسلات الجزئيّة من المُحبَّر — القيمةُ المبنيّةُ التي يُقاس عليها
+     * البند. مُغلَقةُ الشكل: `2·smear / (h + smear)`. */
+    get softInkShare() { return (2 * this.smearPx) / this.inkedExtentPx; },
+    /** وحصّةُ الشاهد الحادّ: صفّا تنعيمٍ حدًّا أعلى. */
+    get softInkShareSharp() { return 2 / MOVE.h; },
+    /** **والمقيسُ أقلُّ من ٠٫٥ بحكم القناع، لا بعطل.** قناعُ البند يَعُدّ
+     * «مُحبَّرًا» ما تغطيتُه ≥ ١٥٪ و«جزئيًّا» ما بين ١٥٪ و٨٥٪. فطرفا المنحدر —
+     * ١٥٪ من كلّ جهة — يَخرجان من البسط والمقام بطريقتين مختلفتين. والمنحدرُ
+     * خطّيٌّ في التغطية، فالتصحيحُ مُغلَقُ الشكل أيضًا:
+     *
+     *     المُحبَّر = (h − smear) + 2(1−lo)·smear
+     *     الجزئيّ = 2(hi−lo)·smear
+     *
+     * وهذا الرقمُ — لا ٠٫٥٠٠ — هو ما يجب أن يُقارَن بالمقيس. وقد قيس ٠٫٣٧٦٧
+     * مقابل ٠٫٣٧٨٤ مبنيًّا: فارقٌ ٠٫٤٤٪، وهو ثمنُ ترميز yuv420p. ولو قورن
+     * بـ٠٫٥٠٠ لَبدا البندُ ناقصًا ٢٥٪ ونُسِب النقصُ إلى المقياس. */
+    get softInkShareMasked() {
+      const lo = 0.15;
+      const hi = 0.85;
+      const L = this.smearPx;
+      return (2 * (hi - lo) * L) / ((MOVE.h - L) + 2 * (1 - lo) * L);
+    },
+  },
   easings,
 };
 
@@ -624,6 +773,11 @@ function printTruth() {
   console.log(`الانجراف     ${MOVE.driftPerFrame} بكسل/إطار بعد ${MOVE.t1}ث · المجموع ${g.driftTotalPx.toFixed(1)} بكسل`);
   console.log(`الشاذّ       الإطار #${MOVE.spikeFrame} مقحَمٌ ${MOVE.spikePx} بكسلًا`);
   console.log(`الالتفاف     ${MOVE.y0} → ${MOVE.detourY} → ${MOVE.y1} · أقصى رجوعٍ ${MOVE.detourY - MOVE.y1} بكسلًا`);
+  const bl = g.blur;
+  console.log(`الضباب       ${BLUR.t0}ث→${BLUR.t1}ث · ${bl.pxPerFrame.toFixed(3)} بكسل/إطار · غالقٌ ${BLUR.angle}° · ${BLUR.samples} عيّنةً`);
+  console.log(`             مسحةٌ ${bl.smearPx.toFixed(3)}px · مُحبَّرٌ ${bl.inkedExtentPx.toFixed(3)}px · مصمتٌ ${bl.solidExtentPx.toFixed(3)}px`);
+  console.log(`             حصّةُ الحافّة خامًّا ${bl.softInkShare.toFixed(4)} · **بقناع البند ${bl.softInkShareMasked.toFixed(4)}** · حادٌّ ≤ ${bl.softInkShareSharp.toFixed(4)}`);
+  console.log(`             وتُقاس عند ${BLUR.t}ث — والمقيسُ يُقارَن بالثاني لا بالأوّل`);
   console.log('\nنسبةُ ذروةِ السرعة ÷ متوسّطها، مُشتقّةً من المنحنى:');
   for (const [k, v] of Object.entries(g.peakRatio)) {
     const at = g.peakAt[k];

@@ -39,6 +39,7 @@ export interface Dictionary {
   ex_unavailable: string; ex_error: string; font_error: string; reveal_folder: string; ex_results: string;
   exportN: (n: number) => string;
   ex_fps: string; ex_mp4_no_alpha: string;
+  ex_shutter: string; ex_shutter_off: string; ex_shutter_cost: string; ex_shutter_preview: string;
   h_greet: string; h_prompt_ph: string; start: string; new_project: string; custom_size: string;
   templates: string; recent: string;
   t1: string; t2: string; t3: string; t4: string; t5: string; t6: string;
@@ -205,6 +206,8 @@ export const AR: Dictionary = {
   font_error: 'فشل التحميل', reveal_folder: '~/Mazij/Exports',
   exportN: (n) => (n === 0 ? 'اختر مقاساً' : n === 1 ? 'تصدير ملف واحد' : n === 2 ? 'تصدير ملفين' : `تصدير ${n} ملفات`),
   ex_fps: 'معدّل الإطارات', ex_mp4_no_alpha: 'MP4 لا يدعم خلفية شفافة — استخدم GIF',
+  ex_shutter: 'ضباب الحركة', ex_shutter_off: 'بلا', ex_shutter_cost: 'زمن التصدير يطول نحو نصف هذا العدد',
+  ex_shutter_preview: 'المعاينة لا تُظهر الضباب بعد — يظهر في الملف المصدَّر وحده',
   h_greet: 'وش نصمم اليوم؟', h_prompt_ph: 'اوصف البوست وخلّ مِزو يبدأ لك…', start: 'ابدأ',
   new_project: 'مشروع جديد', custom_size: 'مقاس مخصص', templates: 'قوالب جاهزة', recent: 'الأخيرة',
   t1: 'عرض', t2: 'اقتباس', t3: 'وظيفة', t4: 'منتج', t5: 'ريلز', t6: 'تغريدة',
@@ -441,6 +444,8 @@ export const EN: Dictionary = {
   font_error: 'Failed to load', reveal_folder: '~/Mazij/Exports',
   exportN: (n) => (n === 0 ? 'Pick a size' : `Export ${n} file${n === 1 ? '' : 's'}`),
   ex_fps: 'Frame rate', ex_mp4_no_alpha: 'MP4 has no transparency — use GIF instead',
+  ex_shutter: 'Motion blur', ex_shutter_off: 'Off', ex_shutter_cost: 'Export takes roughly half this many times longer',
+  ex_shutter_preview: 'The preview does not show blur yet — only the exported file does',
   h_greet: 'What are we designing today?', h_prompt_ph: 'Describe your post and let Mizo start…',
   start: 'Start', new_project: 'New project', custom_size: 'Custom size', templates: 'Templates',
   recent: 'Recent',
