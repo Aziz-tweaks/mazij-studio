@@ -214,8 +214,14 @@ function expandGroups(ids: ElementId[], elements: DocElement[]): ElementId[] {
 /** Per-property sane range for a track keyframe's stored delta/multiplier (see
  * `ElementAnim.tracks` in `elements.ts` for what each property's value means):
  * opacity is a 0..1 multiplier, x/y are offsets as a fraction of artboard width
- * (±2 lets an element swing fully off-canvas and back for a slide-in/out), scale is
- * a non-negative multiplier, rotation is an unrestricted delta in degrees. */
+ * (±2 lets an element swing fully off-canvas and back for a slide-in/out), scale and
+ * its two per-axis companions are non-negative multipliers, rotation is an
+ * unrestricted delta in degrees.
+ *
+ * و`scaleX`/`scaleY` يَلزمان حدَّ `scale` نفسَه لأنهما الكمّيةُ نفسُها على محورٍ
+ * واحد: معاملٌ غيرُ سالبٍ بلا سقف. والسالبُ ليس «قلبًا للمقياس» بل **انعكاسًا**،
+ * وللانعكاس بابُه المُعلَن (`flipH`/`flipV`)، فلا يُفتَح له بابٌ ثانٍ صامتٌ من
+ * مِمسحةِ مفتاح. */
 function clampAnimPropertyValue(property: AnimProperty, v: number): number {
   switch (property) {
     case 'opacity':
@@ -224,6 +230,8 @@ function clampAnimPropertyValue(property: AnimProperty, v: number): number {
     case 'y':
       return clamp(v, -2, 2);
     case 'scale':
+    case 'scaleX':
+    case 'scaleY':
       return Math.max(0, v);
     case 'rotation':
       return v;

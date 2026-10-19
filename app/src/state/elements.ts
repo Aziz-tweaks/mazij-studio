@@ -35,14 +35,51 @@ export interface AnimKeyframe {
   v: number;
 }
 
-export type AnimProperty = 'opacity' | 'x' | 'y' | 'scale' | 'rotation';
+/** `scaleX`/`scaleY` are **per-axis multipliers that compose with the uniform
+ * `scale`** — not absolute width/height. The effective scale is `scale × scaleX`
+ * by `scale × scaleY`; see `effectiveScale` in `src/lib/animTimeline.ts`, which is
+ * the one place that formula lives and the one both renderers read.
+ *
+ * ولِمَ معاملانِ لا عرضٌ وارتفاعٌ مطلقان. ثلاثُ قراءاتٍ تحسمها، لا تفضيلُ ذوق:
+ *
+ * ١. **`ANIM_PROPERTY_DEFAULT` أدناه `Record<AnimProperty, number>`** — رقمٌ
+ *    محايدٌ **واحدٌ لكلّ خصيصة، لا يعرف العنصر**. وللمعامل هذا الرقمُ موجودٌ وهو
+ *    `1`. وأمّا «العرض» المطلق فمحايدُه `el.geo.w`: قيمةٌ لكلّ عنصرٍ قيمة، فلا
+ *    تدخل هذا الجدول أصلًا. وإدخالُها يَفرض على `resolveAnimAt` أن تأخذ العنصرَ
+ *    كلَّه لا `anim` وحده، فيتغيّر توقيعُها ومعه مسارُ التصدير
+ *    (`exportArtboard.ts:318`) و`resolvePropertyAt` و`keyframeAt`.
+ *
+ * ٢. **`PropertyKeyframe.value` رقمٌ واحد** (أدناه). فخصيصةٌ ذات مركّبَين لا
+ *    عبارةَ لها في هذا التمثيل إلّا **مسارَين** — وهو ما بُني. ولا يُغيَّر
+ *    `PropertyKeyframe` لأجلها، فهو ما تَقرؤه الماساتُ والمنبثقةُ والسحبُ
+ *    والترحيلُ كلُّها.
+ *
+ * ٣. **قياسُ النصّ مشتقٌّ من `geo.w`/`geo.h`**: لفُّ الأسطر
+ *    (`exportArtboard.ts:566`، `wrapLines(ctx, el.text, bw)` حيث
+ *    `bw = el.geo.w * w`)، والتسطيرُ بالكشيدة (`:567`)، والمحاذاةُ العموديّة من
+ *    `bh` (`:568-575`)، و`el.geo.w` في قائمة تبعيّات أثر `JustifiedTextView`
+ *    (`ElementView.tsx:135`). فعرضٌ متحرّكٌ يُعيد **لفَّ النصّ وتشكيلَه كلَّ
+ *    إطار** — فعلٌ آخرُ غيرُ «اضغط الصندوقَ عرضًا»، وأثقلُ منه، ولم يُطلَب.
+ *
+ * وهو كذلك الفصلُ الذي يُجريه محرّك حركةٍ مفتوح نفسُه: `transform/scale` مجموعةٌ ثابتةٌ
+ * (`GroupKind::Plain`) تُطبَّق **بعد كومة التأثيرات** كلِّها، ومنفصلةٌ في صيغة
+ * المسار عن `contents/rect#2/size` (`docs/re-effectcraft-source.md:196`
+ * و`:2212-2231`، MIT OR Apache-2.0). المقياسُ تحويلٌ، والمقاسُ محتوًى، وهما
+ * مجموعتان لا واحدة. **الفكرةُ مأخوذةٌ والكودُ لنا: لا سطرَ منقول.** */
+export type AnimProperty = 'opacity' | 'x' | 'y' | 'scale' | 'scaleX' | 'scaleY' | 'rotation';
 
-export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 'rotation'];
+export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation'];
 
 /** Value each property renders as when it has no track at all (untouched by any
- * animation): full opacity, no positional offset, no extra scale, no extra
- * rotation — i.e. exactly what a static (non-animated) element already looks like. */
-export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1, x: 0, y: 0, scale: 1, rotation: 0 };
+ * animation): full opacity, no positional offset, no extra scale (uniform or
+ * per-axis), no extra rotation — i.e. exactly what a static (non-animated) element
+ * already looks like.
+ *
+ * **و`1` للمحورَين ليست قيمةً معقولةً بل متطابقةٌ جبريّة**: بها يصير
+ * `scale × 1 = scale` بتّةً ببتّة في حساب IEEE 754 — الضربُ في الواحد تامٌّ — فمستندٌ
+ * لا يحمل المسارَين يُنتج المقياسَ المنتظمَ **نفسَه** لا مكافئًا له. وعلى هذا يقوم
+ * عقدُ «النصُّ المُنبعِث بايتًا ببايت» المكتوب عند `entranceStyleAt`. */
+export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0 };
 
 /** One keyframe on one property's independent track.
  *
@@ -185,11 +222,23 @@ export function cascadeEasingToTracks(tracks: PropertyTracks, easing: EasingId, 
   return next;
 }
 
+/** المساراتُ التي **لا يَزرعها أيُّ نمطٍ جاهز**، فمجرّدُ وجودِ مسارٍ منها يعني أنّ
+ * المصمّم فتحه بيده. مُشتقَّةٌ من `tracksFromPreset` أعلاه لا مكتوبةٌ بيدها: هي كلُّ
+ * خصيصةٍ لا تَظهر في أيّ فرعٍ من فروعها.
+ *
+ * **وهذا السطرُ هو ما يَمنع إبادةً صامتة.** `scaleX`/`scaleY` لا يَزرعهما نمطٌ
+ * أصلًا، فمسارٌ عليهما **بمفتاحَين** كان سيُقرأ «نمطًا جاهزًا» بقاعدة
+ * `track.length > 2` وحدها، فتُبيده `withPreset` عند أوّل ضغطةٍ على «تلاشٍ» بلا
+ * تحذيرٍ ولا تراجعٍ معلَن — وهو العطلُ الموصوفُ أسفلَ هذا التعليق بعينه، مُعادًا
+ * على خصيصةٍ جديدة. */
+const PRESET_FREE_PROPERTIES = new Set<AnimProperty>(['x', 'rotation', 'scaleX', 'scaleY']);
+
 /** أهذه المساراتُ ما زالت ما يُنتجه نمطٌ جاهزٌ وحده، أم بُنيت باليد فوقه؟
  *
- * `x` و`rotation` لا يَظهران في مسارات أيّ نمطٍ أصلًا (انظر `tracksFromPreset`
- * أعلاه) — فمجرّدُ وجودهما يعني أنّ المصمّم فتح مسارًا بيده. و`opacity`/`y`/`scale`
- * يَزرع النمطُ فيها مفتاحَين بالضبط، فأكثرُ من اثنين على أيّ مسارٍ هو الدليل.
+ * `x` و`rotation` و`scaleX` و`scaleY` لا تَظهر في مسارات أيّ نمطٍ أصلًا (انظر
+ * `tracksFromPreset` أعلاه و`PRESET_FREE_PROPERTIES`) — فمجرّدُ وجودها يعني أنّ
+ * المصمّم فتح مسارًا بيده. و`opacity`/`y`/`scale` يَزرع النمطُ فيها مفتاحَين
+ * بالضبط، فأكثرُ من اثنين على أيّ مسارٍ منها هو الدليل.
  *
  * وكانت هذه الدالّةُ تسكن `Timeline.tsx` ومُستهلِكها **واحدٌ: تلوينُ أيقونةِ ساعة**.
  * نُقِلت هنا لأنّ لها الآن مستهلِكًا ثانيًا يَحمي المستند: حرسُ `withPreset` —
@@ -197,7 +246,7 @@ export function cascadeEasingToTracks(tracks: PropertyTracks, easing: EasingId, 
 export function hasCustomAnimation(tracks: PropertyTracks): boolean {
   return Object.entries(tracks).some(([prop, track]) => {
     if (!track || !track.length) return false;
-    if (prop === 'x' || prop === 'rotation') return true;
+    if (PRESET_FREE_PROPERTIES.has(prop as AnimProperty)) return true;
     return track.length > 2;
   });
 }

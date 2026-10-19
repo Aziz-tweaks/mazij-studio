@@ -7,7 +7,7 @@ import { computeImageCropLayout } from './imageCrop';
 import { maskLocalPolygonPoints, type PxBox } from './geometry';
 import { commandsToSvgPath, drawPathCommandsToCtx, pathElementCommands } from './pathGeometry';
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from './variableStroke';
-import { documentDuration, entranceVisualAt } from './animTimeline';
+import { documentDuration, effectiveScale, entranceVisualAt } from './animTimeline';
 import { SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, type StaggerToken, type UnitVisual } from './textStagger';
 import { getLottieExportFrame, resetLottieExportEngine } from './lottieExportEngine';
 import { getVideoExportFrame, resetVideoExportEngine } from './videoExportEngine';
@@ -320,13 +320,22 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     ctx.globalAlpha = ((el.opacity ?? 100) / 100) * visual.opacity;
     ctx.translate(cx, cy);
     ctx.rotate((el.geo.rotation * Math.PI) / 180);
-    // Matches ElementView's CSS `rotate(baseDeg) translate(Xcqw,Ycqw) scale(S) rotate(deg)`
+    // Matches ElementView's CSS `rotate(baseDeg) translate(Xcqw,Ycqw) scale(SX,SY) rotate(deg)`
     // composition order: each per-property offset applies in the already-transformed
     // local frame, pivoting around the box center, same as the DOM's default
     // transform-origin. Both x and y use `w` (not h) for the same reason the old
     // translateYFrac did — mirroring the cqw unit, which is always width-based.
     if (visual.x !== 0 || visual.y !== 0) ctx.translate(visual.x * w, visual.y * w);
-    if (visual.scale !== 1) ctx.scale(visual.scale, visual.scale);
+    // **مقياسٌ لكلّ محور، من `effectiveScale` الواحدة** — ولا تُشتَقّ الصيغةُ هنا
+    // من جديد، فالمعاينةُ والتصديرُ يجب أن يَقولا الجملةَ نفسَها عند اللحظة
+    // نفسِها. والصندوقُ `bw`/`bh` **لا يتغيّر**: المقياسُ مصفوفةٌ تَحمل محتوًى
+    // مُرتَّبًا سلفًا، فلا يُعاد لفُّ نصٍّ ولا تُعاد هندسةُ حدٍّ ولا قناع — وهو
+    // عينُ الفرق الذي رجَّح المعاملَ على العرض المطلق (`state/elements.ts:38`).
+    //
+    // ومتى تساوى المحوران ومحايدُهما `1` صارت هذه المكالمةَ القديمةَ نفسَها
+    // بوسيطَيها نفسِهما: `ctx.scale(visual.scale, visual.scale)`.
+    const { sx, sy } = effectiveScale(visual);
+    if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
     if (visual.rotation !== 0) ctx.rotate((visual.rotation * Math.PI) / 180);
     ctx.translate(-bw / 2, -bh / 2);
 

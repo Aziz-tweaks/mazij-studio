@@ -50,14 +50,20 @@ function layerRowHeight(expanded: boolean): number {
   return CLIP_ROW_H + (expanded ? EXPANDABLE_PROPERTIES.length * PROP_ROW_H : 0);
 }
 
-/** Per-property slider range/unit for the keyframe-value popover: opacity/scale/x/y
- * are shown as percentages (matching how `tracks` stores them — a 0..1 multiplier or
- * a fraction-of-width offset), rotation is shown directly in degrees. */
+/** Per-property slider range/unit for the keyframe-value popover: opacity, the three
+ * scale multipliers and x/y are shown as percentages (matching how `tracks` stores
+ * them — a 0..1 multiplier or a fraction-of-width offset), rotation is shown directly
+ * in degrees.
+ *
+ * و`scaleX`/`scaleY` يأخذان مدى `scale` نفسَه (٠..٣٠٠٪) لأنهما وحدتُه نفسُها —
+ * ومدًى آخرُ على المحورَين كان سيَجعل «١٥٠٪» تعني شيئَين في لوحٍ واحد. */
 function sliderRange(property: AnimProperty): [number, number] {
   switch (property) {
     case 'opacity':
       return [0, 100];
     case 'scale':
+    case 'scaleX':
+    case 'scaleY':
       return [0, 300];
     case 'x':
     case 'y':

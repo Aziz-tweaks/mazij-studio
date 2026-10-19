@@ -140,7 +140,32 @@ export interface AnimVisual {
   x: number;
   y: number;
   scale: number;
+  /** معاملُ المحور الأفقيّ، **يُضرَب في `scale` ولا يَحُلّ محلَّه** — انظر
+   * `effectiveScale` أدناه. ومحايدُه `1`، فعنصرٌ لا مسارَ له لا يَكتسب شيئًا. */
+  scaleX: number;
+  scaleY: number;
   rotation: number;
+}
+
+/** **المقياسُ الفعليُّ على كلّ محور، وهذا هو الموضعُ الوحيد لهذه الصيغة.**
+ *
+ * `sx = scale × scaleX` و`sy = scale × scaleY`. فـ`scale` يبقى ما كان: معاملًا
+ * منتظمًا على المحورَين معًا، يُضبَط من صفّه ومن نمط `pop` كما كان بالحرف؛
+ * والمحوران يُضافان **فوقه** لا بدلًا منه. وهذا هو ما يَجعل «عرضٌ ينقص وارتفاعٌ
+ * يزيد في اللحظة نفسها» قابلًا للتعبير أصلًا — ولم يكن كذلك قبل اليوم.
+ *
+ * **وعقدُ التوافق متطابقةٌ جبريّة لا دعوى سلوك**: محايدُ المحورَين `1`، والضربُ في
+ * الواحد تامٌّ في IEEE 754، فمستندٌ لا يحمل المسارَين يُعطي `sx === sy === scale`
+ * **بتّةً ببتّة** — لا «قريبًا منه». وعليها تَقدر `entranceStyleAt` أدناه على
+ * إنباعث النصِّ القديمِ نفسِه حرفًا حرفًا، وتَقدر `drawElements`
+ * (`exportArtboard.ts`) على إجراء `ctx.scale` المكالمةِ نفسِها بالوسيطَين
+ * نفسِهما. والقياسُ في `qa/independent-wh-anim.spec.mjs` §٤.
+ *
+ * وتُصدَّر لأنّ مُستهلِكَيها اثنان — معاينةُ DOM ومسارُ القُماش — ولا يجوز أن
+ * يَشتقّ أحدُهما الصيغةَ من جديد، لعين السبب الذي من أجله كانت `resolveAnimAt`
+ * واحدةً: إطارُ فيديو عند لحظةٍ يجب أن يُطابق ما يُظهره السحبُ عندها. */
+export function effectiveScale(v: AnimVisual): { sx: number; sy: number } {
+  return { sx: v.scale * v.scaleX, sy: v.scale * v.scaleY };
 }
 
 function sortedTrack(track: PropertyKeyframe[]): PropertyKeyframe[] {
@@ -189,6 +214,11 @@ export function resolveAnimAt(anim: ElementAnim, time: number): AnimVisual {
     x: trackValueAt(anim.tracks.x, m, ANIM_PROPERTY_DEFAULT.x),
     y: trackValueAt(anim.tracks.y, m, ANIM_PROPERTY_DEFAULT.y),
     scale: trackValueAt(anim.tracks.scale, m, ANIM_PROPERTY_DEFAULT.scale),
+    // كلُّ محورٍ يُحَلّ من مساره وحده، فلا يَعرف أحدُهما الآخرَ ولا `scale`.
+    // والتركيبُ يحدث عند الاستهلاك في `effectiveScale`، لا هنا — فتبقى العيّنةُ
+    // المُلتقَطةُ من بناءٍ سابقٍ قابلةً للمقارنة حقلًا بحقل.
+    scaleX: trackValueAt(anim.tracks.scaleX, m, ANIM_PROPERTY_DEFAULT.scaleX),
+    scaleY: trackValueAt(anim.tracks.scaleY, m, ANIM_PROPERTY_DEFAULT.scaleY),
     rotation: trackValueAt(anim.tracks.rotation, m, ANIM_PROPERTY_DEFAULT.rotation),
   };
 }
@@ -383,7 +413,14 @@ export function entranceStyleAt(anim: ElementAnim, time: number): { opacity?: nu
   const v = resolveAnimAt(anim, time);
   const transformParts: string[] = [];
   if (v.x !== 0 || v.y !== 0) transformParts.push(`translate(${(v.x * 100).toFixed(2)}cqw, ${(v.y * 100).toFixed(2)}cqw)`);
-  if (v.scale !== 1) transformParts.push(`scale(${v.scale.toFixed(3)})`);
+  // **مُعامِلٌ واحدٌ متى تساوى المحوران، ومُعامِلان متى اختلفا.** و`scale(S)` و
+  // `scale(S, S)` صورةٌ واحدةٌ ونصّانِ مختلفان — فلو أُنبعِث الثاني دائمًا لصار
+  // **كلُّ** مستندٍ قائمٍ يُنتج `style.transform` غيرَ الذي كان يُنتجه، وصارت
+  // دعوى «لم يتغيّر شيء» غيرَ قابلةٍ للبرهان بالنصّ. والشرطُ هنا يَجعلها قابلةً
+  // له، ويَجعل المستندَ الذي لا يستعمل القدرةَ الجديدة لا يَدفع ثمنَها في
+  // المُخرَج. مقيسٌ على ملفٍّ من بناءِ ما قبل التغيير — `qa/independent-wh-anim.spec.mjs` §٤.
+  const { sx, sy } = effectiveScale(v);
+  if (sx !== 1 || sy !== 1) transformParts.push(sx === sy ? `scale(${sx.toFixed(3)})` : `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`);
   if (v.rotation !== 0) transformParts.push(`rotate(${v.rotation.toFixed(2)}deg)`);
   return { opacity: v.opacity, transform: transformParts.join(' ') || undefined };
 }
