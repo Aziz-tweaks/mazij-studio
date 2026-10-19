@@ -61,7 +61,7 @@ import { parseHex } from './lib/png.mjs';
 // البنودُ تُستورَد ولا تُعاد كتابتُها: المعايرةُ تُثبت صلاحَ **المحكّم** لا صلاحَ
 // نسخةٍ منه. ولو كُتب هنا منطقٌ ثانٍ لصار في المستودع مقياسان، ولصحّ أحدُهما
 // وسقط الآخرُ يومًا بلا أن يُنبّه أحد.
-import { evalTemporalCriterion } from './lib/score-video.mjs';
+import { evalTemporalCriterion, measureAxisSmear } from './lib/score-video.mjs';
 import { GROUND_TRUTH } from './make-video-controls.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -281,8 +281,19 @@ const CLAUSES = [
     t1: 2.6,
     displacementPx: 800,
     tolerancePx: 8,
-    expect: { 'motion-linear': true, 'motion-wrong-way': false },
-    why: 'الإزاحةُ ٨٠٠ بكسلًا **نزولًا** — والمعاكسُ مقدارُه مطابق',
+    // والشواهدُ الثلاثةُ الأخيرةُ هي معايرةُ انزياحِ المسحة، وهي **الدعوى**:
+    // `blur-off` و`blur-on` مسارٌ واحدٌ لا يفصلهما إلّا عددُ العيّنات، فالحكمُ
+    // عليهما يجب أن يكون **واحدًا** — وكان قبل التصحيح مختلفًا (٨٠٠٫٠ و٧٧٥٫٤).
+    // و`blur-wrong-place` يُثبت الجهةَ الثانية: مُضبَّبٌ ومواضعُه خطأٌ بمقدار
+    // الانزياح بعينه، فالمقياسُ الأعمى يقرأ إزاحتَه ٧٩٩٫٤ **ويُجيزه**.
+    expect: {
+      'motion-linear': true,
+      'motion-wrong-way': false,
+      'motion-blur-off': true,
+      'motion-blur-on': true,
+      'motion-blur-wrong-place': false,
+    },
+    why: 'الإزاحةُ ٨٠٠ بكسلًا **نزولًا** — والمعاكسُ مقدارُه مطابق، والمُضبَّبُ إزاحتُه هي هي',
   },
   {
     id: 'dir-no-detour',
@@ -404,8 +415,98 @@ const CONTROLS = [
   'target', 'motion-slam',
   'motion-linear', 'motion-ease-out', 'motion-ease-in-out', 'motion-overshoot',
   'motion-wrong-way', 'motion-detour', 'motion-spike', 'motion-creep', 'motion-drift',
-  'motion-blur-off', 'motion-blur-on',
+  'motion-blur-off', 'motion-blur-on', 'motion-blur-wrong-place',
 ];
+
+// ═════════════════════════════════════════════════════════════════════════════
+// معايرةُ انزياحِ مركزِ الثقل تحت المسحة
+// ═════════════════════════════════════════════════════════════════════════════
+// الصيغةُ المُغلَقةُ **تُقاس هنا ولا تُصدَّق**: `L = s·(N−1)/N` تُقرأ من الإطار،
+// والانزياحُ نصفُها. ويُقرأ مُقدِّران لا واحد — المستعملُ في البند والشاهدُ عليه —
+// لأن الشاهدَ هو الذي يُثبت الصيغةَ، والمستعملَ هو الذي يَصلح لبندٍ. والفرقُ
+// بينهما يُطبَع ولا يُخفى.
+function smearBiasCalibration(open, bg) {
+  const g = GROUND_TRUTH;
+  const bl = g.blur;
+  console.log('\n(هـ) انزياحُ مركزِ الثقل تحت المسحة — الصيغةُ المُغلَقةُ مقيسةً لا مُصدَّقة');
+  console.log(`    المبنيّ: s = ${bl.smearPx.toFixed(3)}px · N = ${bl.samples}`
+    + `  ⇒ L = s·(N−1)/N = ${bl.supportExcessPx.toFixed(3)}px  ⇒ الانزياح = L/2 = ${bl.centroidBiasPx.toFixed(3)}px`);
+  console.log(`    والحدُّ المتّصل s/2 = ${(bl.smearPx / 2).toFixed(3)}px — وهو المحفوظُ في spec.json قبل هذه الجولة،`);
+  console.log(`    أعلى من المبنيّ بـ s/(2N) = ${(bl.smearPx / (2 * bl.samples)).toFixed(3)}px. فالفارقُ حدٌّ مُهمَلٌ لا ضجيج.`);
+
+  // L على الشواهد عند لحظة القياس، بالمُقدِّرَين.
+  console.log('\n    L مقيسةً عند لحظةِ أقصى مسحة (الإطار #30 @1.000ث) — ومنه يُحكَم على المُقدِّر:');
+  console.log('      الشاهد                  │ ميلُ E(θ) │ خطأ٪  │ السَّند−الكتلة │ خطأ٪');
+  for (const name of ['motion-blur-on', 'motion-blur-wrong-place', 'motion-blur-off', 'motion-linear']) {
+    const fsx = open(name);
+    const at = fsx.frameIndexAt(1.0);
+    const m = measureAxisSmear(fsx.full(at.index), REG, bg, 'y');
+    // وشاهدُ «المواضعُ خطأ» أسرعُ (٨٢٥ ÷ ٧٫٥ إطارًا) فمسحتُه أوسع، ومبنيُّه يُحسَب له.
+    const built = name === 'motion-blur-on'
+      ? bl.supportExcessPx
+      : name === 'motion-blur-wrong-place'
+        ? ((g.travelPx + bl.wrongPlacePx) / ((bl.t1 - bl.t0) * g.comp.fps)) * (bl.angle / 360) * (bl.samples - 1) / bl.samples
+        : 0;
+    const e = (v) => (built > 0 ? `${(100 * (v - built) / built).toFixed(2)}٪` : '—');
+    console.log(`      ${name.padEnd(23)} │ ${m.smearPx.toFixed(3).padStart(9)} │ ${e(m.smearPx).padStart(6)}`
+      + ` │ ${m.supportExcess.toFixed(3).padStart(13)} │ ${e(m.supportExcess)}`
+      + (built > 0 ? `   (المبنيّ ${built.toFixed(3)})` : ''));
+  }
+  // وسببُ الرفض يُقاس هنا لا يُنقَل: أقصى ما يقرؤه كلُّ مُقدِّرٍ على شاهدٍ **بلا
+  // ضبابٍ أصلًا** عبر نافذةِ حركته. وكلُّ ما يقرؤه هناك ضجيجٌ بحكم البناء، ونصفُه
+  // يُحقَن في الموضع.
+  const sweep = (name) => {
+    const fsx = open(name);
+    const s = frameSeries(fsx, 1.0, 2.6, (i) => {
+      const m = measureAxisSmear(fsx.full(i), REG, bg, 'y');
+      return m ? m.smearPx : null;
+    });
+    const sup = s.frames.map((i) => measureAxisSmear(fsx.full(i), REG, bg, 'y').supportExcess);
+    return { slopeMax: Math.max(...s.raw), supMax: Math.max(...sup) };
+  };
+  console.log('\n    وأقصى ما يقرؤه كلُّ مُقدِّرٍ على شاهدٍ **بلا ضباب** عبر نافذةِ حركته — وكلُّه ضجيج:');
+  console.log('      الشاهد            │ أقصى ميلٍ │ أقصى سَندٍ−كتلة');
+  for (const name of ['motion-linear', 'motion-overshoot']) {
+    const w = sweep(name);
+    console.log(`      ${name.padEnd(17)} │ ${w.slopeMax.toFixed(3).padStart(9)} │ ${w.supMax.toFixed(3).padStart(14)}`);
+  }
+  console.log('    ⇐ `السَّند−الكتلة` أدقُّ بمئة ضعفٍ في تقدير L **وهو مرفوض**: السَّندُ طرفٌ لا');
+  console.log('      متوسّط، فيَلتقط رنينَ المرمِّز حول حافّةٍ سريعةٍ حادّة — فيقرأ على شاهدٍ لا');
+  console.log('      ضبابَ فيه أضعافَ ما يقرؤه الميل، ونصفُ ذلك يُحقَن في الموضع. وقيس الأثر:');
+  console.log('      هبط تجاوزُ `motion-overshoot` من ٤٫٠٠ إلى ٢٫٣٠ — ÷١٫٣ تحت تسامحه ١٫٥ بدل ÷٣٠.');
+  console.log('      ولم يُصلحه وسيطٌ ثلاثيٌّ على المُدرَّج: الرنينُ عريضٌ لا منفرد.');
+  console.log('      والمستعملُ هو الميلُ: ‎+٣٫٧٪ في L، وأرضيّتُه على الحادّ لا تُرى في بند.');
+
+  // أرضيّةٌ → عتبة → إشارة، على مقياسِ الانزياح نفسِه.
+  const dirDown = CLAUSES.find((c) => c.id === 'dir-down');
+  console.log('\n    أرضيّةٌ → عتبةٌ → إشارة، على الإزاحة المقيسة في نافذة ١٫٠→٢٫٦ث:');
+  console.log('      الشاهد                  │ خامًّا     │ مُصحَّحةً   │ الباقي  │ الحكم');
+  const rows = [];
+  for (const name of ['motion-blur-off', 'motion-blur-on', 'motion-blur-wrong-place', 'motion-linear']) {
+    const r = evalTemporalCriterion(dirDown, open(name), bg);
+    const mRaw = r.got.match(/من ([+−][\d.]+)px/);
+    const mNew = r.got.match(/^إزاحة ([+−][\d.]+)px/);
+    const toNum = (t) => (t ? Number(t.replace('−', '-').replace('+', '')) : null);
+    const corrected = toNum(mNew && mNew[1]);
+    const raw = mRaw ? toNum(mRaw[1]) : corrected;
+    rows.push({ name, raw, corrected, ok: r.ok });
+    console.log(`      ${name.padEnd(23)} │ ${raw.toFixed(2).padStart(9)} │ ${corrected.toFixed(2).padStart(9)}`
+      + ` │ ${(corrected - 800).toFixed(2).padStart(7)} │ ${r.ok ? '✅ يمرّ' : '❌ يسقط'}`);
+  }
+  const off = rows.find((r) => r.name === 'motion-blur-off');
+  const on = rows.find((r) => r.name === 'motion-blur-on');
+  const bad = rows.find((r) => r.name === 'motion-blur-wrong-place');
+  console.log(`    ⇐ **الدعوى**: الشاهدان لا يفصلهما إلّا عددُ العيّنات، والحكمُ عليهما واحد.`);
+  console.log(`      وكان الفرقُ بينهما ${Math.abs(off.raw - on.raw).toFixed(2)}px — أي ×${(Math.abs(off.raw - on.raw) / dirDown.tolerancePx).toFixed(1)} فوق التسامح ±${dirDown.tolerancePx} —`);
+  console.log(`      وصار ${Math.abs(off.corrected - on.corrected).toFixed(2)}px، أي ÷${(dirDown.tolerancePx / Math.abs(off.corrected - on.corrected)).toFixed(1)} تحته.`);
+  console.log(`      والباقي بعد التصحيح على المُضبَّب ${(on.corrected - 800).toFixed(2)}px — وهو غموضُ منحدرِ الحافّة`);
+  console.log('      نفسِه: المقياسُ لا يُفرّق مسحةً من جانبٍ واحدٍ عن تنعيمٍ متناظرٍ بالعرض نفسِه،');
+  console.log(`      فيُصحّح نصفَ عرضِ تنعيمِ العنصر زيادةً (${measureAxisSmear(open('motion-blur-off').full(open('motion-blur-off').frameIndexAt(1.0).index), REG, bg, 'y').smearPx.toFixed(2)}px ÷ ٢). وهو ثابتٌ فيَذهب في الفرق.`);
+  console.log(`    ⇐ **والحرسُ المعاكس**: \`motion-blur-wrong-place\` خطؤه ${GROUND_TRUTH.blur.wrongPlacePx.toFixed(2)}px = الانزياحُ بعينه،`);
+  console.log(`      فقرأه الخامُّ ${bad.raw.toFixed(2)}px — **داخلَ** ±${dirDown.tolerancePx} فأجازه — ويقرأه المُصحَّحُ ${bad.corrected.toFixed(2)}px،`);
+  console.log(`      أي ×${(Math.abs(bad.corrected - 800) / dirDown.tolerancePx).toFixed(1)} فوق التسامح. فالانزياحُ عدسةٌ تُسقط الصحيحَ **وتُجيز الخطأ**، والتصحيحُ`);
+  console.log('      يُصلح الجهتين. وبندٌ كَفَّ عن السقوط لم يُصلَح بل عُطِّل، وهذا السطرُ هو الذي يَمنعه.');
+}
 
 /** الشاهدُ المقابل: `staticAfter` على شواهد الانجراف.
  *
@@ -456,7 +557,8 @@ function runControls() {
   // ── المقيسُ الخام، قبل أيّ حكم ───────────────────────────────────────────
   // يُطبَع أوّلًا لأن العتبةَ تُشتَقّ منه: من قرأ العتبةَ قبل المقيس قرأ رقمًا
   // بلا مصدر.
-  console.log('\n(أ) المقيسُ الخام على الشواهد — ومنه تُشتَقّ كلُّ عتبةٍ أدناه');
+  console.log('\n(أ) المقيسُ الخام على الشواهد — **قبل تصحيح انزياحِ المسحة** — ومنه تُشتَقّ كلُّ عتبةٍ أدناه');
+  console.log('    (ومُضبَّبُ هذا الجدولِ يُقرأ مُزاحًا بحكم البناء: انظر القسمَ (هـ) أدناه)');
   console.log('    الشاهد             │ إزاحة   │ تجاوز  │ رجوع   │ نسبة  │ خامّة │ ذروةٌ عند');
   const raw = {};
   for (const name of CONTROLS.slice(2)) {
@@ -483,7 +585,7 @@ function runControls() {
     const at = (v.map(Math.abs).indexOf(peak) + 1) / (p.length - 1);
     raw[name] = { travel, over, back, ratio: peak / mean, ratioRaw: peakRaw / mean, at };
     console.log(
-      `    ${name.padEnd(18)} │ ${travel.toFixed(1).padStart(7)} │ ${over.toFixed(2).padStart(6)}`
+      `    ${name.padEnd(23)} │ ${travel.toFixed(1).padStart(7)} │ ${over.toFixed(2).padStart(6)}`
       + ` │ ${back.toFixed(2).padStart(6)} │ ${(peak / mean).toFixed(3)} │ ${(peakRaw / mean).toFixed(3)} │ ${at.toFixed(3)}`,
     );
   }
@@ -568,6 +670,7 @@ function runControls() {
   }
 
   crossCheckHold(open, bg);
+  smearBiasCalibration(open, bg);
 
   for (const s of sets.values()) s.dispose();
   console.log(`\n${'='.repeat(78)}`);
