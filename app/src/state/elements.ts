@@ -65,10 +65,15 @@ export interface AnimKeyframe {
  * (`GroupKind::Plain`) تُطبَّق **بعد كومة التأثيرات** كلِّها، ومنفصلةٌ في صيغة
  * المسار عن `contents/rect#2/size` (`docs/re-effectcraft-source.md:196`
  * و`:2212-2231`، MIT OR Apache-2.0). المقياسُ تحويلٌ، والمقاسُ محتوًى، وهما
- * مجموعتان لا واحدة. **الفكرةُ مأخوذةٌ والكودُ لنا: لا سطرَ منقول.** */
-export type AnimProperty = 'opacity' | 'x' | 'y' | 'scale' | 'scaleX' | 'scaleY' | 'rotation';
+ * مجموعتان لا واحدة. **الفكرةُ مأخوذةٌ والكودُ لنا: لا سطرَ منقول.**
+ *
+ * و`blur` الخصيصةُ الثامنة، وشكلُها **فرقٌ يُجمَع** إلى `ElementBase.blur`
+ * الساكنة لا معاملٌ يُضرَب — لأنّ محايدَ الضبابيّة `0` لا `1`، فالجمعُ هو الذي
+ * يَجعل غيابَ المسار محايدًا. ووحدتُها كسرٌ من عرض اللوح كـ`x`/`y`. والصيغةُ
+ * الواحدةُ في `effectiveBlur` (`src/lib/animTimeline.ts`). */
+export type AnimProperty = 'opacity' | 'x' | 'y' | 'scale' | 'scaleX' | 'scaleY' | 'rotation' | 'blur';
 
-export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation'];
+export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation', 'blur'];
 
 /** Value each property renders as when it has no track at all (untouched by any
  * animation): full opacity, no positional offset, no extra scale (uniform or
@@ -78,8 +83,12 @@ export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 's
  * **و`1` للمحورَين ليست قيمةً معقولةً بل متطابقةٌ جبريّة**: بها يصير
  * `scale × 1 = scale` بتّةً ببتّة في حساب IEEE 754 — الضربُ في الواحد تامٌّ — فمستندٌ
  * لا يحمل المسارَين يُنتج المقياسَ المنتظمَ **نفسَه** لا مكافئًا له. وعلى هذا يقوم
- * عقدُ «النصُّ المُنبعِث بايتًا ببايت» المكتوب عند `entranceStyleAt`. */
-export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0 };
+ * عقدُ «النصُّ المُنبعِث بايتًا ببايت» المكتوب عند `entranceStyleAt`.
+ *
+ * و**محايدُ `blur` صفرٌ لأنها فرقٌ يُجمَع**، والجمعُ لا الضرب: `س + 0 = س` تامٌّ في
+ * IEEE 754 كما `س × 1 = س`، فمستندٌ لا يحمل مسارَ الضبابيّة يُعطي الضبابيّةَ
+ * الساكنةَ **نفسَها** لا مكافئًا لها. والمتطابقةُ هي الحجّةُ، لا «قيمةٌ معقولة». */
+export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, blur: 0 };
 
 /** One keyframe on one property's independent track.
  *
@@ -231,7 +240,7 @@ export function cascadeEasingToTracks(tracks: PropertyTracks, easing: EasingId, 
  * `track.length > 2` وحدها، فتُبيده `withPreset` عند أوّل ضغطةٍ على «تلاشٍ» بلا
  * تحذيرٍ ولا تراجعٍ معلَن — وهو العطلُ الموصوفُ أسفلَ هذا التعليق بعينه، مُعادًا
  * على خصيصةٍ جديدة. */
-const PRESET_FREE_PROPERTIES = new Set<AnimProperty>(['x', 'rotation', 'scaleX', 'scaleY']);
+const PRESET_FREE_PROPERTIES = new Set<AnimProperty>(['x', 'rotation', 'scaleX', 'scaleY', 'blur']);
 
 /** أهذه المساراتُ ما زالت ما يُنتجه نمطٌ جاهزٌ وحده، أم بُنيت باليد فوقه؟
  *
@@ -426,6 +435,28 @@ interface ElementBase {
    * every element built before this roadmap item (and on any literal across the
    * codebase that doesn't set it) — see `AppearanceStack`'s own doc comment above. */
   appearance?: AppearanceStack;
+  /** **ضبابيّةُ العنصر نفسِه** — نصفُ قطرِ تمويهٍ جاوسيٍّ يُطبَّق على العنصر
+   * **مُركَّبًا** (تعبئتُه وحدُّه وظلُّه ومحتواه معًا)، فيَلين العنصرُ كلُّه.
+   *
+   * **وهي ليست `AppearanceShadowLayer.blur`، والفرقُ جوهريٌّ لا لفظيّ.** تلك نصفُ
+   * قطرِ **هالةِ ظلٍّ** تُرسَم خلف العنصر ثم **تُغطّيها التعبئةُ الحادّةُ نفسُها**
+   * بعدها بسطرَين (`paintOuterShadowsCanvas` ثم `paintFillsCanvas` في
+   * `src/lib/appearance.ts`)، فلا يَلين من العنصر شيءٌ قطّ — إنما يَنزّ شيءٌ ناعمٌ
+   * من تحت حدِّه الحادّ. وهذه تُضبّب العنصرَ ذاته.
+   *
+   * **والوحدةُ كسرٌ من عرض اللوح لا بكسلًا، وهو اختيارٌ حَسَمه الكود لا الذوق**:
+   * `magicResizeElements` لا تَكتب إلّا `geo` و`fontSize` وتَنسخ ما بقي بـ`...el`
+   * (`src/lib/magicResize.ts:148-160`)، فكسرٌ بلا بُعدٍ صحيحٌ عند كلّ مقاسٍ **بحكم
+   * البناء**؛ وقيمةٌ بالبكسل كانت ستَحتاج قاعدةَ تحجيمٍ خاصّةً بها، أو تَفعل الخطأَ
+   * في صمت. وهي حجّةُ `widthProfile` و`scaleX`/`scaleY` نفسُها.
+   *
+   * وعليها يُجمَع مسارُ `blur` المتحرّك إن وُجد — الصيغةُ في `effectiveBlur`
+   * (`src/lib/animTimeline.ts`)، وهي الموضعُ الوحيدُ لها والذي تَقرؤه الرسّامات.
+   *
+   * اختياريّة، فغيابُها (أو `0`) = العنصرُ حادٌّ بالضبط كما كان قبل هذا البند، بلا
+   * أيّ ترحيلٍ يُجرى على بايتٍ قائم — نفسُ عقد «ترحيل بلا فقد» الذي حمله
+   * `appearance` و`groupId` و`widthProfile`. */
+  blur?: number;
 }
 
 export interface TextElement extends ElementBase {

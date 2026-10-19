@@ -861,8 +861,12 @@ export function Stage() {
   // Every element carries its own real animation clip (start/duration/keyframes/
   // easing) edited in the pro-mode timeline — entrance styling is just that clip's
   // progress at the current playhead time, mapped through its visual preset.
-  const entranceByTool: Record<string, { opacity?: number; transform?: string }> = {};
-  for (const el of state.elements) entranceByTool[el.id] = entranceStyleAt(el.anim, t);
+  //
+  // والضبابيّةُ الساكنةُ `el.blur` تُمرَّر معها لأنها الطرفُ الآخرُ من صيغةٍ واحدة
+  // (`effectiveBlur` في `animTimeline.ts`): العنصرُ يَحمل نصفَ القطر الأساس،
+  // والمسارُ يَحمل فرقَه عند هذه اللحظة، ولا يجوز أن يَجمعهما أحدٌ غيرُ ذلك الموضع.
+  const entranceByTool: Record<string, { opacity?: number; transform?: string; filter?: string }> = {};
+  for (const el of state.elements) entranceByTool[el.id] = entranceStyleAt(el.anim, t, el.blur ?? 0);
 
   const hintKey = HINT_KEYS[state.tool];
   const selected = state.selectedIds;
@@ -969,6 +973,7 @@ export function Stage() {
             }
             entranceOpacity={entranceByTool[el.id]?.opacity}
             entranceTransform={entranceByTool[el.id]?.transform}
+            entranceFilter={entranceByTool[el.id]?.filter}
             time={t}
             onPointerDown={onElementPointerDown}
             onDoubleClick={onDoubleClickElement}

@@ -178,6 +178,10 @@ export interface ElementViewProps {
   lang: Lang;
   entranceOpacity?: number;
   entranceTransform?: string;
+  /** `filter: blur(Ncqw)` من `entranceStyleAt`، أو `undefined` متى كانت الضبابيّةُ
+   * الفعليّةُ صفرًا — وغيابُه هو ما يَجعل كلَّ مستندٍ لا يَستعمل الضبابيّة يُنتج
+   * كائنَ النمطِ نفسَه الذي كان يُنتجه. */
+  entranceFilter?: string;
   /** Current timeline time (seconds) — needed to resolve the text-stagger layer's
    * per-unit reveal progress (see `renderStaggeredText` above); unused by any other
    * element kind. */
@@ -189,7 +193,7 @@ export interface ElementViewProps {
   editRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function ElementView({ el, pal, selected, editing, croppingActive, size, scale, maskShape, pathShape, lang, entranceOpacity, entranceTransform, time, onPointerDown, onDoubleClick, onTextBlur, onTextKeyDown, editRef }: ElementViewProps) {
+export function ElementView({ el, pal, selected, editing, croppingActive, size, scale, maskShape, pathShape, lang, entranceOpacity, entranceTransform, entranceFilter, time, onPointerDown, onDoubleClick, onTextBlur, onTextKeyDown, editRef }: ElementViewProps) {
   if (!el.visible) return null;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
@@ -218,7 +222,16 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
     height: `${el.geo.h * 100}%`,
     transform: `rotate(${el.geo.rotation}deg) ${entranceTransform ?? ''}`.trim(),
     opacity: ((el.opacity ?? 100) / 100) * (entranceOpacity ?? 1),
-    outline: selected ? selOutline : 'none',
+    // ضبابيّةُ العنصر نفسِه، مُركَّبةً: CSS `filter` يُطبَّق على ما رسمه العنصرُ
+    // وأبناؤه **كلَّه معًا** ثم يَمطّه `transform` — وهو عينُ المعنى المطلوب
+    // («العنصرُ يَلين»)، لا هالةَ ظلٍّ تَنزّ من تحت تعبئةٍ حادّة.
+    filter: entranceFilter,
+    // **ولِمَ يُرفَع خطُّ التحديد متى كان العنصرُ مُضبَّبًا.** `outline` جزءٌ من
+    // رسمِ العنصر، فـ`filter` يُضبّبه هو أيضًا — فيصير خطُّ التحديد نفسُه ضبابيًّا
+    // ويَكذب على المصمّم عن حدود ما حدّده. والمَقابضُ (`Handles`) عقدةٌ شقيقةٌ على
+    // مستوى اللوح لا ابنةٌ لهذا العنصر، فلا يَمسّها الفلتر وتبقى هي دليلَ التحديد
+    // حادًّا. وهذا نقصٌ مُعلَنٌ لا صامت: عنصرٌ مُضبَّبٌ يُعرَف تحديدُه من مقابضه.
+    outline: selected && !entranceFilter ? selOutline : 'none',
     outlineOffset: 3 * px,
     cursor: el.locked ? 'default' : 'move',
     touchAction: 'none',

@@ -7,7 +7,7 @@ import { computeImageCropLayout } from './imageCrop';
 import { maskLocalPolygonPoints, type PxBox } from './geometry';
 import { commandsToSvgPath, drawPathCommandsToCtx, pathElementCommands } from './pathGeometry';
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from './variableStroke';
-import { documentDuration, effectiveScale, entranceVisualAt } from './animTimeline';
+import { canvasBlurRadiusPx, documentDuration, effectiveScale, entranceVisualAt } from './animTimeline';
 import { SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, type StaggerToken, type UnitVisual } from './textStagger';
 import { getLottieExportFrame, resetLottieExportEngine } from './lottieExportEngine';
 import { getVideoExportFrame, resetVideoExportEngine } from './videoExportEngine';
@@ -318,6 +318,22 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     const visual = entranceVisualAt(el.anim, time);
     ctx.save();
     ctx.globalAlpha = ((el.opacity ?? 100) / 100) * visual.opacity;
+    // **ضبابيّةُ العنصر، من `canvasBlurRadiusPx` الواحدة.** تُضبَط هنا — بعد
+    // `save()` وقبل أيّ رسم — فتَسري على كلّ عمليّات الرسم في هذا العنصر، ويُعيدها
+    // `restore()` أدناه إلى `'none'` بحكم مواصفة القُماش (مقيسٌ: `ctx.filter` بعد
+    // `restore()` يُقرأ `'none'`)، فلا تَنزّ إلى العنصر الذي يليه.
+    //
+    // ولا تَتأثّر بمصفوفة التحويل إطلاقًا — وهذا مقيسٌ لا مُفترَض، ولذلك يَحمل
+    // `canvasBlurRadiusPx` تعويضَ المقياس بنفسه. انظر تعليقَها في
+    // `animTimeline.ts` للأرقام.
+    //
+    // **وقيدٌ مُعلَن**: `ctx.filter` تُضبّب **كلَّ عمليّةِ رسمٍ على حدتها** لا
+    // المُركَّبَ النهائيّ، بخلاف CSS `filter` الذي يُضبّب المُركَّب. فعنصرٌ بتعبئةٍ
+    // واحدةٍ (حالةُ البقعة الناعمة، وهي المطلوبة) متطابقٌ تمامًا؛ وعنصرٌ بطبقاتٍ
+    // متعدّدةٍ تُضبَّب طبقاتُه فُرادى ثم تُركَّب، والفرقُ مقيسٌ ومُعلَنٌ رقمًا في
+    // `qa/shape-blur.spec.mjs` §٥ لا مُغطًّى.
+    const blurPx = canvasBlurRadiusPx(el.blur ?? 0, visual, w);
+    if (blurPx > 0) ctx.filter = `blur(${blurPx.toFixed(3)}px)`;
     ctx.translate(cx, cy);
     ctx.rotate((el.geo.rotation * Math.PI) / 180);
     // Matches ElementView's CSS `rotate(baseDeg) translate(Xcqw,Ycqw) scale(SX,SY) rotate(deg)`
@@ -751,9 +767,23 @@ function svgGradientDef(grad: { angle: number; from: string; to: string }, id: s
  * PNG/MP4/GIF path both honor it exactly via a real inset/outset silhouette.
  * `kind:'inner'` shadows are also SVG-export-only unsupported (documented
  * alongside `spread`) — returns `''` (no filter) if `shadows` has no outer layer. */
-function svgOuterShadowFilter(shadows: ResolvedShadowPaint[], id: string): string {
+/** و**ضبابيّةُ العنصر تَدخل هذا المُنشِئَ نفسَه ولا تَفتح `<filter>` ثانيًا** —
+ * لأنّ `filter` خصيصةٌ واحدةٌ على `<g>` الواحد: ثانيةٌ تَطرد الأولى صامتةً. فالبناءُ
+ * واحدٌ: ظلالٌ خارجيّةٌ (إن وُجدت) تُدمَج خلف `SourceGraphic`، ثم يُضبَّب
+ * **المُركَّبُ كلُّه** بـ`feGaussianBlur` واحدةٍ في النهاية — وهو عينُ ترتيب CSS
+ * `filter`، لا ترتيبُ `ctx.filter` الذي يُضبّب كلَّ عمليّةٍ على حدتها.
+ *
+ * و`stdDeviation` تأخذ نصفَ القطر **كما هو**: CSS `blur(Npx)` مُعرَّفٌ انحرافًا
+ * معياريًّا `N`، بخلاف `box-shadow` الذي نصفُ قطره ضِعفُ الانحراف — ولذلك يَقسم
+ * الظلُّ أدناه على اثنين وهذه لا تَقسم.
+ *
+ * **ومنطقةُ الفلتر تُوسَّع بالحساب لا بالتمنّي**: تمويهٌ جاوسيٌّ يَحتاج نحو
+ * `3σ` من كلّ جهة، ونصفُ القطر هنا كسرٌ من **عرض اللوح** لا من صندوق العنصر، فقد
+ * يَفوق الصندوقَ نفسَه أضعافًا. والمنطقةُ الثابتةُ `-60% / 220%` كانت ستَقصّ ذلك
+ * قصًّا حادًّا — وهو أسوأُ عطلٍ ممكن: ضبابيّةٌ ذاتُ حدٍّ حادّ. */
+function svgOuterShadowFilter(shadows: ResolvedShadowPaint[], id: string, blurPx = 0, bw = 0, bh = 0): string {
   const outer = shadows.filter((s) => s.kind === 'outer');
-  if (!outer.length) return '';
+  if (!outer.length && blurPx <= 0) return '';
   const prims: string[] = [];
   const merge: string[] = [];
   outer.forEach((sh, i) => {
@@ -764,7 +794,16 @@ function svgOuterShadowFilter(shadows: ResolvedShadowPaint[], id: string): strin
     merge.push(`<feMergeNode in="tinted${i}" />`);
   });
   merge.push('<feMergeNode in="SourceGraphic" />');
-  return `<filter id="${id}" x="-60%" y="-60%" width="220%" height="220%">${prims.join('')}<feMerge>${merge.join('')}</feMerge></filter>`;
+  const mergeStage = `<feMerge result="merged">${merge.join('')}</feMerge>`;
+  // الضبابيّةُ آخرَ الكومة، على المُركَّب — فتَلين الظلالُ والتعبئةُ والحدُّ معًا.
+  const blurStage = blurPx > 0 ? `<feGaussianBlur in="merged" stdDeviation="${blurPx.toFixed(3)}" />` : '';
+  // `3σ` من كلّ جهةٍ، منسوبةً إلى صندوق العنصر لأنّ منطقةَ الفلتر بالنِّسَب.
+  const padX = blurPx > 0 && bw > 0 ? (3 * blurPx) / bw : 0;
+  const padY = blurPx > 0 && bh > 0 ? (3 * blurPx) / bh : 0;
+  const offX = -(0.6 + padX) * 100;
+  const offY = -(0.6 + padY) * 100;
+  const region = `x="${offX.toFixed(1)}%" y="${offY.toFixed(1)}%" width="${(100 - 2 * offX).toFixed(1)}%" height="${(100 - 2 * offY).toFixed(1)}%"`;
+  return `<filter id="${id}" ${region}>${prims.join('')}${mergeStage}${blurStage}</filter>`;
 }
 
 /** Builds a real standalone SVG document for the artboard (vector shapes + text,
@@ -791,6 +830,32 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
     const bh = el.geo.h * h;
     const transform = `translate(${x} ${y}) rotate(${el.geo.rotation} ${bw / 2} ${bh / 2})`;
     const opacity = (el.opacity ?? 100) / 100;
+    // ضبابيّةُ العنصر بالبكسل في فضاء المستخدم: كسرٌ من **عرض اللوح** كما في
+    // الرسّامتَين الأخريَين، فتُضرَب في `w`.
+    //
+    // **والمسارُ المتحرّكُ غائبٌ هنا عن قصدٍ مُعلَن**: `renderArtboardSvg` لا
+    // تُطبّق أيَّ حالةِ حركةٍ إطلاقًا — لا إزاحةً ولا مقياسًا ولا دورانًا ولا
+    // عتامةً — فسطرُ `transform` أعلاه من `geo` وحدها ولا تُنادى `entranceVisualAt`
+    // قطّ. فجوةٌ قائمةٌ من قبل هذا البند ومُسجَّلةٌ في `af23c63`، والضبابيّةُ
+    // تَرِثها كما وَرِثها المقياسُ: ما يَظهر في SVG هو نصفُ القطر **الساكن** وحده.
+    const svgBlurPx = Math.max(0, el.blur ?? 0) * w;
+
+    /** فلترُ ضبابيّةٍ **وحدَه**، للفروع التي لا تَبني فلترًا أصلًا.
+     *
+     * أربعةُ فروعٍ تُنبعِث `<g>` بلا `filter` قطُّ: لوتي، ولقطةُ الفيديو، وصندوقُ
+     * الصورة البديل، والنصُّ على منحنى. ولا ظلَّ لواحدٍ منها — قيدٌ قائمٌ من قبل
+     * هذا البند. فلو تُرِكت هكذا لخرج عنصرٌ **مُضبَّبٌ في المعاينة وفي PNG،
+     * حادٌّ في SVG**: عطلٌ يُحدِثه هذا البندُ لا يَرِثه، فيُسَدّ.
+     *
+     * ومُعرَّفُه مستقلٌّ (`blur-…` لا `shadow-…`) فلا يَتعارض مع فلتر الظلّ متى
+     * بَناه فرعٌ آخر. وقيدُ الظلّ في هذه الفروع يبقى كما كان مُعلَنًا: هذا يَحمل
+     * الضبابيّةَ وحدَها. */
+    const blurOnlyId = `blur-${esc(el.id)}`;
+    const blurOnlyAttr = (): string => {
+      if (svgBlurPx <= 0) return '';
+      parts.push(svgOuterShadowFilter([], blurOnlyId, svgBlurPx, bw, bh));
+      return ` filter="url(#${blurOnlyId})"`;
+    };
 
     // Generic clipping mask: any element kind gets a clip-path on its own outer <g>,
     // same polygon math as the canvas/DOM paths (maskLocalPolygonPoints) — not image-only.
@@ -819,7 +884,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
         const time = spec.time ?? settledTimeOf(spec);
         const frameCanvas = getLottieExportFrame(el.id, el.data, bw, bh, time, el.loop);
         const dataUrl = frameCanvas.toDataURL('image/png');
-        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}><image href="${dataUrl}" x="0" y="0" width="${bw}" height="${bh}" /></g>`);
+        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${blurOnlyAttr()}><image href="${dataUrl}" x="0" y="0" width="${bw}" height="${bh}" /></g>`);
       } catch {
         // Corrupt/unloadable data — fall through, leaving this element absent from
         // the SVG rather than throwing mid-export and losing every other element.
@@ -833,7 +898,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
       // the real import-time poster frame (see docs/CONTROLS.md) — an honest static
       // snapshot of actual decoded content, never a blank placeholder box.
       if (el.poster) {
-        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}><image href="${el.poster}" x="0" y="0" width="${bw}" height="${bh}" /></g>`);
+        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${blurOnlyAttr()}><image href="${el.poster}" x="0" y="0" width="${bw}" height="${bh}" /></g>`);
       }
     } else if (el.type === 'image') {
       if (el.src) {
@@ -861,14 +926,14 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
           })
           .join('');
         const shadowId = `shadow-${esc(el.id)}`;
-        const shadowFilter = svgOuterShadowFilter(resolved.shadows, shadowId);
+        const shadowFilter = svgOuterShadowFilter(resolved.shadows, shadowId, svgBlurPx, bw, bh);
         const filterAttr = shadowFilter ? ` filter="url(#${shadowId})"` : '';
         if (shadowFilter) parts.push(shadowFilter);
         parts.push(
           `<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${filterAttr}><g clip-path="url(#${clipId})"><image href="${esc(el.src)}" x="${layout.tx}" y="${layout.ty}" width="${layout.dw}" height="${layout.dh}"${flipTransform} /></g>${strokeSvg}</g>`,
         );
       } else {
-        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}><rect width="${bw}" height="${bh}" rx="${w * 0.02}" fill="none" stroke="${spec.palette.fg}" stroke-opacity="0.5" stroke-dasharray="${w * 0.012} ${w * 0.012}" stroke-width="${Math.max(1, w * 0.004)}" /></g>`);
+        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${blurOnlyAttr()}><rect width="${bw}" height="${bh}" rx="${w * 0.02}" fill="none" stroke="${spec.palette.fg}" stroke-opacity="0.5" stroke-dasharray="${w * 0.012} ${w * 0.012}" stroke-width="${Math.max(1, w * 0.004)}" /></g>`);
       }
     } else if (el.type === 'shape') {
       // Roadmap #17 — rect/ellipse get the full multi-layer treatment (every fill
@@ -911,7 +976,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
           })
           .join('');
         shapeSvg = defs.join('') + fillSvg + strokeSvg;
-        shadowFilter = svgOuterShadowFilter(resolved.shadows, shadowId);
+        shadowFilter = svgOuterShadowFilter(resolved.shadows, shadowId, svgBlurPx, bw, bh);
       } else if (el.shape === 'path' && (el.points?.length || el.subpaths?.length || el.outline?.length)) {
         const { cmds, multiRegion, closedForFill } = pathElementCommands(el);
         const d = commandsToSvgPath(cmds, bw, bh);
@@ -955,6 +1020,11 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
           labelSvg = `<text x="${bw / 2}" y="${bh / 2}" fill="${labelColor}" font-size="${bw * 0.3}" font-weight="800" text-anchor="middle" dominant-baseline="middle" font-family="Alexandria, sans-serif">${esc(el.label)}</text>`;
         }
       }
+      // فرعُ المسار المرسومِ باليد لا يُسنِد فلترَ ظلٍّ إطلاقًا (قيدٌ قائمٌ من قبل،
+      // مُوثَّقٌ أعلى هذا الفرع)، فلو تُرِك هكذا لخرج مسارٌ **مُضبَّبٌ في المعاينة
+      // حادًّا في SVG** — عطلٌ أُحدِثه هذا البند لا أرِثه. فالضبابيّةُ وحدَها
+      // تُسنَد هنا متى لم يَبنِ الفرعُ فلترًا، وقيدُ الظلّ يبقى كما كان مُعلَنًا.
+      if (!shadowFilter && svgBlurPx > 0) shadowFilter = svgOuterShadowFilter([], shadowId, svgBlurPx, bw, bh);
       const filterAttr = shadowFilter ? ` filter="url(#${shadowId})"` : '';
       if (shadowFilter) parts.push(shadowFilter);
       parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${filterAttr}>${shapeSvg}${labelSvg}</g>`);
@@ -985,7 +1055,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
         // `ArtboardRenderSpec.curvedTextCmds`. A real `<path>`, correct without the
         // font installed, exactly like "تحويل النص إلى مخطط متجهي" already is.
         const d = commandsToSvgPath(curvedCmds, 1, 1);
-        parts.push(`${gradientDef}<g transform="${transform}" opacity="${opacity}"${maskClipAttr}><path d="${d}" fill="${fillAttr}" fill-opacity="${topFill?.opacity ?? 1}" /></g>`);
+        parts.push(`${gradientDef}<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${blurOnlyAttr()}><path d="${d}" fill="${fillAttr}" fill-opacity="${topFill?.opacity ?? 1}" /></g>`);
       } else {
         const startIsRight = dir === 'rtl';
         const anchor = el.halign === 'start' ? (startIsRight ? 'end' : 'start') : el.halign === 'end' ? (startIsRight ? 'start' : 'end') : 'middle';
@@ -994,7 +1064,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
         const weightNum = WEIGHT_CSS[el.weight];
         const strokeAttr = topStroke ? ` stroke="${topStroke.color}" stroke-opacity="${topStroke.opacity}" stroke-width="${topStroke.width}"` : '';
         const shadowId = `shadow-${esc(el.id)}`;
-        const shadowFilter = svgOuterShadowFilter(resolved.shadows, shadowId);
+        const shadowFilter = svgOuterShadowFilter(resolved.shadows, shadowId, svgBlurPx, bw, bh);
         const filterAttr = shadowFilter ? ` filter="url(#${shadowId})"` : '';
         if (shadowFilter) parts.push(shadowFilter);
         const renderedText = spec.justifiedTexts?.[el.id] ?? el.text;

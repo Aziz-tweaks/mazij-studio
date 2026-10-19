@@ -145,6 +145,12 @@ export interface AnimVisual {
   scaleX: number;
   scaleY: number;
   rotation: number;
+  /** **فرقُ ضبابيّةٍ يُجمَع** إلى `ElementBase.blur` الساكنة، كسرًا من عرض اللوح —
+   * انظر `effectiveBlur` أدناه. ومحايدُه `0` لأنّ الجمعَ هو العمليّة، فعنصرٌ لا
+   * مسارَ له يبقى على ضبابيّته الساكنة بلا زيادةٍ ولا نقص. والسالبُ مسموحٌ **في
+   * المسار** كي يَقدر مفتاحٌ على إحدادِ عنصرٍ مُضبَّبٍ سلفًا؛ والمجموعُ هو ما
+   * يُقصَر عند الصفر، لا المفتاحُ وحده. */
+  blur: number;
 }
 
 /** **المقياسُ الفعليُّ على كلّ محور، وهذا هو الموضعُ الوحيد لهذه الصيغة.**
@@ -166,6 +172,55 @@ export interface AnimVisual {
  * واحدةً: إطارُ فيديو عند لحظةٍ يجب أن يُطابق ما يُظهره السحبُ عندها. */
 export function effectiveScale(v: AnimVisual): { sx: number; sy: number } {
   return { sx: v.scale * v.scaleX, sy: v.scale * v.scaleY };
+}
+
+/** **الضبابيّةُ الفعليّةُ كسرًا من عرض اللوح، وهذا هو الموضعُ الوحيد لهذه الصيغة.**
+ *
+ * `blur = max(0, الساكنة + فرقُ المسار)`. والجمعُ لا الضرب لأنّ محايدَ الضبابيّة
+ * `0`: فمستندٌ لا يحمل المسارَ يُعطي الساكنةَ **بتّةً ببتّة** (`س + 0 = س` تامٌّ
+ * في IEEE 754)، ومستندٌ لا يحمل الساكنةَ ولا المسارَ يُعطي `0` فلا يُنبعَث
+ * `filter` إطلاقًا ولا يُضبَط `ctx.filter` — وعليه يقوم عقدُ «كلُّ مستندٍ قائمٍ
+ * يُنتج ما كان يُنتجه حرفًا حرفًا».
+ *
+ * والقَصرُ عند الصفر على **المجموع** لا على المفتاح: مفتاحٌ بفرقٍ سالبٍ هو الطريقُ
+ * الوحيدُ إلى «ابدأ مُضبَّبًا وانتهِ حادًّا»، وضبابيّةٌ سالبةٌ لا معنى لها في أيّ
+ * رسّامة. وهي ليست كالمقياس: السالبُ هناك **انعكاسٌ** له بابُه المُعلَن، وهنا لا
+ * معنًى ثانيًا يُفتَح له باب.
+ *
+ * وتُصدَّر لأنّ مُستهلِكيها ثلاثةٌ — معاينةُ DOM و القُماشُ و SVG — ولا يجوز أن
+ * يَشتقّ أحدُهم الصيغةَ من جديد، لعين سبب `effectiveScale` و`resolveAnimAt`. */
+export function effectiveBlur(staticBlur: number, v: AnimVisual): number {
+  return Math.max(0, (staticBlur || 0) + v.blur);
+}
+
+/** نصفُ قطر الضبابيّة **بالبكسل على القُماش**، مع تعويضٍ مقيسٍ عن فرقٍ حقيقيٍّ بين
+ * الرسّامتَين.
+ *
+ * **ولِمَ تعويضٌ أصلًا.** قيسَ الفرقُ في Chromium قبل كتابة هذا السطر:
+ *
+ * - **CSS**: `filter` يُطبَّق في الفضاء المحلّيّ للعنصر **ثم** يَمطّه `transform`.
+ *   `blur(20px)` وحدَه أعطى عرضَ انتقالٍ ١٠-٩٠ يساوي ٥٠ بكسلًا؛ ومعه `scale(2)`
+ *   أعطى ٩٨ — نسبةُ ١٫٩٦ ≈ ٢. فالمقياسُ يُكبّر الضبابيّة.
+ * - **Canvas**: `ctx.filter` **لا تَعرف مصفوفةَ التحويل إطلاقًا**. الصندوقُ المرسومُ
+ *   نفسُه تحت `ctx.scale(2, 2)` أعطى عرضَ انتشارٍ ١٨٢ بكسلًا، وبلا مقياسٍ ١٨٢
+ *   أيضًا — نسبةُ `1.000` بالضبط.
+ *
+ * فبلا ضربٍ باليد يَختلف الرسّامان كلَّما حُرِّك المقياسُ على عنصرٍ مُضبَّب.
+ * والمتوسّطُ الهندسيُّ `sqrt(sx·sy)` هو المختار لأنه **يُعيد `s` بعينه متى تساوى
+ * المحوران** — وهي حالةُ كلّ مستندٍ لا يَستعمل `scaleX`/`scaleY`، فيَتطابق
+ * الرسّامان فيها تطابقًا تامًّا لا تقريبيًّا.
+ *
+ * **وثمنُه مُعلَنٌ لا مُخفًى**: متى اختلف المحوران فـCSS يُنتج ضبابيّةً **لا
+ * متساويةَ المحاور** (قيسَ: `scale(1,2)` أعطى حبرًا ١٧٤×٣٤٤ والانتقالُ الأفقيُّ ٥٠
+ * كما هو)، و`ctx.filter` لا تَقبل إلّا نصفَ قطرٍ واحدًا متساويَ المحاور. فلا سبيلَ
+ * إلى جمعهما بهذه الأداة، والفرقُ **مقيسٌ ومُعلَنٌ رقمًا** في
+ * `qa/shape-blur.spec.mjs` §٥ لا مُغطًّى. */
+export function canvasBlurRadiusPx(staticBlur: number, v: AnimVisual, artboardWidthPx: number): number {
+  const frac = effectiveBlur(staticBlur, v);
+  if (frac <= 0) return 0;
+  const { sx, sy } = effectiveScale(v);
+  const scaleMean = Math.sqrt(Math.max(0, sx) * Math.max(0, sy));
+  return frac * artboardWidthPx * scaleMean;
 }
 
 function sortedTrack(track: PropertyKeyframe[]): PropertyKeyframe[] {
@@ -220,6 +275,10 @@ export function resolveAnimAt(anim: ElementAnim, time: number): AnimVisual {
     scaleX: trackValueAt(anim.tracks.scaleX, m, ANIM_PROPERTY_DEFAULT.scaleX),
     scaleY: trackValueAt(anim.tracks.scaleY, m, ANIM_PROPERTY_DEFAULT.scaleY),
     rotation: trackValueAt(anim.tracks.rotation, m, ANIM_PROPERTY_DEFAULT.rotation),
+    // فرقٌ خالصٌ من مساره وحده، لا يَعرف الضبابيّةَ الساكنةَ على العنصر — والتركيبُ
+    // يحدث عند الاستهلاك في `effectiveBlur`، لا هنا. وبهذا تبقى هذه الدالّةُ تأخذ
+    // `anim` وحدَه لا العنصرَ كلَّه، وهو القيدُ المُعلَن في `state/elements.ts:45`.
+    blur: trackValueAt(anim.tracks.blur, m, ANIM_PROPERTY_DEFAULT.blur),
   };
 }
 
@@ -409,7 +468,7 @@ export function formatClock(seconds: number): string {
 /** `AnimVisual` turned into a CSS transform/opacity pair for the DOM preview —
  * `ElementView` composes this with the element's own static `geo` rotation and base
  * `opacity`. */
-export function entranceStyleAt(anim: ElementAnim, time: number): { opacity?: number; transform?: string } {
+export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0): { opacity?: number; transform?: string; filter?: string } {
   const v = resolveAnimAt(anim, time);
   const transformParts: string[] = [];
   if (v.x !== 0 || v.y !== 0) transformParts.push(`translate(${(v.x * 100).toFixed(2)}cqw, ${(v.y * 100).toFixed(2)}cqw)`);
@@ -422,7 +481,22 @@ export function entranceStyleAt(anim: ElementAnim, time: number): { opacity?: nu
   const { sx, sy } = effectiveScale(v);
   if (sx !== 1 || sy !== 1) transformParts.push(sx === sy ? `scale(${sx.toFixed(3)})` : `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`);
   if (v.rotation !== 0) transformParts.push(`rotate(${v.rotation.toFixed(2)}deg)`);
-  return { opacity: v.opacity, transform: transformParts.join(' ') || undefined };
+  // **`cqw` لا بكسلًا، ولا يَعرف هذا الموضعُ مقاسَ اللوح — وهو مقيسٌ لا مُفترَض.**
+  // اللوحُ `container-type: inline-size` (`Stage.tsx`)، و`translate(Xcqw, Ycqw)`
+  // أعلاه يَقرأ ذلك سلفًا. وقيسَ أنّ Chromium يَحُلّ `blur(5cqw)` داخل حاضنٍ عرضُه
+  // ٤٠٠ بكسلًا إلى `blur(20px)` **بالضبط**، ومسحُ البكسل للاثنين متطابقٌ حبرًا
+  // وانتقالًا. فلا تَحتاج المعاينةُ أن تَعرف مقاسًا، ولا يُعاد حسابُ شيءٍ عند
+  // التكبير أو عند «التحجيم الذكيّ».
+  //
+  // و**`undefined` متى كان المجموعُ صفرًا** لا `'blur(0cqw)'` ولا `'none'`: فكلُّ
+  // مستندٍ قائمٍ يُنتج كائنَ النمطِ نفسَه الذي كان يُنتجه، فتبقى دعوى «لم يتغيّر
+  // شيء» قابلةً للبرهان بالنصّ — وهو عقدُ `scale(S)` نفسُه أعلاه.
+  const blurFrac = effectiveBlur(staticBlur, v);
+  return {
+    opacity: v.opacity,
+    transform: transformParts.join(' ') || undefined,
+    filter: blurFrac > 0 ? `blur(${(blurFrac * 100).toFixed(3)}cqw)` : undefined,
+  };
 }
 
 /** Same resolution as `entranceStyleAt`, but as raw numbers for the canvas frame
@@ -432,6 +506,6 @@ export function entranceVisualAt(anim: ElementAnim, time: number): AnimVisual {
   return resolveAnimAt(anim, time);
 }
 
-export function entranceStyleToCss(style: { opacity?: number; transform?: string }): CSSProperties {
-  return { opacity: style.opacity, transform: style.transform };
+export function entranceStyleToCss(style: { opacity?: number; transform?: string; filter?: string }): CSSProperties {
+  return { opacity: style.opacity, transform: style.transform, filter: style.filter };
 }

@@ -87,7 +87,7 @@ export interface Dictionary {
   'l_badge-label': string; 'l_logo-label': string;
   ease_linear: string; ease_in: string; ease_in_out: string; ease_back: string; ease_bounce: string; ease_custom: string;
   no_easing_target: string; add_keyframe: string; delete_keyframe: string; kf_value: string; soon: string;
-  prop_opacity: string; prop_x: string; prop_y: string; prop_scale: string; prop_scaleX: string; prop_scaleY: string; prop_rotation: string;
+  prop_opacity: string; prop_x: string; prop_y: string; prop_scale: string; prop_scaleX: string; prop_scaleY: string; prop_rotation: string; prop_blur: string;
   expand_tracks: string; collapse_tracks: string; kf_easing: string;
   entrance: string; tl_beyond_doc: string;
   /** المرحلة ٢ — المقاطعُ الحيّة: التقسيمُ وأسبابُ تعطيله، وحرسُ النمط الجاهز،
@@ -272,7 +272,7 @@ export const AR: Dictionary = {
   preset_blocked: 'لهذا العنصر مسارات حركة بُنيت باليد — تطبيق حركة دخول جاهزة سيَمحوها، فهو ممنوع. احذف مفاتيحها أوّلًا إن أردت البدء من جديد.',
   undo_clip_move: 'نقل المقطع', undo_clip_trim_in: 'تقليم بداية المقطع', undo_clip_trim_out: 'تقليم نهاية المقطع',
   undo_kf_move: 'نقل مفتاح',
-  prop_opacity: 'الشفافية', prop_x: 'الموضع X', prop_y: 'الموضع Y', prop_scale: 'المقياس', prop_scaleX: 'العرض', prop_scaleY: 'الارتفاع', prop_rotation: 'الدوران',
+  prop_opacity: 'الشفافية', prop_x: 'الموضع X', prop_y: 'الموضع Y', prop_scale: 'المقياس', prop_scaleX: 'العرض', prop_scaleY: 'الارتفاع', prop_rotation: 'الدوران', prop_blur: 'الضبابية',
   expand_tracks: 'إظهار مسارات الخصائص', collapse_tracks: 'إخفاء مسارات الخصائص', kf_easing: 'منحنى المفتاح',
   entrance: 'حركة الدخول',
   // يُقال للمصمّم **لماذا** تعطَّل المفتاح، لا أنه معطَّل: المفتاح يُضاف عند المؤشّر،
@@ -507,7 +507,7 @@ export const EN: Dictionary = {
   preset_blocked: 'This element has hand-built animation tracks — applying an entrance preset would erase them, so it is refused. Delete their keyframes first if you want to start over.',
   undo_clip_move: 'Move clip', undo_clip_trim_in: 'Trim clip in', undo_clip_trim_out: 'Trim clip out',
   undo_kf_move: 'Move keyframe',
-  prop_opacity: 'Opacity', prop_x: 'Position X', prop_y: 'Position Y', prop_scale: 'Scale', prop_scaleX: 'Width', prop_scaleY: 'Height', prop_rotation: 'Rotation',
+  prop_opacity: 'Opacity', prop_x: 'Position X', prop_y: 'Position Y', prop_scale: 'Scale', prop_scaleX: 'Width', prop_scaleY: 'Height', prop_rotation: 'Rotation', prop_blur: 'Blur',
   expand_tracks: 'Show property tracks', collapse_tracks: 'Hide property tracks', kf_easing: 'Keyframe easing',
   entrance: 'Entrance',
   ex_estimate: (seconds, files, mb) => `${seconds}s · ${files} file${files === 1 ? '' : 's'} · ≈${mb} MB`,

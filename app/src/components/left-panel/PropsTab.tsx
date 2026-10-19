@@ -236,21 +236,7 @@ export function PropsTab() {
                   </div>
                 </div>
               </section>
-              <section data-soon="effects" style={{ display: 'flex', flexDirection: 'column', gap: 8, opacity: 0.45, pointerEvents: 'none' }} aria-disabled title="قريبًا">
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span className="mz-label" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>{L.effects} <SoonBadge /></span>
-                  <button disabled style={{ height: 24, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>+ {L.add_fx}</button>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
-                  <Toggle on />
-                  <span style={{ flex: 1 }}>{L.fx_shadow}</span>
-                  <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11 }}>0 · 12 · 40</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, color: 'var(--muted)' }}>
-                  <Toggle on={false} />
-                  <span style={{ flex: 1 }}>{L.fx_blur}</span>
-                </div>
-              </section>
+              {state.selectedIds.length === 1 && <EffectsSection el={el} />}
             </>
           )}
 
@@ -1732,6 +1718,57 @@ function StrokeTaperRow({ elId, s }: { elId: string; s: AppearanceStrokeLayer })
         </>
       )}
     </div>
+  );
+}
+
+/** قسمُ التأثيرات — **سطحٌ حيٌّ، وهو ما كان ميتًا**.
+ *
+ * كان القسمُ كلُّه `pointerEvents:'none'` و`aria-disabled` و`title="قريبًا"`، وفيه
+ * صفّان: «ظلّ» و«ضبابية». وقد رُفِعا كلاهما لسببَين مختلفَين، لا لسببٍ واحد:
+ *
+ * - **صفُّ «ضبابية» صار يعمل**، وهو هذا الشريط. فلا «قريبًا» على قدرةٍ قائمة.
+ * - **وصفُّ «ظلّ» رُفِع رفعًا** لأنه كان «قريبًا» **فوق سطحٍ يعمل فعلًا**: الظلالُ
+ *   مبنيّةٌ ومشحونةٌ في قسم المظهر أعلاه (`AppearanceSection` ← طبقاتُ الظلّ،
+ *   بإزاحةٍ ونصفِ قطرٍ وانتشارٍ ولونٍ وداخليٍّ/خارجيّ)، وكان هذا الصفُّ المعطَّلُ
+ *   يُوهم أنها غيرُ موجودة. وذلك ما يَمنعه الميثاق نصًّا: «قريبًا» دواءٌ للصمت لا
+ *   بديلٌ لسطحٍ قائم، لا يُغطّى بها ما يعمل فعلًا.
+ *
+ * وزرُّ «+ إضافة تأثير» رُفِع معهما: كان زرًّا معطَّلًا لا يُضيف شيئًا، وقائمةُ
+ * التأثيرات هنا واحدةٌ مُعلَنةٌ لا كومةٌ يُضاف إليها. */
+function EffectsSection({ el }: { el: DocElement }) {
+  const { actions, dict: L } = useStudio();
+  // المعروضُ نسبةٌ مئويّةٌ من عرض اللوح، والمخزونُ كسرٌ — فالشريطُ ٠..١٠٪.
+  const pct = Math.round((el.blur ?? 0) * 1000) / 10;
+  return (
+    <section data-testid="fx-section" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <span className="mz-label">{L.effects}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 36, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
+        <span style={{ minWidth: 48 }}>{L.fx_blur}</span>
+        <input
+          data-testid={`fx-blur-${el.id}`}
+          dir="ltr"
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(pct * 10)}
+          // سحبةٌ واحدةٌ = خطوةُ تراجعٍ واحدة، بنمط `smooth-amount` نفسِه:
+          // `beginElementEdit` مُتعادِيةُ الاستدعاء فنداؤها من `onChange` آمنٌ
+          // ويُغطّي تغييرَ الشريط بالسهمَين أيضًا — وهو مسارٌ لا يمرّ
+          // بـ`onPointerDown` إطلاقًا.
+          onChange={(e) => {
+            actions.beginElementEdit();
+            actions.liveUpdateElementBlur(el.id, Number(e.target.value) / 1000);
+          }}
+          onPointerUp={() => actions.commitElementEdit()}
+          onKeyUp={() => actions.commitElementEdit()}
+          onBlur={() => actions.commitElementEdit()}
+          style={{ flex: 1, accentColor: 'var(--accent)' }}
+        />
+        <span data-testid={`fx-blur-value-${el.id}`} dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', minWidth: 38, textAlign: 'end' }}>
+          {pct}%
+        </span>
+      </div>
+    </section>
   );
 }
 

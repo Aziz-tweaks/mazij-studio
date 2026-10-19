@@ -233,6 +233,13 @@ function clampAnimPropertyValue(property: AnimProperty, v: number): number {
     case 'scaleX':
     case 'scaleY':
       return Math.max(0, v);
+    // **والضبابيّةُ فرقٌ يُجمَع، فالسالبُ فيها مشروعٌ لا خطأ** — وهو الطريقُ
+    // الوحيدُ إلى «ابدأ مُضبَّبًا وانتهِ حادًّا» على عنصرٍ ضبابيّتُه الساكنةُ
+    // موجبة. والذي يُقصَر عند الصفر هو **المجموعُ** في `effectiveBlur` لا المفتاحُ
+    // هنا؛ ولو قُصِر المفتاحُ لاستحال الإحدادُ بالحركة أصلًا. والمدى ±١ أي عرضُ
+    // اللوح كلُّه: سخيٌّ ومحدود، كما ±٢ لـ`x`/`y`.
+    case 'blur':
+      return clamp(v, -1, 1);
     case 'rotation':
       return v;
   }
@@ -654,6 +661,13 @@ export interface StudioActions {
   setElementJustify: (id: ElementId, justify: boolean) => void;
   setTextStagger: (id: ElementId, patch: Partial<TextStaggerAnim>) => void;
   setElementOpacity: (id: ElementId, opacity: number) => void;
+  /** ضبابيّةُ العنصر الساكنةُ، كسرًا من عرض اللوح (`ElementBase.blur`). خطوةُ
+   * تراجعٍ واحدةٌ لكلّ نداء — فلا تُستعمل من سحبِ شريط، وهذا ما
+   * `liveUpdateElementBlur` له. */
+  setElementBlur: (id: ElementId, blur: number) => void;
+  /** نفسُ الكتابة بلا دفعٍ في التاريخ، لمدّة سحبةٍ واحدةٍ على الشريط — نفسُ نمط
+   * `liveUpdateShapeSmoothAmount`: سحبةٌ واحدةٌ = خطوةُ تراجعٍ واحدة. */
+  liveUpdateElementBlur: (id: ElementId, blur: number) => void;
   setElementGeoPx: (id: ElementId, patch: { x?: number; y?: number; w?: number; h?: number; rotation?: number }) => void;
   setShapeFill: (id: ElementId, hex: string) => void;
   setShapeStroke: (id: ElementId, hex: string | null) => void;
@@ -2296,6 +2310,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setTextStagger: (id, p) =>
         commitElements((els) => els.map((e) => (e.id === id && e.type === 'text' ? { ...e, textAnim: { ...e.textAnim, ...p } } : e))),
       setElementOpacity: (id, opacity) => commitElements((els) => els.map((e) => (e.id === id ? { ...e, opacity: clamp(opacity, 0, 100) } : e))),
+      // كسرٌ من عرض اللوح، غيرُ سالبٍ — فالساكنةُ لا معنى لسلبها (بخلاف مفتاحِ
+      // المسار، وهو فرقٌ فيُسمَح له). والسقفُ `1` أي عرضُ اللوح كلُّه: حدٌّ
+      // للمعنى لا للذوق، وشريطُ اللوح يَعرض ٠..١٠٪ منه.
+      setElementBlur: (id, blur) => commitElements((els) => els.map((e) => (e.id === id ? { ...e, blur: clamp(blur, 0, 1) } : e))),
+      liveUpdateElementBlur: (id, blur) =>
+        liveUpdateElements((els) => els.map((e) => (e.id === id ? { ...e, blur: clamp(blur, 0, 1) } : e))),
       setElementGeoPx: (id, p) =>
         commitElements((els) =>
           els.map((e) => {
