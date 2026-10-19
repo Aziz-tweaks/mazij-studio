@@ -41,9 +41,43 @@
 // ثم تُوضَع العتبةُ **وسطًا هندسيًّا** بين الأرضيّة والظاهرة — لا على الأرضيّة
 // فتسقط على ضجيج، ولا على الظاهرة فتمرّ عليها وحدها. الأرقامُ المقيسة والفجوةُ
 // بينها في `targets/t00-video-calib/README.md`.
-import { evalCriterion, inkFraction, overallSimilarity } from './score.mjs';
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// وثلاثةُ بنودٍ تُقاس على **سلسلةٍ** لا على طرفين — ولماذا لم تكن موجودة
+// ─────────────────────────────────────────────────────────────────────────────
+// البنودُ أعلاه كلُّها تسأل عن إطارٍ أو إطارين. وذلك يكفي مقطعًا أغلبُه سكونٌ
+// وقفزاتُه منفصلة. أمّا مقطعٌ **٤٤٪ منه حركةٌ متّصلة** — وهذا رقمٌ مقيسٌ على مرجعٍ
+// حقيقيّ: ١٥٩ زوجًا متحرّكًا من ٣٥٩ — فلا تُطابَق فيه قفزاتٌ تُوقَّت بل مُنحنياتٌ
+// تُوصَف. ومحكّمٌ يَعرف **أين** الأشياء ولا يَعرف **كيف** تتحرّك يُجيز محاولةً
+// مواضعُها صحيحةٌ ومنحنياتُها خطأٌ تمامًا، فلا نعلم أنّا طابقنا.
+//
+// فهذه الثلاثةُ تقيس الكيف، وكلٌّ منها يسدّ فراغًا **مقيسًا** في بندٍ قائم:
+//
+//   entryRamp       — `appearsBetween` يُثبت أن منطقةً صارت ممتلئةً بعد أن كانت
+//                     فارغة، ولا يُثبت أن ذلك جرى تدرّجًا. ومقطعٌ يُقحِم عنصرَه في
+//                     إطارٍ واحدٍ يجتازه. (الشاهد `motion-slam`: يجتاز مواصفةَ
+//                     t00 كلَّها، أربعةً وعشرين بندًا، ولا يراه إلا هذا البند.)
+//
+//   motionDirection — `motionBetween` يقيس المقدار لا الإشارة. وعنصرٌ يدخل من
+//                     الجهة المقابلة يجتازه بالمقدار نفسِه بالضبط. وهذا هو درسُ
+//                     `edgeDelta` منقولًا إلى الزمن: بندان يسألان «أين» لا
+//                     يُثبتان «كم أزاح»، فهذا يسأل الثاني — ويسأله عبر النافذة
+//                     كلِّها لا عند طرفَيها، لأن طرفين صحيحين لا يُثبتان مسارًا.
+//
+//   easingShape     — ولا بندَ في المقياس كلِّه يسأل عن المنحنى. و«يدخل سريعًا ثم
+//                     يستقرّ» مقيسٌ: فروقُ الأزواج المتتالية ترتفع ثم تهبط.
+//                     وهذا هو البندُ الذي يُميّز المستقيمَ من التخفيف من
+//                     التجاوز، وهو السببُ الذي جعل المحكّمَ يُبنى قبل البناء.
+//
+// وثلاثتُها تُقاس على **المقاس الأصلي**، لا على شريط التحليل: شريطُ ١٩٢px يُحوّل
+// تجاوزًا مقداره أربعةُ بكسلاتٍ إلى سبعةِ أعشارِ بكسلٍ فيُذيبه في التنعيم. وهذا
+// هو التطبيقُ نفسُه لقاعدةِ `frameAt`: ما يسأل عن موضعٍ يُقاس على الأصل.
+//
+// وثلاثتُها تُقاس على سلسلةٍ **مُرشَّحةٍ بوسيطٍ ثلاثيّ**، والسببُ والحدُّ مكتوبان
+// في `lib/video.mjs` §٤: شاذٌّ منفردٌ واحدٌ لا يُغيّر فيها عيّنةً، كبُرَ أو صغُر.
+import { evalCriterion, inkFraction, inkCentroid, overallSimilarity } from './score.mjs';
 import { parseHex } from './png.mjs';
-import { FrameSet, frameDelta } from './video.mjs';
+import { FrameSet, frameDelta, frameSeries, median3Filter } from './video.mjs';
 
 // العتبات الافتراضيّة — مقيسةٌ على t00، ولكلّ بندٍ أن يُصرّح بغيرها.
 const DEFAULTS = {
@@ -64,10 +98,17 @@ const DEFAULTS = {
   appearsMaxBefore: 0.005,
   appearsMinAfter: 0.5,
   inkMinDistance: 60,
+  // حدُّ «الوسط» في بندِ التدرّج: العُشرُ من كلٍّ من الطرفين. وهذه **اصطلاحٌ
+  // مُعلَن** لا عتبةٌ مُعايَرة — تعريفُ ما يُعَدّ إطارًا وسطًا، كتعريف «الإطار
+  // المعروض عند t». والمقيسُ عليه عددٌ صحيح: الهدفُ المُولَّد يُخرج عشرةَ إطاراتٍ
+  // وسطى والشاهدُ المُقتحِم **صفرًا**. فالفصلُ ليس نسبةً تُوازَن بل حدٌّ لا يُجاوَز
+  // من جهةِ السالب.
+  rampBandMargin: 0.1,
 };
 
 const fmtPct = (v) => `${(v * 100).toFixed(2)}٪`;
 const fmtNum = (v) => v.toFixed(3);
+const fmtPx = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(2)}px`;
 
 /** وصفُ الإطار الذي قيس عليه بندٌ زمنيّ — يُلحَق بكلّ نتيجةٍ حتى لا يحتاج القارئ
  * أن يستنتج على أيّ إطارٍ حُكم عليه. */
@@ -149,6 +190,150 @@ function evalContainer(c, facts) {
   }
 }
 
+/** يتبّع موضعَ عنصرٍ عبر نافذةٍ زمنيّة ويُخرج كلَّ ما تُقاس عليه بنودُ «الكيف».
+ *
+ * مركزُ ثقلِ الحبر لا الحافّة، على المقاس الأصلي، إطارًا إطارًا. والمُخرَج:
+ *
+ *   `pos`    — سلسلةُ المواضع، مُرشَّحةً بوسيطٍ ثلاثيّ. تُقاس عليها الإزاحةُ
+ *              والرجوعُ والتجاوزُ — أي كلُّ ما يُقارِن موضعًا بموضع.
+ *
+ *   `vel`    — سلسلةُ السرعة: **فرقٌ مركزيٌّ** `(p[i+1]−p[i−1])/2` من السلسلة
+ *              الخامّة، ثم وسيطٌ ثلاثيّ عليها.
+ *
+ * ولماذا الفرقُ المركزيُّ تحديدًا، وهو الموضعُ الذي يُحسَم فيه فخُّ الشاذّ: الفرقُ
+ * الأماميُّ `p[i+1]−p[i]` يُصيب الشاذُّ المنفردُ منه **قيمتين متجاورتين** بإشارتين
+ * متعاكستين، فيبقى بعد الوسيط الثلاثيِّ أثرٌ ضِعفُ الخُطوة. أمّا الفرقُ المركزيُّ
+ * فالشاذُّ عند الإطار s **لا يَمسّ `v[s]` أصلًا** — لأنها لا تقرأ `p[s]` — ويُصيب
+ * `v[s−1]` و`v[s+1]` وبينهما قيمةٌ سليمة. فيصير الشاذّان في السلسلة **منفردَين
+ * مفصولَين**، والوسيطُ الثلاثيُّ يَطرح كلًّا منهما تمامًا.
+ *
+ * وهذا قيس لا استُنتِج: على شاهدٍ مستقيمٍ أُقحِم فيه إطارٌ واحدٌ ١٢٠ بكسلًا، تقرأ
+ * السلسلةُ الخامّةُ نسبةَ ذروةٍ ٤٫٦٦٦ وتقرأ هذه ١٫٠٨٠ — وهي **رقمُ الشاهد
+ * المستقيم نفسُه إلى ثلاث خانات**. فالطرحُ تامٌّ لا مُخفَّف.
+ *
+ * وثمنُه يُقال: ذروةٌ حقيقيّةٌ عرضُها **إطارٌ واحد** تُطرَح كما يُطرَح الشاذّ، فلا
+ * يُفرِّق المقياسُ بينهما. وهذا مقصودٌ لا مُحتمَل: انحرافٌ يَظهر في إطارٍ ويزول في
+ * الذي بعده ليس منحنًى، والمنحنى هو ما يُقاس هنا. */
+function trackPosition(frames, bg, c) {
+  if (c.axis !== 'x' && c.axis !== 'y') {
+    return { error: `«axis» تكون «x» أو «y»، لا «${c.axis ?? '—'}» — خطأُ مواصفة` };
+  }
+  if (!c.region) {
+    // بندٌ يتبّع «العنصر» على كامل اللوح يتبّع متوسّطَ كلِّ شيءٍ فيه، فعنصرٌ ساكنٌ
+    // كبير يُخمِد حركةَ عنصرٍ صغير حتى تصير تحت كلّ عتبة. ومن أراد أن يُسمّي
+    // العنصر حدّد مستطيله — وهذه قاعدةُ `region` نفسُها في `motionBetween`،
+    // مشدَّدةً هنا إلى **شرط** لأن المقياسَ موضعٌ لا مقدار.
+    return { error: 'بندٌ يقيس موضعَ عنصرٍ بلا `region` — خطأُ مواصفة' };
+  }
+  const minD = c.minDistance ?? DEFAULTS.inkMinDistance;
+  const axis = c.axis;
+  const s = frameSeries(frames, c.t0, c.t1, (i) => {
+    const ctr = inkCentroid(frames.full(i), c.region, bg, minD);
+    return ctr ? ctr[axis] : null;
+  });
+  if (s.error) return s;
+
+  const pos = s.smooth;
+  const n = pos.length;
+  const span = axis === 'x' ? frames.facts.width : frames.facts.height;
+
+  // الإزاحةُ الصافية وإشارتُها. والإشارةُ هي ما لا يقيسه `motionBetween` بحرف.
+  const travel = pos[n - 1] - pos[0];
+  const dir = Math.sign(travel) || 1;
+
+  // المستقرّ: **وسيطُ** آخرِ ثلاثةِ مواضع لا آخرُ موضعٍ وحده. وإلّا كان إطارٌ
+  // أخيرٌ شاذٌّ يُزيح المستقرَّ فيُخرج تجاوزًا لا وجودَ له أو يُخفي واقعًا.
+  const tail = pos.slice(-3);
+  const rest = n >= 3 ? median3Filter(tail)[1] : pos[n - 1];
+  // وسعةُ الذيل: هل استقرّ العنصرُ عند `t1` أصلًا؟
+  //
+  // وهذا السطرُ وُجد بعطلٍ وقع، لا باحتياط. قيس البندُ على الهدف المُولَّد بنافذةٍ
+  // تنتهي **عند لحظة الوصول بالضبط** (١٫٠ث→٢٫٠ث، والقرصُ يصل في ٢٫٠ث)، فقرأ
+  // تجاوزًا ٢٣ بكسلًا على حركةٍ خطّيّةٍ محضة. والسببُ أن وسيطَ آخرِ ثلاثةٍ على ذيلٍ
+  // **ما زال يتحرّك** يُرجع موضعَ ما قبل الأخير، فيَقرأ الموضعَ الأخيرَ تجاوزًا
+  // له. أي أن مُرشِّحَ الوسيط — وهو حِرزٌ من الشاذّ — صار مصدرَ خطأٍ مُطّردٍ
+  // حين لا ذيلَ ساكنًا يُرشَّح.
+  //
+  // والتصحيحُ ليس إلغاءَه ولا توسيعَ التسامح، بل **الاعترافُ بأن القياسَ غيرُ
+  // معرَّفٍ هناك**: تجاوزُ المستقرِّ لا معنى له قبل أن يوجد مستقرّ. فالبندُ يسقط
+  // برسالةٍ تقول «النافذةُ تنتهي والعنصرُ يتحرّك» — خطأُ مواصفةٍ يُصلَح بمدّ `t1`،
+  // لا عطلٌ في المحاولة يُحتسَب عليها.
+  const restSpread = Math.max(...tail) - Math.min(...tail);
+
+  // التجاوز: أقصى تخطٍّ للمستقرّ **في اتّجاه السير**. وسالبُه يعني أن العنصر لم
+  // يَبلغ مستقرَّه في النافذة أصلًا، وهو خبرٌ أيضًا.
+  let overshoot = -Infinity;
+  let overshootAt = 0;
+  for (let i = 0; i < n; i++) {
+    const v = dir * (pos[i] - rest);
+    if (v > overshoot) { overshoot = v; overshootAt = i; }
+  }
+
+  // أقصى رجوعٍ عبر النافذة: الفرقُ بين أبعدِ ما بلغه العنصرُ حتى الآن وموضعِه
+  // الآن، في اتّجاه السير. وهو الذي يرى الالتفافَ الذي طرفاه صحيحان.
+  let runMax = -Infinity;
+  let backtrack = 0;
+  let backtrackAt = 0;
+  for (let i = 0; i < n; i++) {
+    const p = dir * pos[i];
+    if (p > runMax) runMax = p;
+    if (runMax - p > backtrack) { backtrack = runMax - p; backtrackAt = i; }
+  }
+
+  // السرعة: فرقٌ مركزيٌّ من الخامّ ثم وسيطٌ ثلاثيّ. والسلسلةُ أقصرُ باثنين،
+  // و`vel[k]` تقابل الإطارَ `k+1` في النافذة.
+  const central = [];
+  for (let i = 1; i < s.raw.length - 1; i++) central.push((s.raw[i + 1] - s.raw[i - 1]) / 2);
+  const vel = median3Filter(central);
+  const velRaw = central;
+
+  // سرعةُ المستقيم المكافئ: الإزاحةُ الصافيةُ ÷ عددِ الأزواج. وهي القاسمُ لأن
+  // نسبةً إليها تقرأ **واحدًا بالضبط** على سرعةٍ ثابتة — فيكون الرقمُ مفهومًا
+  // بلا جدول: ٣ تعني «ذروتُه ثلاثةُ أضعاف ما لو كان مستقيمًا».
+  const meanSpeed = Math.abs(travel) / (n - 1);
+  const peakOf = (series) => {
+    let peak = 0;
+    let at = 0;
+    for (let i = 0; i < series.length; i++) {
+      if (Math.abs(series[i]) > peak) { peak = Math.abs(series[i]); at = i; }
+    }
+    return { peak, at };
+  };
+  const pk = peakOf(vel);
+  const pkRaw = peakOf(velRaw);
+
+  return {
+    series: s,
+    pos,
+    vel,
+    span,
+    travel,
+    travelPct: travel / span,
+    dir,
+    rest,
+    restSpread,
+    overshoot,
+    overshootFrame: s.frames[overshootAt],
+    backtrack,
+    backtrackFrame: s.frames[backtrackAt],
+    meanSpeed,
+    peakSpeed: pk.peak,
+    // النسبةُ غيرُ معرَّفةٍ حين لا إزاحةَ صافية، ولا تُسَدّ بصفرٍ ولا بلا نهاية:
+    // عنصرٌ يذهب ويعود إلى موضعه لا «منحنى دخولٍ» له، والبندُ يقول ذلك.
+    peakRatio: meanSpeed > 0 ? pk.peak / meanSpeed : null,
+    peakRatioRaw: meanSpeed > 0 ? pkRaw.peak / meanSpeed : null,
+    peakAt: vel.length > 1 ? (pk.at + 1) / (n - 1) : null,
+    peakFrame: s.frames[pk.at + 1],
+    frames: s.frames,
+  };
+}
+
+/** وصفٌ مختصرٌ لنافذةٍ قيست: عددُ الإطارات وطرفاها، يُلحَق بكلّ نتيجة. */
+function windowTag(t, c) {
+  return `${t.frames.length} إطارًا #${t.frames[0]}→#${t.frames[t.frames.length - 1]}`
+    + ` (${c.t0}ث→${c.t1}ث)`;
+}
+
 /** بنودُ الزمن. */
 function evalTemporal(c, frames, bg) {
   switch (c.type) {
@@ -223,9 +408,281 @@ function evalTemporal(c, frames, bg) {
       };
     }
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // (١) التدرّج — أن الحبرَ **نما**، لا أنه ظهر
+    // ═══════════════════════════════════════════════════════════════════════
+    case 'entryRamp': {
+      // `appearsBetween` يقرأ طرفَين. ومقطعٌ يُقحِم عنصرَه في إطارٍ واحدٍ يُرضيه
+      // تمامًا: فارغٌ قبل، ممتلئٌ بعد. فهذا البندُ يقرأ **كلَّ** إطارٍ في النافذة
+      // ويسأل: أين الإطاراتُ الوسطى؟
+      //
+      // ومقياسانِ لا مقياس، على قاعدة `frameDelta` نفسِها:
+      //
+      //   `rampFrames`   — عددُ الإطارات التي يقع حبرُها في **وسط** النموّ (أي
+      //                    بعد عُشره الأوّل وقبل عُشره الأخير). وهو عددٌ صحيح:
+      //                    نموٌّ على ثلاثين إطارًا يُخرج عشَراتٍ، واقتحامٌ في
+      //                    إطارٍ يُخرج **صفرًا**. فالفصلُ ليس نسبةً تُوازَن.
+      //
+      //   `maxStepShare` — أكبرُ حصّةٍ من النموّ كلِّه يحملها زوجٌ واحد. المستقيمُ
+      //                    يُخرج كسرًا صغيرًا، والاقتحامُ يُخرج **واحدًا بالضبط**
+      //                    بحكم الحساب: زوجٌ واحدٌ حمل النموَّ كلَّه.
+      //
+      // والطرفان يُقاسان أيضًا، بحدَّي `appearsBetween` نفسِهما: بندٌ يرى تدرّجًا
+      // من ٣٠٪ إلى ٣٥٪ ليس بندَ دخول. فهذا البندُ **يَشمل** ذاك ويزيد.
+      if (!c.region) return { ok: false, got: 'بندٌ بلا `region` — خطأُ مواصفة', want: 'مستطيلٌ مُصرَّحٌ به' };
+      if (c.minRampFrames == null) {
+        // لا قيمةَ افتراضيّة، للسبب الذي من أجله لا افتراضيَّ لـ`minDistance`:
+        // طولُ التدرّج خاصيّةُ المشهد. ومن لم يُصرّح بها سقط بندُه مُسمًّى.
+        return { ok: false, got: 'لا `minRampFrames` في المواصفة', want: 'عددٌ مُصرَّحٌ به' };
+      }
+      const minD = c.minDistance ?? DEFAULTS.inkMinDistance;
+      const s = frameSeries(frames, c.t0, c.t1, (i) => inkFraction(frames.full(i), c.region, bg, minD));
+      if (s.error) return { ok: false, got: s.error, want: `تدرّجٌ بين ${c.t0}ث و${c.t1}ث` };
+      const g = s.smooth;
+      const first = g[0];
+      const last = g[g.length - 1];
+      const maxBefore = c.maxBefore ?? DEFAULTS.appearsMaxBefore;
+      const minAfter = c.minAfter ?? DEFAULTS.appearsMinAfter;
+      const growth = last - first;
+
+      const okBefore = first <= maxBefore;
+      const okAfter = last >= minAfter;
+      if (growth <= 0) {
+        return {
+          ok: false,
+          got: `لا نموَّ أصلًا: ${fmtPct(first)} → ${fmtPct(last)} على ${s.frames.length} إطارًا`,
+          want: `نموٌّ من ≤ ${fmtPct(maxBefore)} إلى ≥ ${fmtPct(minAfter)}`,
+        };
+      }
+
+      const lo = first + DEFAULTS.rampBandMargin * growth;
+      const hi = last - DEFAULTS.rampBandMargin * growth;
+      let rampFrames = 0;
+      for (const v of g) if (v > lo && v < hi) rampFrames++;
+      let maxStepShare = 0;
+      let stepAt = 0;
+      for (let i = 0; i < g.length - 1; i++) {
+        const share = (g[i + 1] - g[i]) / growth;
+        if (share > maxStepShare) { maxStepShare = share; stepAt = i; }
+      }
+      const okRamp = rampFrames >= c.minRampFrames;
+      const okStep = c.maxStepShare == null || maxStepShare <= c.maxStepShare;
+
+      return {
+        ok: okBefore && okAfter && okRamp && okStep,
+        got: `${fmtPct(first)}${okBefore ? '' : ' ✗'} → ${fmtPct(last)}${okAfter ? '' : ' ✗'}`
+          + ` · إطاراتٌ وسطى ${rampFrames}${okRamp ? '' : ' ✗'}`
+          + ` · أكبرُ حصّةِ زوج ${fmtPct(maxStepShare)}${okStep ? '' : ' ✗'}`
+          + ` عند #${s.frames[stepAt]}→#${s.frames[stepAt + 1]}`
+          + ` (${s.frames.length} إطارًا #${s.frames[0]}→#${s.frames[s.frames.length - 1]})`,
+        want: `فارغةٌ ≤ ${fmtPct(maxBefore)} ثم ≥ ${fmtPct(minAfter)}`
+          + ` · إطاراتٌ وسطى ≥ ${c.minRampFrames}`
+          + (c.maxStepShare != null ? ` · حصّةُ زوجٍ ≤ ${fmtPct(c.maxStepShare)}` : ''),
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // (٢) الاتّجاه — الإزاحةُ **مُوقَّعة**، والمسارُ كلُّه لا طرفاه
+    // ═══════════════════════════════════════════════════════════════════════
+    case 'motionDirection': {
+      // `motionBetween` يُرجع مقدارًا. وعنصرٌ يصعد ٨٠٠ بكسلًا وعنصرٌ ينزل ٨٠٠
+      // يُخرجان الرقمَ نفسَه إلى آخرِ خانة — قيس ذلك على شاهدَين لا فرقَ بينهما
+      // إلّا الإشارة. فهذا البندُ يقيس الإشارةَ والمقدار معًا، ويقيس معهما
+      // **أقصى رجوعٍ** عبر النافذة.
+      //
+      // والرجوعُ هو درسُ `edgeDelta` منقولًا: هناك ثبت أن بندَي موضعٍ لا يُثبتان
+      // ميلًا لأن نافذتَي قبولهما تتداخلان. وهنا: بندا موضعٍ عند t0 وt1 لا
+      // يُثبتان مسارًا — وبُني شاهدٌ يُثبتها بالبناء لا بالجدل (`motion-detour`):
+      // ينزل إلى ١٧٠٠ ثم يعود إلى ١٤٠٠، فطرفاه مطابقان للمستقيم حرفًا بحرف
+      // ويجتاز كلَّ بندٍ يسأل «أين هو عند t». ولا يراه إلا `maxBacktrackPx`.
+      const t = trackPosition(frames, bg, c);
+      if (t.error) return { ok: false, got: t.error, want: `إزاحةٌ بين ${c.t0}ث و${c.t1}ث` };
+
+      const checks = [];
+      let ok = true;
+      if (c.displacementPx != null) {
+        if (c.tolerancePx == null) {
+          return { ok: false, got: '`displacementPx` بلا `tolerancePx` — خطأُ مواصفة', want: 'تسامحٌ مُصرَّحٌ به' };
+        }
+        // إزاحةٌ مُوقَّعةٌ بتسامح، لا مقدارٌ بحدٍّ أدنى: هذا هو الفرقُ عن
+        // `motionBetween`، ولو كُتب مقدارًا لعاد الفراغُ كما كان.
+        const good = Math.abs(t.travel - c.displacementPx) <= c.tolerancePx;
+        ok = ok && good;
+        checks.push(`إزاحة ${fmtPx(t.travel)}${good ? '' : ' ✗'}`);
+      }
+      if (c.minDisplacementPx != null) {
+        // حدٌّ أدنى **مُوقَّع**: سالبُه يطلب صعودًا وموجبُه نزولًا، والمقارنةُ
+        // بالضرب في الإشارة كي لا يُمرَّر معاكسٌ بمقدارٍ أكبر.
+        const want = c.minDisplacementPx;
+        const good = want >= 0 ? t.travel >= want : t.travel <= want;
+        ok = ok && good;
+        checks.push(`إزاحة ${fmtPx(t.travel)}${good ? '' : ' ✗'}`);
+      }
+      if (c.maxBacktrackPx != null) {
+        const good = t.backtrack <= c.maxBacktrackPx;
+        ok = ok && good;
+        checks.push(`أقصى رجوعٍ ${t.backtrack.toFixed(2)}px عند #${t.backtrackFrame}${good ? '' : ' ✗'}`);
+      }
+      if (!checks.length) {
+        // بندٌ لا يسأل شيئًا لا يمرّ — القاعدةُ نفسُها التي في `videoCodec`.
+        return {
+          ok: false,
+          got: 'بندٌ بلا `displacementPx` ولا `minDisplacementPx` ولا `maxBacktrackPx` — خطأُ مواصفة',
+          want: 'أحدُها على الأقلّ',
+        };
+      }
+      const wants = [];
+      if (c.displacementPx != null) wants.push(`${fmtPx(c.displacementPx)} ± ${c.tolerancePx}px`);
+      if (c.minDisplacementPx != null) wants.push(`إزاحةٌ ${c.minDisplacementPx >= 0 ? '≥' : '≤'} ${fmtPx(c.minDisplacementPx)}`);
+      if (c.maxBacktrackPx != null) wants.push(`رجوعٌ ≤ ${c.maxBacktrackPx}px`);
+      return {
+        ok,
+        got: `${checks.join(' · ')} على محور ${c.axis} (${windowTag(t, c)})`,
+        want: wants.join(' · '),
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // (٣) شكلُ المنحنى — وهو الذي يُسقِط المنحنياتَ الخاطئة
+    // ═══════════════════════════════════════════════════════════════════════
+    case 'easingShape': {
+      // ثلاثةُ أرقامٍ تُقاس من سلسلةِ السرعة، وكلُّ واحدٍ منها له شاهدٌ يُسقطه:
+      //
+      //   `velocityPeakRatio` — ذروةُ السرعة ÷ سرعةِ المستقيم المكافئ. تقرأ
+      //        واحدًا على سرعةٍ ثابتةٍ بحكم التعريف، وثلاثةً على تخفيفٍ تكعيبيّ.
+      //        تُسقِط المستقيمَ على بندٍ يطلب تخفيفًا، والتخفيفَ على بندٍ يطلب
+      //        مستقيمًا. (الشاهدان `motion-linear` و`motion-ease-out`.)
+      //
+      //   `peakVelocityAt` — موضعُ الذروة كسرًا من النافذة. «يدخل سريعًا ثم
+      //        يستقرّ» ذروتُه في أوّلها، و«يبدأ ساكنًا ويسكن» ذروتُه في منتصفها.
+      //        والنسبةُ لا تُفرّق بينهما — كلتاهما ٣ — فلا يفصلهما إلا هذا
+      //        الحقل. (الشاهد `motion-ease-in-out`، ووُجد لهذا الحقل وحده: لولاه
+      //        لمرّ الحقلُ بلا شيءٍ يُسقطه، وبندٌ لا يسقط لم يُقَس.)
+      //
+      //   `overshootPx` — أقصى تخطٍّ للمستقرّ في اتّجاه السير. صفرٌ على كلّ
+      //        منحنًى رتيب، وموجبٌ مقيسٌ على التجاوز. والشاهدُ تجاوزُه **أربعةُ
+      //        بكسلاتٍ بالضبط** لأن معامِلَ منحناه حُلَّ لها عدديًّا — لا ثمانون
+      //        يُخرجها منحنًى جاهزٌ فتُعاير البندَ على حدٍّ مريح.
+      //
+      // وكلُّ حقلٍ اختياريّ، والبندُ بلا حقلٍ واحدٍ **يسقط** خطأَ مواصفة.
+      const t = trackPosition(frames, bg, c);
+      if (t.error) return { ok: false, got: t.error, want: `منحنًى بين ${c.t0}ث و${c.t1}ث` };
+
+      const checks = [];
+      const wants = [];
+      let ok = true;
+      let asked = false;
+
+      // السرعةُ تحتاج أربعةَ إطاراتٍ على الأقلّ: الفرقُ المركزيُّ يُسقِط الطرفين،
+      // والوسيطُ الثلاثيُّ يحتاج ثلاثةَ فروقٍ ليكون له معنًى. ونافذةٌ أقصرُ
+      // تُخرج سلسلةً فارغةً فتُقرأ ذروتُها صفرًا — ونسبةُ ذروةٍ صفرٌ تمرّ على
+      // `maxVelocityPeakRatio` بثقة. فالحدُّ يُقال بدل أن يُسَدّ بصفر.
+      if (t.vel.length < 2) {
+        return {
+          ok: false,
+          got: `النافذةُ ${t.frames.length} إطاراتٍ — وسلسلةُ السرعة ${t.vel.length}، فلا شكلَ يُقاس`,
+          want: 'نافذةٌ لا تقلّ عن أربعة إطارات',
+        };
+      }
+
+      if (c.minVelocityPeakRatio != null || c.maxVelocityPeakRatio != null) {
+        asked = true;
+        if (t.peakRatio == null) {
+          return {
+            ok: false,
+            got: `لا إزاحةَ صافيةَ على محور ${c.axis} (${fmtPx(t.travel)}) — فلا نسبةَ ذروة`,
+            want: 'نافذةٌ فيها إزاحةٌ صافية',
+          };
+        }
+        const lo = c.minVelocityPeakRatio;
+        const hi = c.maxVelocityPeakRatio;
+        const good = (lo == null || t.peakRatio >= lo) && (hi == null || t.peakRatio <= hi);
+        ok = ok && good;
+        // النسبةُ الخامّةُ تُطبَع معها دائمًا: الفرقُ بينهما هو مقدارُ ما طرحه
+        // مُرشِّحُ الوسيط، ومن أراد أن يعرف هل في الملفّ شاذٌّ منفردٌ قرأه هنا
+        // بلا أداةٍ أخرى.
+        checks.push(
+          `نسبةُ الذروة ${fmtNum(t.peakRatio)}${good ? '' : ' ✗'}`
+          + (t.peakRatioRaw != null && Math.abs(t.peakRatioRaw - t.peakRatio) > 0.05
+            ? ` (وخامًّا ${fmtNum(t.peakRatioRaw)} — شاذٌّ منفردٌ طرحه الوسيط)` : ''),
+        );
+        wants.push(`نسبةُ الذروة ${lo != null ? `≥ ${lo}` : ''}${lo != null && hi != null ? ' و' : ''}${hi != null ? `≤ ${hi}` : ''}`);
+      }
+
+      if (c.peakVelocityBefore != null || c.peakVelocityAfter != null) {
+        asked = true;
+        if (t.peakAt == null) return { ok: false, got: 'النافذةُ أقصرُ من أن تُعطي سلسلةَ سرعة', want: 'نافذةٌ أطول' };
+        const good = (c.peakVelocityBefore == null || t.peakAt <= c.peakVelocityBefore)
+          && (c.peakVelocityAfter == null || t.peakAt >= c.peakVelocityAfter);
+        ok = ok && good;
+        checks.push(`ذروةُ السرعة عند ${fmtPct(t.peakAt)} من النافذة (#${t.peakFrame})${good ? '' : ' ✗'}`);
+        const parts = [];
+        if (c.peakVelocityAfter != null) parts.push(`≥ ${fmtPct(c.peakVelocityAfter)}`);
+        if (c.peakVelocityBefore != null) parts.push(`≤ ${fmtPct(c.peakVelocityBefore)}`);
+        wants.push(`موضعُ الذروة ${parts.join(' و')}`);
+      }
+
+      // وقبل أيّ قياسِ تجاوزٍ: هل يوجد مستقرٌّ يُقاس التجاوزُ عليه؟
+      //
+      // والتسامحُ المستعمَل هو تسامحُ التجاوز نفسُه، لا رقمٌ ثالثٌ يُخمَّن: ذيلٌ
+      // تتباعد مواضعُه أكثرَ من الدقّة التي يُطلَب بها التجاوزُ لا يُعطي مستقرًّا
+      // بتلك الدقّة. فالحدُّ مشتَقٌّ من المواصفة نفسِها.
+      const overTol = c.overshootTolerancePx ?? c.maxOvershootPx;
+      if (overTol != null && t.restSpread > overTol) {
+        return {
+          ok: false,
+          got: `النافذةُ تنتهي والعنصرُ يتحرّك: آخرُ ثلاثةِ مواضعَ تتباعد ${t.restSpread.toFixed(2)}px`
+            + ` — فلا مستقرَّ يُقاس التجاوزُ عليه (${windowTag(t, c)})`,
+          want: `ذيلٌ ساكنٌ ≤ ${overTol}px — يُصلَح بمدّ \`t1\` بعد لحظة الاستقرار`,
+        };
+      }
+
+      if (c.overshootPx != null) {
+        asked = true;
+        if (c.overshootTolerancePx == null) {
+          return { ok: false, got: '`overshootPx` بلا `overshootTolerancePx` — خطأُ مواصفة', want: 'تسامحٌ مُصرَّحٌ به' };
+        }
+        const good = Math.abs(t.overshoot - c.overshootPx) <= c.overshootTolerancePx;
+        ok = ok && good;
+        checks.push(`تجاوزٌ ${t.overshoot.toFixed(2)}px عند #${t.overshootFrame}${good ? '' : ' ✗'}`);
+        wants.push(`تجاوزٌ ${c.overshootPx}px ± ${c.overshootTolerancePx}px`);
+      }
+      if (c.maxOvershootPx != null) {
+        asked = true;
+        const good = t.overshoot <= c.maxOvershootPx;
+        ok = ok && good;
+        checks.push(`تجاوزٌ ${t.overshoot.toFixed(2)}px${good ? '' : ' ✗'}`);
+        wants.push(`تجاوزٌ ≤ ${c.maxOvershootPx}px`);
+      }
+
+      if (!asked) {
+        return {
+          ok: false,
+          got: 'بندٌ لا يسأل عن نسبةٍ ولا موضعِ ذروةٍ ولا تجاوز — خطأُ مواصفة',
+          want: 'حقلٌ واحدٌ على الأقلّ',
+        };
+      }
+      return {
+        ok,
+        got: `${checks.join(' · ')} · مستقرٌّ ${t.rest.toFixed(1)}px · سرعةُ المستقيم ${fmtNum(t.meanSpeed)}px/إطار`
+          + ` (${windowTag(t, c)})`,
+        want: wants.join(' · '),
+      };
+    }
+
     default:
       return null;
   }
+}
+
+/** بنودُ الزمن، مُصدَّرةً كما هي ليحكم بها المُعاير.
+ *
+ * ولماذا تُصدَّر: المُعايرُ يُثبت أن كلَّ بندٍ يسقط على شاهدٍ ويمرّ على آخر. فلو
+ * أعاد كتابةَ منطقِ البند لأثبت صلاحَ **نسخته** لا صلاحَ المحكّم، وكانت المعايرةُ
+ * تقيس ملفًّا لا يُحكَم به أحد. وهذا هو السببُ نفسُه الذي من أجله استُخرج
+ * `evalCriterion` من `score.mjs` بدل أن يُنسَخ هنا. */
+export function evalTemporalCriterion(c, frames, bg) {
+  return evalTemporal(c, frames, bg);
 }
 
 /** يُسطِّح بندَ `frameAt` إلى صفوفٍ واحدٍ لكلّ بندٍ ساكنٍ داخله.
