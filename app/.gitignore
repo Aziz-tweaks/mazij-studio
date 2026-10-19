@@ -65,3 +65,7 @@ qa/replication/attempt-t04.mp4
 *.njsproj
 *.sln
 *.sw?
+
+# (٣) `t05-update-card/target.mp4` مرجعُ جودةِ التصميم النهائيّ — عملٌ منشورٌ لا يملكه المستودع
+qa/replication/targets/t05-update-card/target.mp4
+qa/replication/attempt-t05.mp4
