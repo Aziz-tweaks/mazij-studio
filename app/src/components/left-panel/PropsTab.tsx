@@ -724,6 +724,11 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
   const pal = PALETTES[state.postPalette];
   const swatches = Array.from(new Set([pal.ac, pal.fg, pal.bg, '#FFFFFF', ...(pal.ac2 ? [pal.ac2] : [])]));
   const activeFill = el.fill ?? pal[el.fillToken];
+  // الطبقةُ القاعديّة هي ما يُرسَم (انظر التعليق عند صفّ الحدّ أدناه).
+  const baseStroke = currentAppearance(el).strokes[0] ?? null;
+  const strokeOn = !!baseStroke && baseStroke.visible && baseStroke.width > 0;
+  const strokeHex = baseStroke ? resolveLayerColor(baseStroke.color, baseStroke.colorToken, pal) : pal.fg;
+  const strokeWidth = baseStroke ? baseStroke.width : el.strokeWidth;
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -754,24 +759,63 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
           />
         </label>
       )}
-      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+      {/* **صفُّ الحدّ يقرأ ما يُرسَم ويكتب فيه.**
+       *
+       * كان يقرأ الحقلَ القديم `el.stroke` ويكتبه وحده، ولونُه مثبَّتٌ على
+       * `pal.fg` — فلا لونَ يُختار أصلًا، وعلى شكلٍ من المكتبة (أو على أيّ مستندٍ
+       * أُعيد تحميله، إذ تُجسِّد `normalizeDoc` كومةً لكلّ عنصر) لا يُرسَم شيءٌ
+       * بالمرّة. التفصيلُ والقياسُ في `withBaseStroke` بـ`lib/appearance.ts`.
+       *
+       * فالمقروءُ هنا هو `strokes[0]` من `currentAppearance` — **الطبقة التي
+       * تَرسم فعلًا** — ولا كومةَ ثانيةً تُبنى: هذا الصفُّ نافذةٌ بسيطة على
+       * الطبقة القاعديّة نفسِها التي يُحرّرها محرّرُ الطبقات في الوضع الاحترافيّ
+       * (`AppearanceSection` أدناه، وهو محجوبٌ خلف `isPro`). ولذلك يَصدُق الصفُّ
+       * الآن على خطّ المكتبة أيضًا: كومتُه حدٌّ بلا تعبئة، فكان يقول «بدون»
+       * والخطُّ مرسومٌ أمام عين المصمّم.
+       *
+       * و«حدٌّ بسُمك صفر» ليس حدًّا: يُقرأ إطفاءً، وإلا لقال الصفُّ «نشِط» وليس
+       * على الشاشة شيء.
+       *
+       * والحقلان: مُدخَلُ اللون للاختيار بالعين، وحقلُ الستّ عشريّ للصقِ لونِ
+       * علامةٍ تجاريّة — ولمَ لا يكفي الأوّل وحده مكتوبٌ عند `normalizeHex`. وهما
+       * الحقلان الأوّلان نفساهما في صفّ الطبقة الاحترافيّ، لا عنصران جديدان. */}
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, rowGap: 6, flexWrap: 'wrap', fontSize: 12 }}>
         <span style={{ color: 'var(--muted)', flex: 1 }}>{L.stroke}</span>
         <button
-          onClick={() => actions.setShapeStroke(el.id, el.stroke ? null : pal.fg)}
-          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.stroke ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.stroke ? 'var(--accent)' : 'var(--muted)' }}
+          data-testid={`shape-stroke-toggle-${el.id}`}
+          onClick={() => actions.setShapeStroke(el.id, strokeOn ? null : strokeHex)}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: strokeOn ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: strokeOn ? 'var(--accent)' : 'var(--muted)' }}
         >
-          {el.stroke ? L.on_state : L.off_state}
+          {strokeOn ? L.on_state : L.off_state}
         </button>
-        {el.stroke && (
-          <input
-            dir="ltr"
-            type="number"
-            min={1}
-            max={40}
-            value={el.strokeWidth}
-            onChange={(e) => actions.setShapeStrokeWidth(el.id, Number(e.target.value) || 0)}
-            style={{ width: 44, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
-          />
+        {strokeOn && (
+          <>
+            {/* `normalizeHex` لا القيمةُ الخام: مُدخَلُ اللون مضبوطٌ بالكامل
+                والمتصفّح يُصغّر قيمته دائمًا، وألوانُ `PALETTES` بحرفٍ كبير —
+                فالفرقُ الذي يراه React في كل تصييرٍ يَسرق التركيز من جار الحقل.
+                العطلُ (ب) في `qa/appearance-hex.spec.mjs`، وقد كَلَّف أربعة بنودٍ
+                في حلقة المحاكاة. */}
+            <input
+              data-testid={`shape-stroke-color-${el.id}`}
+              type="color"
+              title={L.stroke}
+              aria-label={L.stroke}
+              value={normalizeHex(strokeHex) ?? '#000000'}
+              onChange={(e) => actions.setShapeStroke(el.id, e.target.value)}
+              style={{ width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, background: 'transparent' }}
+            />
+            <HexField testId={`shape-stroke-hex-${el.id}`} value={strokeHex} onCommit={(hex) => actions.setShapeStroke(el.id, hex)} />
+            <input
+              data-testid={`shape-stroke-width-${el.id}`}
+              dir="ltr"
+              type="number"
+              min={1}
+              max={40}
+              value={strokeWidth}
+              onChange={(e) => actions.setShapeStrokeWidth(el.id, Number(e.target.value) || 0)}
+              style={{ width: 44, height: 26, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', textAlign: 'center', fontSize: 12 }}
+            />
+          </>
         )}
       </label>
       {el.shape === 'path' && el.points && el.points.length >= 2 && !el.subpaths?.length && <PathSmoothProps el={el} />}

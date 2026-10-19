@@ -87,6 +87,55 @@ export function withBaseLayerColor(el: DocElement, hex: string): AppearanceStack
   return a;
 }
 
+/** يضبط **طبقةَ الحدّ القاعديّة** في كومةٍ مُجسَّدة سلفًا: لونًا صريحًا وسُمكًا،
+ * ويُنشئها إن لم يكن في الكومة حدٌّ بعد. ويُرجع `el.appearance` بلا تغيير إن لم
+ * تكن هناك كومة، فيبقى المسار القديم (`migrateAppearance` من `stroke`) هو العامل
+ * كما كان بالضبط — نفسُ عقد `withBaseLayerColor` أعلاه، للحدّ هذه المرّة.
+ *
+ * **سبب وجوده.** صفُّ «الحدود» في لوح الخصائص كان ينادي `setShapeStroke` التي
+ * تكتب الحقل القديم `el.stroke` وحده، بينما `currentAppearance` تُفضّل الكومة متى
+ * وُجدت، و`normalizeDoc` تُجسّد كومةً **لكلّ عنصر** عند كلّ فتحٍ
+ * (`StudioContext.tsx:178`). فكان الصفُّ زرًّا ميّتًا على كل شكلٍ من المكتبة
+ * وعلى كلّ مستندٍ أُعيد تحميله: قيسَ ذلك بالضغط الحقيقيّ — مستطيلٌ من المكتبة
+ * بعد «نشِط» يحمل `stroke: '#FFFFFF'` في المستند و`appearance.strokes: []`،
+ * و`getComputedStyle(…).border` يبقى `0px none`. وهو بعينه العطلُ الذي أُصلِح
+ * للتعبئة بـ`withBaseLayerColor`، تُرك فيه الحدُّ وحده خلفًا.
+ *
+ * والطبقة القاعديّة هي `strokes[0]`، كما في `withBaseLayerColor` وكما تبنيها
+ * `migrateAppearance` (`LEGACY_STROKE_ID`) — فما يضيفه محرّر الطبقات فوقها لا
+ * يَمسّه هذا الصفُّ البسيط. */
+export function withBaseStroke(el: DocElement, color: string, width: number): AppearanceStack | undefined {
+  const a = el.appearance;
+  if (!hasAnyLayer(a)) return a;
+  if (a.strokes.length > 0) {
+    return { ...a, strokes: a.strokes.map((s, i) => (i === 0 ? { ...s, color, colorToken: null, width, visible: true } : s)) };
+  }
+  return { ...a, strokes: [newStrokeLayer({ color, colorToken: null, width, position: 'center' })] };
+}
+
+/** يَضبط سُمكَ طبقة الحدّ القاعديّة وحده (لا لونها)، ويُهمل الكومةَ التي لا حدَّ
+ * فيها — فحقلُ السُّمك في الصفّ البسيط لا يُعرَض إلا والحدُّ قائم. */
+export function withBaseStrokeWidth(el: DocElement, width: number): AppearanceStack | undefined {
+  const a = el.appearance;
+  if (!hasAnyLayer(a) || a.strokes.length === 0) return a;
+  return { ...a, strokes: a.strokes.map((s, i) => (i === 0 ? { ...s, width } : s)) };
+}
+
+/** «بدون حدّ» على كومةٍ مُجسَّدة = **إخفاء** الطبقة القاعديّة لا حذفُها.
+ *
+ * والحذفُ كان الخيارَ الأوّل، ونُقض بحالةٍ واحدة: شكلُ المكتبة المفتوح (خطّ/سهم)
+ * كومتُه **طبقةُ حدٍّ واحدة بلا تعبئة** (`libraryAppearance` في
+ * `src/lib/shapeFactory.ts:197`). فحذفُها يُفرِغ الكومة، و`hasAnyLayer` تصير
+ * كاذبة، فتعود `currentAppearance` إلى `migrateAppearance` — وهي تبني لغير
+ * المسار تعبئةً من `el.fill`. فيتحوّل الخطُّ إلى **صندوقٍ معبَّأ** عند إطفاء
+ * حدِّه، وهو عطلٌ أسوأ من الذي نُصلحه. و`resolveAppearance` تُرشِّح المخفيّ،
+ * فالإخفاءُ يُنتج «لا شيء مرسوم» بالضبط، ويبقى قابلًا للرجوع. */
+export function withBaseStrokeHidden(el: DocElement): AppearanceStack | undefined {
+  const a = el.appearance;
+  if (!hasAnyLayer(a) || a.strokes.length === 0) return a;
+  return { ...a, strokes: a.strokes.map((s, i) => (i === 0 ? { ...s, visible: false } : s)) };
+}
+
 /** A reasonable literal fallback for a layer created from a palette-token legacy field
  * (e.g. a shape's `fillToken` with no explicit `fill`) — only ever shown if the user
  * later clears the token in the new layer editor; the token itself takes priority in

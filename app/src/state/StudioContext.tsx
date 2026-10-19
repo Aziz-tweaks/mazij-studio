@@ -19,7 +19,7 @@ import { initialStudioState } from './types';
 // النيّة — ملفٌّ واحد التقت عليه ثلاثة فروع.
 import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
 import { DEFAULT_IMAGE_CROP, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
-import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor } from '../lib/appearance';
+import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor, withBaseStroke, withBaseStrokeHidden, withBaseStrokeWidth } from '../lib/appearance';
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
@@ -2156,8 +2156,29 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // `withBaseLayerColor` في `lib/appearance.ts` لتفصيل القاعدة.
       setShapeFill: (id, hex) =>
         commitElements((els) => els.map((e) => (e.id === id && e.type === 'shape' ? { ...e, fill: hex, appearance: withBaseLayerColor(e, hex) } : e))),
-      setShapeStroke: (id, hex) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'shape' ? { ...e, stroke: hex } : e))),
-      setShapeStrokeWidth: (id, w) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'shape' ? { ...e, strokeWidth: Math.max(0, w) } : e))),
+      // والحدُّ على القاعدة نفسها، وقد كان متروكًا خلفها. `withBaseStroke`
+      // و`withBaseStrokeHidden` في `lib/appearance.ts` تحملان الدليل المقيس.
+      //
+      // و**السُّمكُ يُرفَع من الصفر عند الإيقاد**: الشكلُ يُولَد بـ`strokeWidth: 0`
+      // (مغلقًا)، وحدٌّ بسُمك صفرٍ لا يرسم بكسلًا واحدًا — فكان «نشِط» يَصدُق في
+      // الحالة ويبقى الشكل بلا حدٍّ على الشاشة. والقاعدةُ المستعملة هي قاعدةُ
+      // البرنامج نفسها لِسُمكٍ يُرى على هذه الصفحة: `max(2, pageW × LINE_WIDTH_FRACTION)`
+      // — وهي حرفيًّا ما يُولَد به خطُّ المكتبة (`shapeFactory.ts:201`) وما يُولَد
+      // به مسارُ القلم المفتوح (أدناه في هذا الملفّ)، فلا رقمَ رابعًا يُخترَع هنا.
+      setShapeStroke: (id, hex) =>
+        commitElements((els) =>
+          els.map((e) => {
+            if (e.id !== id || e.type !== 'shape') return e;
+            if (hex === null) return { ...e, stroke: null, appearance: withBaseStrokeHidden(e) };
+            const pageW = sizeAt(state.sizeIdx, state.customW, state.customH).w;
+            const width = e.strokeWidth > 0 ? e.strokeWidth : Math.max(2, Math.round(pageW * LINE_WIDTH_FRACTION));
+            return { ...e, stroke: hex, strokeWidth: width, appearance: withBaseStroke(e, hex, width) };
+          }),
+        ),
+      setShapeStrokeWidth: (id, w) =>
+        commitElements((els) =>
+          els.map((e) => (e.id === id && e.type === 'shape' ? { ...e, strokeWidth: Math.max(0, w), appearance: withBaseStrokeWidth(e, Math.max(0, w)) } : e)),
+        ),
       setShapeRadius: (id, r) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'shape' ? { ...e, radius: clamp(r, 0, 0.5) } : e))),
       setShapeSmoothAmount: (id, amount) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'shape' ? { ...e, smoothAmount: clamp(amount, 0, 1) } : e))),
       liveUpdateShapeSmoothAmount: (id, amount) =>
