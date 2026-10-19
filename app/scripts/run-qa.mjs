@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // `npm test` / `pnpm test` — the whole QA suite, one command.
 //
-// WHY THIS FILE EXISTS. The suite is 42 standalone Node programs under `qa/`,
+// WHY THIS FILE EXISTS. The suite is 45 standalone Node programs under `qa/`,
 // each of which launches Playwright itself, prints `N passed, M failed` and
 // exits non-zero if anything failed. It has always been run by hand, in two
 // steps, in two terminals:
@@ -14,6 +14,33 @@
 // interprets a test; it starts the dev server the specs need, runs them one at a
 // time, adds up the two summary formats they print, and stops the server. No
 // assertion, no spec, and no threshold lives in this file.
+//
+// WHY IT COUNTS SUITES AND NOT ONLY ASSERTIONS. A measured defect, reproduced
+// deliberately before it was fixed: this runner reported a crashed suite as
+// `0 passed, 0 failed` and exited 0, so `npm test` was green about work it had
+// not measured. The path is quiet. Several specs own a `pass`/`fail` counter and
+// print it from a `finally`; when such a spec dies before its first assertion,
+// its counters are still at zero, so it prints a perfectly parseable
+// `0 passed, 0 failed` and exits 0 because `fail` was never incremented. This
+// runner then summed zero, added nothing to the totals, and called the run a
+// success. The observed reproduction: a run of two suites where one had died
+// printed `34 passed, 0 failed` and exited 0.
+//
+// The totals alone cannot catch that — reading them correctly requires already
+// knowing what the total should be, which is exactly the knowledge a test suite
+// is supposed to supply. So the run is judged on two numbers, not one:
+//
+//   1. every assertion that passed or failed, and
+//   2. how many of the suites launched actually reported a measurement.
+//
+// A suite counts as *measured* only when it printed a parseable summary that
+// accounts for at least one assertion. Fewer measured than launched is itself a
+// failure, named suite by suite, regardless of how the assertions went. Silence
+// is the loudest thing this script can report.
+//
+// And a suite that died is reported apart from a suite that failed: failing
+// assertions are a defect in the app, while a suite that never printed is a
+// defect in the measurement, and the two are not fixed in the same place.
 //
 // WHY NOT `pretest`. The dev server has to be alive *during* the run, not before
 // it, so it cannot be a `pretest` step — a `pretest` process would be reaped
@@ -123,18 +150,85 @@ function runSpec(file) {
     );
     child.stdout.on('data', (d) => ((out += d), process.stdout.write(d)));
     child.stderr.on('data', (d) => ((out += d), process.stderr.write(d)));
+    // A spawn that never starts must not look like a spec that ran and said
+    // nothing: it is reported as its own crash, with the reason.
+    child.on('error', (err) => resolve({ code: null, out: `${out}\n[spawn failed] ${err.message}` }));
     child.on('close', (code) => resolve({ code, out }));
   });
 }
 
-/** Two summary formats are in use: `N passed, M failed` in 38 specs and
+/** Two summary formats are in use: `N passed, M failed` in 41 specs and
  * `name: N pass, M fail` in 4 (designer-flow, migration-roundtrip,
- * motion-journey, phase1-representation). The last match in the output wins. */
+ * motion-journey, phase1-representation). The last match in the output wins.
+ * Both shapes go through this one regex, so neither can be misread as missing. */
 function countsFrom(out) {
   const matches = [...out.matchAll(/(\d+)\s+pass(?:ed)?,\s*(\d+)\s+fail(?:ed)?/g)];
   if (!matches.length) return null;
   const last = matches[matches.length - 1];
   return { pass: Number(last[1]), fail: Number(last[2]) };
+}
+
+/** Judge one finished spec, and say which of the two different problems it has.
+ *
+ *   ok       — printed a summary, accounted for at least one assertion, every
+ *              one of them passed, and exited 0.
+ *   failed   — the app is wrong: the suite ran and reported failing assertions.
+ *   crashed  — the measurement is wrong: the suite produced no usable number.
+ *
+ * A suite is `crashed` in three distinguishable ways, each named in the output:
+ * it printed no summary at all; it printed a summary accounting for zero
+ * assertions (the quiet shape documented at the top of this file — a swallowed
+ * exception leaves the counters at zero and the spec exits 0); or it printed a
+ * clean summary and then died anyway, which means the run it reported on was not
+ * the run that finished. */
+function classify(file, code, out) {
+  const counts = countsFrom(out);
+  const exited = code === null ? 'killed by a signal, no exit code' : `exit ${code}`;
+  if (!counts) {
+    return { file, counts: null, kind: 'crashed', why: `printed no summary line at all (${exited})` };
+  }
+  if (counts.pass + counts.fail === 0) {
+    return {
+      file,
+      counts,
+      kind: 'crashed',
+      why: `printed a summary that measures nothing — 0 passed, 0 failed (${exited}); it died before its first assertion`,
+    };
+  }
+  if (counts.fail > 0) {
+    return {
+      file,
+      counts,
+      kind: 'failed',
+      why: `${counts.fail} failing assertion${counts.fail === 1 ? '' : 's'} out of ${counts.pass + counts.fail} (${exited})`,
+    };
+  }
+  if (code !== 0) {
+    return {
+      file,
+      counts,
+      kind: 'crashed',
+      why: `printed ${counts.pass} passed, 0 failed and then died — ${exited}; the summary describes a run that did not finish`,
+    };
+  }
+  return { file, counts, kind: 'ok', why: null };
+}
+
+/** Did the suite report a summary that accounts for anything at all? This is the
+ * predicate the launched-vs-reported reconciliation is built on: the runner
+ * knows what it launched, so a launched suite that never reported is a hole it
+ * can see without being told what the total ought to be. */
+function reportedSummary(result) {
+  return Boolean(result.counts) && result.counts.pass + result.counts.fail > 0;
+}
+
+/** May the suite's numbers go into the run totals? Only from a suite that
+ * finished. A suite that printed `12 passed, 0 failed` and then died reported a
+ * summary — so it is not "missing" — but it was describing a run that did not
+ * complete, so lending its 12 to the totals would inflate them with assertions
+ * whose suite never got to the end. Reported and trusted are two questions. */
+function countsTowardTotals(result) {
+  return result.kind === 'ok' || result.kind === 'failed';
 }
 
 async function main() {
@@ -167,32 +261,81 @@ async function main() {
       throw new Error(`the dev server never answered on ${BASE_URL}`);
     }
 
-    let pass = 0;
-    let fail = 0;
-    const unreadable = [];
-    const nonZero = [];
+    const results = [];
 
     for (const file of specs) {
       console.log(`\n──── ${file} ────`);
       const { code, out } = await runSpec(file);
-      const counts = countsFrom(out);
-      if (counts) {
-        pass += counts.pass;
-        fail += counts.fail;
-      } else {
-        unreadable.push(file);
-      }
-      if (code !== 0) nonZero.push(`${file} (exit ${code})`);
+      const result = classify(file, code, out);
+      results.push(result);
+      // Echo what this runner actually read out of the spec's own output, per
+      // suite. Without it the totals are unauditable: a wrong total tells you
+      // only that something is wrong somewhere in 45 suites.
+      console.log(
+        result.kind === 'ok'
+          ? `  ↳ counted ${result.counts.pass} passed, ${result.counts.fail} failed`
+          : `  ↳ ${result.kind.toUpperCase()}: ${result.why}`,
+      );
     }
 
-    console.log(`\n════ ${pass} passed, ${fail} failed · ${specs.length} suites ════`);
-    if (unreadable.length) {
-      console.log(`no summary line printed by: ${unreadable.join(', ')}`);
+    const counted = results.filter(countsTowardTotals);
+    const neverReported = results.filter((r) => !reportedSummary(r));
+    const crashed = results.filter((r) => r.kind === 'crashed');
+    const failed = results.filter((r) => r.kind === 'failed');
+
+    let pass = 0;
+    let fail = 0;
+    for (const r of counted) {
+      pass += r.counts.pass;
+      fail += r.counts.fail;
     }
-    if (nonZero.length) {
-      console.log(`exited non-zero: ${nonZero.join(', ')}`);
+
+    // `counted/launched` is in the headline on purpose. It is the one number
+    // that cannot be read as green while a suite is missing, and it is the
+    // number the old headline left out — it printed the launched count beside
+    // the totals, which reads as though every launched suite was in them.
+    console.log(
+      `\n════ ${pass} passed, ${fail} failed · ${counted.length}/${specs.length} suites counted ════`,
+    );
+
+    if (crashed.length) {
+      console.log(
+        `\n✗ CRASHED — ${crashed.length} of ${specs.length} suites produced no usable measurement:`,
+      );
+      for (const r of crashed) console.log(`    · ${r.file} — ${r.why}`);
+      console.log('  A crashed suite is a defect in the measurement, not a passing suite.');
     }
-    process.exitCode = fail > 0 || nonZero.length || unreadable.length ? 1 : 0;
+
+    if (failed.length) {
+      console.log(
+        `\n✗ FAILING ASSERTIONS — ${failed.length} suite${failed.length === 1 ? '' : 's'}:`,
+      );
+      for (const r of failed) console.log(`    · ${r.file} — ${r.why}`);
+    }
+
+    // The reconciliation, stated as arithmetic even when the bucket above
+    // already named the same files: the runner knows what it launched, so a
+    // launched suite that never reported is a hole it is able to see on its own.
+    if (neverReported.length) {
+      const reported = specs.length - neverReported.length;
+      console.log(
+        `\n✗ COUNT MISMATCH — launched ${specs.length} suites, ${reported} reported a summary, ` +
+          `${neverReported.length} never reported at all: ${neverReported.map((r) => r.file).join(', ')}`,
+      );
+      console.log(
+        '  The assertion totals above are therefore incomplete and must not be quoted as the suite.',
+      );
+    }
+
+    const green = fail === 0 && !crashed.length && !failed.length && !neverReported.length;
+    process.exitCode = green ? 0 : 1;
+    if (green) {
+      console.log(
+        `✓ all ${specs.length} suites launched reported and finished, and every assertion passed`,
+      );
+    } else {
+      console.log('\n✗ QA RUN FAILED');
+    }
   } finally {
     stop();
   }
