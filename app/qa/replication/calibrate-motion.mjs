@@ -334,6 +334,28 @@ const CLAUSES = [
     why: 'يدخل سريعًا ثم يستقرّ بلا تجاوز',
   },
   {
+    id: 'smear-is-sharp',
+    type: 'motionSmear',
+    region: REG,
+    axis: 'y',
+    t: GROUND_TRUTH.blur.t,
+    maxAnisotropy: 5,
+    maxSoftInkShare: 0.1,
+    expect: { 'motion-blur-off': true, 'motion-blur-on': false },
+    why: 'الحوافُّ حادّةٌ — عيّنةٌ واحدةٌ للإطار',
+  },
+  {
+    id: 'smear-is-blurred',
+    type: 'motionSmear',
+    region: REG,
+    axis: 'y',
+    t: GROUND_TRUTH.blur.t,
+    minAnisotropy: 5,
+    minSoftInkShare: 0.1,
+    expect: { 'motion-blur-on': true, 'motion-blur-off': false, 'motion-linear': false },
+    why: 'مسحةٌ على اتّجاه السير — و`motion-linear` يُثبت أن الحركةَ وحدَها لا تَكفي',
+  },
+  {
     id: 'ease-is-overshoot',
     type: 'easingShape',
     region: REG,
@@ -348,10 +370,41 @@ const CLAUSES = [
   },
 ];
 
+/** قراءتا بندِ المسحة على الشواهد — الأرضيّةُ أقصى ما قرأه شاهدٌ **بلا** ضباب،
+ * والإشارةُ ما قرأه الشاهدُ المُضبَّب. وتُجمَع الأرضيّةُ من أربعة شواهدَ لا من
+ * واحد: `motion-blur-off` (سريعٌ حادّ) و`motion-linear` و`motion-ease-out` و
+ * `motion-overshoot` — فعتبةٌ مبنيّةٌ على قراءةٍ واحدةٍ تُعاير على تلك القراءة. */
+function smearReadings(open) {
+  const read = (name, t) => {
+    const r = evalTemporalCriterion(
+      { id: 'cal', type: 'motionSmear', region: REG, axis: 'y', t, minAnisotropy: 1e-9, minSoftInkShare: 1e-9 },
+      open(name), parseHex(BG),
+    );
+    return {
+      aniso: Number(r.got.match(/الاتّجاه ([\d.]+)/)[1]),
+      soft: Number(r.got.match(/الحافّة ([\d.]+)/)[1]) / 100,
+    };
+  };
+  const sharp = [
+    read('motion-blur-off', GROUND_TRUTH.blur.t),
+    read('motion-linear', 1.5),
+    read('motion-ease-out', 1.5),
+    read('motion-overshoot', 1.5),
+  ];
+  const blurred = read('motion-blur-on', GROUND_TRUTH.blur.t);
+  return {
+    anisoFloor: Math.max(...sharp.map((r) => r.aniso)),
+    softFloor: Math.max(...sharp.map((r) => r.soft)),
+    anisoSignal: blurred.aniso,
+    softSignal: blurred.soft,
+  };
+}
+
 const CONTROLS = [
   'target', 'motion-slam',
   'motion-linear', 'motion-ease-out', 'motion-ease-in-out', 'motion-overshoot',
   'motion-wrong-way', 'motion-detour', 'motion-spike', 'motion-creep', 'motion-drift',
+  'motion-blur-off', 'motion-blur-on',
 ];
 
 /** الشاهدُ المقابل: `staticAfter` على شواهد الانجراف.
@@ -468,6 +521,18 @@ function runControls() {
     console.log(`            أرضيّة ${floorV}px · المبنيُّ ${signalV.toFixed(3)}px · وسطٌ هندسيّ ${Math.sqrt(floorV * Math.abs(signalV)).toFixed(3)}px · العتبة ${th}px`);
     console.log(`            ×${(th / floorV).toFixed(0)} فوق الأرضيّة · ÷${(Math.abs(signalV) / th).toFixed(2)} تحت المبنيّ`);
   };
+  // ــ عتبتا الضباب ــ كلتاهما بوسطٍ هندسيٍّ بين ظاهرتين مقيستين ــــــــــــــ
+  // والأرضيّةُ هنا **ليست السكون** بل **حركةٌ سريعةٌ بلا ضباب** — وهذا هو الشرط:
+  // عتبةٌ معايَرةٌ على إطارٍ ساكنٍ تُسمّي كلَّ حركةٍ ضبابًا. ولهذا يُقرأ الطرفُ
+  // الأدنى من `motion-blur-off` نفسِه: المسارُ نفسُه والسرعةُ نفسُها واللحظةُ
+  // نفسُها، ولا يفصله عن الآخر إلّا عددُ العيّنات.
+  const smear = smearReadings(open);
+  sep('تباينُ اتّجاه المسحة', 'حادٌّ (أقصى ما قيس)', smear.anisoFloor, 'مُضبَّبٌ ١٦ عيّنة', smear.anisoSignal, 5);
+  sep('حصّةُ الحافّة', 'حادٌّ (أقصى ما قيس)', smear.softFloor, 'مُضبَّبٌ ١٦ عيّنة', smear.softSignal, 0.1);
+  console.log(`        والمبنيُّ بقناع البند ${GROUND_TRUTH.blur.softInkShareMasked.toFixed(4)}`
+    + ` · المقيسُ ${smear.softSignal.toFixed(4)} · فارقٌ `
+    + `${(100 * Math.abs(smear.softSignal - GROUND_TRUTH.blur.softInkShareMasked) / GROUND_TRUTH.blur.softInkShareMasked).toFixed(2)}٪`);
+
   oneSided('تجاوزٌ (overshootTolerancePx)', CENTROID_FLOOR, raw['motion-overshoot'].over, 1.5);
   oneSided('رجوعٌ (maxBacktrackPx)', CENTROID_FLOOR, raw['motion-detour'].back, 2);
   oneSided('انجرافٌ (tolerancePx على نافذة الثبات)', CENTROID_FLOOR, 16, 2);

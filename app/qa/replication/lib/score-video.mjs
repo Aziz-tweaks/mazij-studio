@@ -76,7 +76,7 @@
 // وثلاثتُها تُقاس على سلسلةٍ **مُرشَّحةٍ بوسيطٍ ثلاثيّ**، والسببُ والحدُّ مكتوبان
 // في `lib/video.mjs` §٤: شاذٌّ منفردٌ واحدٌ لا يُغيّر فيها عيّنةً، كبُرَ أو صغُر.
 import { evalCriterion, inkFraction, inkCentroid, overallSimilarity } from './score.mjs';
-import { parseHex } from './png.mjs';
+import { colorDistance, parseHex } from './png.mjs';
 import { FrameSet, frameDelta, frameSeries, median3Filter } from './video.mjs';
 
 // العتبات الافتراضيّة — مقيسةٌ على t00، ولكلّ بندٍ أن يُصرّح بغيرها.
@@ -126,6 +126,94 @@ function rationalEquals(fps, want) {
     return fps.num * d === n * fps.den;
   }
   return fps.num === want * fps.den;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ضبابُ الحركة — وهو وحدَه من بنود هذه الورقة يُقاس على **إطارٍ واحد**
+// ─────────────────────────────────────────────────────────────────────────────
+// كلُّ بندٍ زمنيٍّ فوق يسأل عن فرقٍ بين إطارات. وضبابُ الحركة ليس كذلك: هو أثرٌ
+// **داخل** الإطار الواحد — عنصرٌ ممسوحٌ على اتّجاه سيره وجارٌ له حادٌّ في الإطار
+// نفسِه. ولهذا لا شيءَ في هذا الملفّ كلِّه كان يراه: بنودُ الفرق تقرأ إطارين،
+// وبنودُ `frameAt` تقرأ لونًا وموضعًا وحافّةً، ولا واحدَ منها يسأل «كيف تَتوزّع
+// الحافّةُ داخل هذا الإطار».
+//
+// **ومتوسّطُ التدرّج أعمى عنه بحكم بنائه، وهذا قيس لا استُنتج.** أوّلُ مقياسٍ
+// جُرّب كان `mean|∂I/∂x|`، فقرأ على كتلةٍ مُضبَّبةٍ ستَّ عشرة عيّنةً **الرقمَ نفسَه
+// إلى أربع خانات** الذي قرأه على الحادّة. والسببُ متطابقةٌ: التغايرُ الكلّيُّ
+// محفوظٌ تحت المسح. حافّةٌ ارتفاعُها H تُعطي H، وإن مُسحت إلى N درجةٍ ارتفاعُ كلٍّ
+// منها H/N أعطت N·(H/N) = H. فالمسحُ **يُعيد توزيعَ** التدرّج ولا يُنقصه.
+//
+// فالمقياسُ طاقةٌ لا متوسّط: `Σ(∂I/∂x)²` تُعطي H² للحافّة الحادّة و
+// N·(H/N)² = H²/N للممسوحة — أي أنها تَسقط كـ١/N. وهذا هو الفرقُ بين مقياسٍ
+// يَرى الظاهرةَ ومقياسٍ لا يراها، ولا علاقةَ له بالعتبة.
+//
+// والبندُ يُحاسَب على **ساقَين**، كما يُحاسَب `staticAfter` على ساقَيه وللسبب
+// نفسِه — أن إحداهما تَعمى عمّا تراه الأخرى:
+//
+//   `anisotropy` = طاقةُ التدرّج عرضَ السير ÷ طاقتُه على السير. تُثبت أن المسحةَ
+//   **على اتّجاه الحركة** لا في كلّ اتّجاه — فتُفرّق الضبابَ من تمويهٍ عامّ. وهي
+//   **تابعةٌ للمحتوى**: مربّعٌ حادٌّ يقرأ نحوَ ١٫٠، ونصٌّ عمودُه أغلبُ من سطره يقرأ
+//   أقلَّ من ١ بلا ضبابٍ أصلًا. فلا قيمةَ افتراضيّةَ لها — القاعدةُ نفسُها التي
+//   تَحكم `motionBetween.minDistance`.
+//
+//   `softInkShare` = حصّةُ البكسلات الجزئيّة من المُحبَّر. لا اتّجاهَ لها، لكنها
+//   **شبهُ مستقلّةٍ عن المحتوى**: حبرٌ حادٌّ كلُّه مصمتٌ إلّا صفَّ التنعيم، أيًّا
+//   كان شكلُه.
+//
+// والقناعُ نسبيٌّ لا مطلق: «مُحبَّر» = بُعدُه اللونيُّ عن الخلفيّة ≥ ١٥٪ من أقصى
+// بُعدٍ في المنطقة، و«جزئيّ» = بين ١٥٪ و٨٥٪. ولم تُكتَب حدودًا مطلقةً لأن لونَ
+// الحبر يختلف بين هدفٍ وهدف، فحدٌّ مطلقٌ كان سيُعاير البندَ على لون الشاهد.
+const SOFT_LO = 0.15;
+const SOFT_HI = 0.85;
+
+function smearMetrics(img, region, bg) {
+  const x0 = Math.max(1, Math.round(region.x * img.width));
+  const y0 = Math.max(1, Math.round(region.y * img.height));
+  const x1 = Math.min(img.width - 1, Math.round((region.x + region.w) * img.width));
+  const y1 = Math.min(img.height - 1, Math.round((region.y + region.h) * img.height));
+  if (x1 - x0 < 3 || y1 - y0 < 3) return null;
+  const C = img.channels;
+  const W = img.width;
+  const px = (x, y) => {
+    const i = y * W * C + x * C;
+    return C === 1
+      ? { r: img.pixels[i], g: img.pixels[i], b: img.pixels[i] }
+      : { r: img.pixels[i], g: img.pixels[i + 1], b: img.pixels[i + 2] };
+  };
+  // أقصى بُعدٍ لونيٍّ عن الخلفيّة — مقامُ القناع النسبيّ.
+  let dMax = 0;
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const d = colorDistance(px(x, y), bg);
+      if (d > dMax) dMax = d;
+    }
+  }
+  if (dMax <= 0) return null;
+  // السطوعُ المُدرَك — المشتقّةُ تُؤخَذ عليه لا على القنوات الثلاث منفردةً.
+  const lum = (p) => 0.2126 * p.r + 0.7152 * p.g + 0.0722 * p.b;
+  let ex = 0;
+  let ey = 0;
+  let n = 0;
+  let inked = 0;
+  let soft = 0;
+  for (let y = y0 + 1; y < y1 - 1; y++) {
+    for (let x = x0 + 1; x < x1 - 1; x++) {
+      // فرقٌ مركزيّ — القاعدةُ نفسُها التي في `trackPosition`، ولنفس السبب:
+      // الأماميُّ يُزيح الحافّةَ نصفَ بكسلٍ فيَجعل الطاقةَ دالّةً في اتّجاه المسح.
+      const dx = (lum(px(x + 1, y)) - lum(px(x - 1, y))) / 2;
+      const dy = (lum(px(x, y + 1)) - lum(px(x, y - 1))) / 2;
+      ex += dx * dx;
+      ey += dy * dy;
+      n++;
+      const r = colorDistance(px(x, y), bg) / dMax;
+      if (r >= SOFT_LO) {
+        inked++;
+        if (r <= SOFT_HI) soft++;
+      }
+    }
+  }
+  if (!n || !inked) return null;
+  return { energyX: ex / n, energyY: ey / n, inked, soft, softInkShare: soft / inked, pixels: n };
 }
 
 /** بنودُ الحاوية: الحقائقُ التي تُقرأ من الملفّ قبل أن يُفتح أيُّ إطار. */
@@ -666,6 +754,78 @@ function evalTemporal(c, frames, bg) {
         ok,
         got: `${checks.join(' · ')} · مستقرٌّ ${t.rest.toFixed(1)}px · سرعةُ المستقيم ${fmtNum(t.meanSpeed)}px/إطار`
           + ` (${windowTag(t, c)})`,
+        want: wants.join(' · '),
+      };
+    }
+
+    case 'motionSmear': {
+      // بندُ إطارٍ واحد — ولهذا يأخذ `t` لا `t0`/`t1`. وهو الوحيدُ كذلك في هذا
+      // الملفّ، لأن الظاهرةَ نفسَها كذلك: المسحةُ أثرٌ داخل الإطار لا فرقٌ بين
+      // إطارين. ومن قاسها بفرقٍ بين إطارين قاس الحركةَ لا الغالق.
+      if (c.axis !== 'x' && c.axis !== 'y') {
+        return { ok: false, got: `«axis» ليس x ولا y (${JSON.stringify(c.axis)}) — خطأُ مواصفة`, want: 'محورُ سيرٍ مُصرَّحٌ به' };
+      }
+      if (!c.region) {
+        // المنطقةُ **شرطٌ** لا اختيار، للسبب الذي جعلها شرطًا في بنود الاتّجاه:
+        // طاقةُ التدرّج على اللوحة كلِّها يُخمِدها كلُّ ساكنٍ فيها، فتُقرأ مسحةٌ
+        // أضعفَ من الحقيقة ويُنسَب النقصُ إلى المقياس.
+        return { ok: false, got: 'بندٌ بلا `region` — خطأُ مواصفة', want: 'منطقةُ العنصر المتحرّك' };
+      }
+      if (typeof c.t !== 'number' || !Number.isFinite(c.t)) {
+        return { ok: false, got: `«t» ليس زمنًا (${JSON.stringify(c.t)}) — خطأُ مواصفة`, want: 'لحظةٌ مُصرَّحٌ بها' };
+      }
+      const at = frames.frameIndexAt(c.t);
+      if (!at) return { ok: false, got: `${c.t}ث خارج المجرى`, want: 'لحظةٌ داخل المقطع' };
+      const m = smearMetrics(frames.full(at.index), c.region, bg);
+      if (!m) {
+        return { ok: false, got: `لا حبرَ في المنطقة على ${frameTag(at, c.t)}`, want: 'منطقةٌ فيها العنصر' };
+      }
+      // عرضَ السير ÷ على السير. فمحورُ السير `axis`، والعرضُ هو الآخر.
+      const along = c.axis === 'x' ? m.energyX : m.energyY;
+      const cross = c.axis === 'x' ? m.energyY : m.energyX;
+      const aniso = along > 0 ? cross / along : Infinity;
+
+      const checks = [];
+      let ok = true;
+      if (c.minAnisotropy != null) {
+        const good = aniso >= c.minAnisotropy;
+        ok = ok && good;
+        checks.push(`تباينُ الاتّجاه ${fmtNum(aniso)}${good ? '' : ' ✗'}`);
+      }
+      if (c.maxAnisotropy != null) {
+        const good = aniso <= c.maxAnisotropy;
+        ok = ok && good;
+        checks.push(`تباينُ الاتّجاه ${fmtNum(aniso)}${good ? '' : ' ✗'}`);
+      }
+      if (c.minSoftInkShare != null) {
+        const good = m.softInkShare >= c.minSoftInkShare;
+        ok = ok && good;
+        checks.push(`حصّةُ الحافّة ${fmtPct(m.softInkShare)}${good ? '' : ' ✗'}`);
+      }
+      if (c.maxSoftInkShare != null) {
+        const good = m.softInkShare <= c.maxSoftInkShare;
+        ok = ok && good;
+        checks.push(`حصّةُ الحافّة ${fmtPct(m.softInkShare)}${good ? '' : ' ✗'}`);
+      }
+      if (!checks.length) {
+        // القاعدةُ نفسُها التي في `videoCodec` و`motionDirection`: بندٌ لا يسأل
+        // شيئًا لا يمرّ.
+        return {
+          ok: false,
+          got: 'بندٌ بلا حدٍّ على `anisotropy` ولا على `softInkShare` — خطأُ مواصفة',
+          want: 'أحدُها على الأقلّ',
+        };
+      }
+      const wants = [];
+      if (c.minAnisotropy != null) wants.push(`تباينٌ ≥ ${c.minAnisotropy}`);
+      if (c.maxAnisotropy != null) wants.push(`تباينٌ ≤ ${c.maxAnisotropy}`);
+      if (c.minSoftInkShare != null) wants.push(`حصّةُ حافّةٍ ≥ ${fmtPct(c.minSoftInkShare)}`);
+      if (c.maxSoftInkShare != null) wants.push(`حصّةُ حافّةٍ ≤ ${fmtPct(c.maxSoftInkShare)}`);
+      return {
+        ok,
+        got: `${checks.join(' · ')} على محور ${c.axis}`
+          + ` (طاقةٌ على السير ${fmtNum(along)} · عرضَه ${fmtNum(cross)} · ${m.inked} بكسلًا محبَّرًا)`
+          + ` ← على ${frameTag(at, c.t)}`,
         want: wants.join(' · '),
       };
     }
