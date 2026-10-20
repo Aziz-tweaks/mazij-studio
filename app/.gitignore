@@ -74,6 +74,12 @@ qa/replication/targets/t05-update-card/target.mp4
 qa/replication/targets/t05-update-card/adv-*.mp4
 qa/replication/attempt-t05.mp4
 qa/replication/attempt-t05.doc.json
+# و`attempt-t05.autosave.json` معهما: لقطةُ مستندِ المحاولة كما يَحفظها
+# `mazij.autosave.v1`، فتَحمل حروفَ العمل وعلامتَه كما يَحملها `doc.json`.
+# لا يَكتبه `build-t05.mjs`، بل يَسقط من تجربةٍ يدويّةٍ تَنسخ المِفتاحَ إلى
+# القرص — وقد وُجد فعلًا غيرَ متتبَّعٍ في شجرةِ بناءٍ قائمة. فالسطرُ هنا
+# لأن الخطَّ الأحمرَ يُسبِق الحادثة.
+qa/replication/attempt-t05.autosave.json
 # وحروفُ ذلك العمل وعلامتُه معه. فالهندسةُ والزمنُ واللونُ والحركةُ في
 # `build-t05.mjs` متتبَّعةٌ لأنها ما تَختبره الحلقة؛ وهذا الملفُّ وحدَه هويّةُ
 # صاحبه. فمن يَملكه يُعيد إنتاج المرجع، ومن استنسخ المستودعَ بناه بمحتوًى محايدٍ
