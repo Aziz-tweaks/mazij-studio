@@ -1,5 +1,6 @@
 import type { Lang } from '../i18n/strings';
 import type { SizeMedium, ToolId } from '../data/constants';
+import { defaultTargetsFor } from '../data/constants';
 import type { DocElement, ElementId } from './elements';
 // `createDefaultElements` لم يعد يُستورَد هنا: شاشة البداية نقلت البوستر التجريبي الجاهز
 // إلى `starterTemplates.ts` وجعلت المستند الفاضي هو نقطة الانطلاق، فلم يبقَ له إلا
@@ -391,6 +392,13 @@ export interface StudioState {
   openDoc: 'checking' | 'none' | 'open';
 }
 
+/** مقاسُ الحالة الابتدائيّة، ثابتًا مُسمًّى لا رقمًا مكتوبًا مرّتين: يَقرؤه
+ * `sizeIdx` و`targets` معًا أدناه، فلا يَنحرف الافتراضُ عن مقاسه كما انحرف من
+ * قبل. والبرنامجُ لا يَفتح على مستندٍ أصلًا (`screen: 'home'`)، فهذه قيمةُ ما
+ * قبل الاختيار — وكلُّ مستندٍ حقيقيٍّ يُبذَر من مقاسه هو في `startDoc` أو في
+ * مُستعيد الحفظ التلقائيّ. */
+const INITIAL_SIZE_IDX = 0;
+
 export const initialStudioState: StudioState = {
   // يفتح البرنامج على **سؤال، لا على مستند**. كانت القيمة `'editor'`، فكان مزيج
   // يتجاوز شاشة البدايته المبنيّة أصلًا (`HomeScreen.tsx`) ويهبط في البوستر التجريبي
@@ -407,7 +415,10 @@ export const initialStudioState: StudioState = {
   tlOpen: true,
   exportOpen: false,
   exportFormat: 'png',
-  targets: { ig: true, x: true, tt: true, li: true },
+  // مقاسُ المستند هو هدفُ تصديره، لا أربعةٌ مكتوبةٌ بالاسم — انظر
+  // `defaultTargetsFor` في `src/data/constants.ts` لِمَ كان الحرفُ هنا خطأً
+  // ولِمَ صار واحدًا.
+  targets: defaultTargetsFor(INITIAL_SIZE_IDX),
   exportState: 'idle',
   exportProgress: 0,
   exportScale: 2,
@@ -426,7 +437,7 @@ export const initialStudioState: StudioState = {
   aiMsgs: [],
   aiInput: '',
   aiTyping: false,
-  sizeIdx: 0,
+  sizeIdx: INITIAL_SIZE_IDX,
   customW: 1080,
   customH: 1080,
   playing: false,

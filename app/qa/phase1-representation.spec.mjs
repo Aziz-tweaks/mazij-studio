@@ -20,7 +20,12 @@
 //   A6  a key placed by arrow-key scrubbing shows its own value in frame 0 at 24 fps
 //   A7  a still format opens with no timeline; a timed one with one; and the size
 //       menu flips it both ways with no reload
-//   A8  `medium ===` appears in at most three files — a grep, run here as a spec
+//   A8  a UI branch on `medium` appears in at most three files — a grep, run here as
+//       a spec. It counted the literal `medium ===` until 20 October 2026, which
+//       bounded the idiom and not the thing: `medium !== 'timed'` in a fourth UI file
+//       satisfied the grep while adding exactly the branch A8 exists to limit. It now
+//       counts either operator, outside the model layer (`src/state/`), whose `!==`
+//       guards are exempt by the convention `nextSizeState` documents
 //   A9  the derived duration is visible and correct, and the frame count follows it
 //
 // Plus the frame grid's own round-trip, which is what lets every epsilon be deleted.
@@ -649,25 +654,62 @@ async function main() {
   // ═════════════════════════════════════════════════════════════════════════
   // A8. عدُّ التفرّع / The anti-fork count
   // ═════════════════════════════════════════════════════════════════════════
-  console.log('\nA8. `medium ===` في ثلاثة ملفّاتٍ على الأكثر');
+  console.log('\nA8. تفرُّعُ الواجهة على `medium` في ثلاثة ملفّاتٍ على الأكثر');
+  // **هذا البندُ كان يَحرس الصيغةَ لا المعنى، فشُدِّد في ٢٠ أكتوبر ٢٠٢٦.**
+  //
+  // كان يَبحث عن النصّ `medium ===` حرفيًّا. وقَلبُ الشرط إلى `medium !== 'timed'`
+  // يُرضي ذلك البحثَ ويُضيف **بعينه** التفرّعَ الذي وُجد البندُ ليَحصره: شرطٌ في
+  // ملفِّ واجهةٍ رابعٍ يَقرأ طبيعةَ المستند ويَبني عليها سطحًا. فالبندُ كان يَعِد
+  // بثلاثةِ أسطحٍ ويَضمن ثلاثَ كتاباتٍ لعلامةِ المساواة.
+  //
+  // والقالبُ قائمٌ في المستودع فعلًا — `splitAtPlayhead` و`nextSizeState` في
+  // `StudioContext.tsx` كلاهما `medium !== 'timed'` — وهو **اصطلاحٌ موثَّقٌ لا
+  // تحايل: تعليقُ `nextSizeState` يَقوله صراحةً** («التفرّعُ بـ`===` سطحُ واجهةٍ
+  // محصورٌ في ثلاثة ملفّاتٍ يَحرسها A8، وهذا حرسُ نموذجٍ لا سطحَ واجهة»). فالفصلُ
+  // المقصودُ هو **نموذجٌ مقابل واجهة**، لا علامةُ مساواةٍ مقابل نفيها؛ و`!==`
+  // علامةٌ يَلبسها حرسُ النموذج، لا بابٌ خلفيٌّ إلى عدّ الواجهة.
+  //
+  // فالعدُّ الآن: أيُّ مقارنةٍ على `medium` — `===` أو `!==` — في أيّ ملفٍّ **خارج**
+  // طبقةِ النموذج (`src/state/`). والجدولُ المفتوحُ (`MEDIUM_CHIP`) لا يُعَدّ ولا
+  // يُراد عدُّه: المستودعُ يُفضّله على الشرط صراحةً، لأن إضافةَ طبيعةٍ ثالثةٍ تصير
+  // فيه خطأَ ترجمةٍ عند كلّ قارئ لا شرطًا منسيًّا — وهو الشكلُ الذي يُدفَع إليه من
+  // يَحتاج قراءةَ الطبيعة بلا تفرّعِ سلوك.
+  // `[!=]=` لا `[!=]==`: يَلقُط `===` و`!==` و`==` و`!=` معًا، فلا تَبقى المساواةُ
+  // المتسامحةُ بابًا ثالثًا. ولا يَلقُط إسنادًا (`medium = x`) لأنه يَطلب علامتَين.
+  const MEDIUM_BRANCH = /\bmedium\s*[!=]=/;
+  /** طبقةُ النموذج، المُعفاةُ بالاصطلاح الموثَّق أعلاه. وهي مسارٌ لا ملفٌّ مُسمًّى:
+   * من نَقل حرسَ نموذجٍ إلى ملفٍّ جديدٍ تحت `src/state/` لم يُضِف سطحَ واجهة. */
+  const isModelLayer = (rel) => rel.startsWith('src/state/');
   const hits = [];
+  const modelHits = [];
   const walk = (dir) => {
     for (const name of readdirSync(dir)) {
       const p = join(dir, name);
       if (statSync(p).isDirectory()) walk(p);
-      else if (/\.tsx?$/.test(name) && readFileSync(p, 'utf8').includes('medium ===')) hits.push(p.replace(/.*\/src\//, 'src/'));
+      else if (/\.tsx?$/.test(name) && MEDIUM_BRANCH.test(readFileSync(p, 'utf8'))) {
+        const rel = p.replace(/.*\/src\//, 'src/');
+        (isModelLayer(rel) ? modelHits : hits).push(rel);
+      }
     }
   };
   walk(new URL('../src', import.meta.url).pathname);
   hits.sort();
+  modelHits.sort();
   const expectedHits = ['src/App.tsx', 'src/components/ExportDialog.tsx', 'src/components/ToolRail.tsx'];
   assert(
     hits.length <= 3,
-    `\`medium ===\` appears in ${hits.length} files under src/ (at most 3 allowed): ${hits.join(', ')}`,
+    `a UI branch on \`medium\` (\`===\` **or** \`!==\`) appears in ${hits.length} files outside src/state/ (at most 3 allowed): ${hits.join(', ')}`,
   );
   assert(
     JSON.stringify(hits) === JSON.stringify(expectedHits),
     `and they are exactly the three surfaces the plan names: ${hits.join(', ')}. Timeline.tsx's local \`sizeAt(...).kind\` derivation is gone — it is the document's field now, read in one place and branched on in three`,
+  );
+  // والمعفاةُ تُطبَع لا تُسكَت: إعفاءٌ لا يُرى يصير مع الوقت فجوةً لا يَعلم بها
+  // أحد. وهذه القراءةُ هي التي تُظهِر — عند كلّ تشغيل — أنّ الإعفاء مسارٌ معدودٌ
+  // وليس شيكًا على بياض.
+  assert(
+    modelHits.every((h) => isModelLayer(h)),
+    `and the \`!==\` guards that are exempt are all in the model layer, named: ${modelHits.join(', ') || 'none'} — the exemption is a path (src/state/), printed on every run so it cannot quietly become a hole`,
   );
 
   // ═════════════════════════════════════════════════════════════════════════

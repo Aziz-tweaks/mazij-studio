@@ -70,11 +70,58 @@ async function main() {
 
   assert((await page.locator('[data-testid="export-target-custom"]').count()) === 1, 'batch export: a custom-size target tile exists in the sizes grid');
 
-  // Default targets are ig+x+tt+li all on; narrow to ig+x, then add custom — 3 total.
-  await page.locator('button', { hasText: 'تيك توك' }).click();
-  await page.locator('button', { hasText: 'لينكدإن' }).click();
-  await page.locator('[data-testid="export-target-custom"]').click();
+  // **The three targets this file is about: ig + x + custom.** The set is what matters
+  // — one preset whose size differs from the artboard, one more, and the custom size
+  // that only a real custom-size branch can produce — so that three files with three
+  // different pixel sizes come out of one run.
+  //
+  // The *route* to that set changed on 20 October and the destination did not. This
+  // used to read «Default targets are ig+x+tt+li all on; narrow to ig+x, then add
+  // custom» and clicked تيك توك / لينكدإن to switch them **off**. That premise was
+  // borrowed from `initialStudioState.targets`, which held `{ ig, x, tt, li }`
+  // literally for every project regardless of its size — a defect, fixed in
+  // `defaultTargetsFor`. With the default now seeded from the document, the very same
+  // clicks switched those two tiles **on** and the run produced four files: the clicks
+  // had silently changed sign while the assertions below went on counting three.
+  //
+  // So the selection is now stated outright instead of being reached by subtracting
+  // from somewhere else's default, and checked before anything is exported. A test
+  // that needs a particular selection should say which one; what the export dialog
+  // opens with is `qa/export-default-target.spec.mjs`'s subject, not this file's.
+  //
+  // **And it is reached by «تحديد الكل» and then switching tiles off, on purpose.**
+  // The first repair of this route only switched the wanted tiles *on* — and since the
+  // wanted set is now a superset of what the dialog opens with, nothing was ever
+  // switched off, so a `toggleExportTarget` that could select but not deselect passed
+  // the whole file. That was coverage the old subtract-from-the-default route had and
+  // the repair had quietly dropped. Widening first and narrowing down restores it: the
+  // off direction is exercised eleven times before a single file is written, which is
+  // what makes the premise assertion below worth asserting.
+  const WANT = ['custom', 'ig', 'x'];
+  const targetsOn = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('[data-testid^="export-target-"]')]
+        .filter((e) => e.dataset.on === 'true')
+        .map((e) => e.dataset.testid.replace('export-target-', ''))
+        .sort(),
+    );
+  await page.getByRole('button', { name: 'تحديد الكل', exact: true }).click();
+  await page.waitForTimeout(80);
+  const widened = await targetsOn();
+  assert(widened.length > WANT.length, `batch export: «تحديد الكل» widens past the three wanted targets first (${widened.length} on), so narrowing to them really exercises switching a tile **off**`);
+  for (const id of await targetsOn()) {
+    if (!WANT.includes(id)) await page.locator(`[data-testid="export-target-${id}"]`).click();
+  }
+  for (const id of WANT) {
+    const already = await page.locator(`[data-testid="export-target-${id}"]`).getAttribute('data-on');
+    if (already !== 'true') await page.locator(`[data-testid="export-target-${id}"]`).click();
+  }
   await page.waitForTimeout(60);
+  const selected = await targetsOn();
+  assert(
+    JSON.stringify(selected) === JSON.stringify(WANT),
+    `batch export: the run starts from exactly the three intended targets — ${selected.join(', ')} (wanted ${WANT.join(', ')}). Stated here so a drift in what the dialog opens with, or a tile that cannot be switched off, shows up as a wrong *premise* rather than as three confusing count failures downstream`,
+  );
 
   const downloads = [];
   page.on('download', (d) => downloads.push(d));

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AR, EN, type Dictionary, type Lang } from '../i18n/strings';
-import { CMDS, SIZES, PALETTES, CUSTOM_SIZE_IDX, DEFAULT_FPS, FPS_OPTIONS, TOOL_LIBRARY, sizeAt, nameOf, clamp, type CommandDef } from '../data/constants';
+import { CMDS, SIZES, PALETTES, CUSTOM_SIZE_IDX, DEFAULT_FPS, FPS_OPTIONS, TOOL_LIBRARY, sizeAt, nameOf, clamp, defaultTargetsFor, type CommandDef } from '../data/constants';
 import {
   LINE_WIDTH_FRACTION,
   MAX_SHAPE_N,
@@ -551,6 +551,10 @@ function startDoc(s: StudioState, doc: DocSnapshot, opts?: { paletteIdx?: number
     ...s,
     ...doc,
     screen: 'editor',
+    // **ومقاسُ هذا المستند هو هدفُ تصديره.** مشروعٌ جديدٌ لم يَختر صاحبُه أهدافًا
+    // بعد، فالافتراضُ يُبذَر من مقاسه هو — وكان يُورَّث من `s` أربعةً مكتوبةً
+    // بالاسم لا يَربطها به شيء. التفصيلُ في `defaultTargetsFor`.
+    targets: defaultTargetsFor(doc.sizeIdx),
     postPalette: opts?.paletteIdx ?? s.postPalette,
     artboards: [{ id, name: defaultArtboardName(1, s.lang), paletteIdx: opts?.paletteIdx ?? s.postPalette }],
     activeArtboardId: id,
@@ -1117,6 +1121,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         // ظهر ذلك في `qa/timeline.spec.mjs` §٦ وحدها، وتكرّر، فأُصلِح هنا.
         fps: active.doc.fps,
         medium: active.doc.medium,
+        // **وأهدافُ التصدير تُبذَر هنا كذلك، ولهذا سببٌ مختلفٌ عن كلّ ما فوقه.**
+        // كلُّ سطرٍ أعلاه يَستعيد حقلًا مكتوبًا في `DocSnapshot`؛ و`targets`
+        // **ليست** فيه ولا تُحفَظ، فهي حالةُ جلسةٍ تَرجع إلى قيمة
+        // `initialStudioState` عند كلّ إعادة تحميل. فمستندُ «بوست عمودي» يُبذَر
+        // صحيحًا في `startDoc`، ثم يُعاد تحميلُ الصفحة، فتَرجع الأهدافُ إلى مقاسِ
+        // ما-قبل-الاختيار بصمتٍ — عطلٌ آخرُ بالأثر نفسِه من طريقٍ آخر. قِيس في
+        // `qa/export-default-target.spec.mjs` §٣.
+        targets: defaultTargetsFor(active.doc.sizeIdx),
         historyPast: [],
         historyFuture: [],
         historyLabels: [],
@@ -3187,14 +3199,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       selectAllTargets: () => patch({ targets: Object.fromEntries(SIZES.map((z) => [z.id, true])) }),
       selectProjectSizeTarget: () =>
         patch((s) => {
-          // هدفٌ واحد: مقاس هذه اللوحة بعينه. الأهداف الافتراضية
-          // (`ig`/`x`/`tt`/`li`) لا علاقة لها بالمقاس الذي بدأ منه المشروع — من بدأ
-          // على «ريل إنستقرام» يجد هدفه نفسه **غير محدَّد** وأربعةَ أهدافٍ أخرى
-          // محدَّدة، ثلاثةٌ منها بنِسَبٍ مختلفة تمامًا. وعلى الفيديو الثمن مضاعَف:
-          // كل هدفٍ يعني رسم ١٥٠ إطارًا وترميزًا كاملًا مستقلًا.
-          const id = s.sizeIdx === CUSTOM_SIZE_IDX ? 'custom' : SIZES[s.sizeIdx]?.id;
-          if (!id) return {};
-          return { targets: { [id]: true } };
+          // هدفٌ واحد: مقاس هذه اللوحة بعينه — بـ`defaultTargetsFor` نفسِها التي
+          // تَبذر الافتراض، فلا يَنحرف الزرُّ عمّا يَفتح عليه الحوار.
+          //
+          // **وقد كان هذا الزرُّ علاجَ عطلٍ، فصار رجعةً عن توسيعٍ مقصود.** يومَ
+          // كُتب كانت الأهدافُ الافتراضيّة أربعةً مكتوبةً بالاسم لا يَربطها
+          // بالمشروع شيء، فكان الزرُّ هو الطريقَ الوحيدَ إلى ملفٍّ واحدٍ بمقاس
+          // صاحبه. والافتراضُ الآن مقاسُ المشروع نفسُه، فدَورُه أن يَرجع إلى
+          // الواحد بعد «تحديد الكل» أو بعد نقراتٍ على البلاطات — وهو دَورٌ قائم:
+          // الرجوعُ من ثلاثةَ عشر إلى واحدٍ نقرةٌ واحدة، لا اثنتا عشرة.
+          const targets = defaultTargetsFor(s.sizeIdx);
+          return Object.keys(targets).length ? { targets } : {};
         }),
       setExportScale: (exportScale) => patch({ exportScale }),
       setExportQuality: (exportQuality) => patch({ exportQuality }),

@@ -31,10 +31,17 @@
 // 6. Play **resumes** from the playhead instead of jumping to zero (parked at 3.000s,
 //    play used to report 0.132s on the next sample), and the clock tracks wall time
 //    (the old fixed +0.033 per `setInterval(33)` tick measured −1.2%/−1.6% slow).
-// 7. The export dialog states المدّة/عدد الملفات/الحجم before you commit, offers
-//    «مقاس المشروع فقط» (the four default targets never included the format the
-//    project was started in), and locks the 1×/2×/3× multiplier off for video — at the
+// 7. The export dialog states المدّة/عدد الملفات/الحجم before you commit, **opens on
+//    the project's own size** and offers «تحديد الكل»/«مقاس المشروع فقط» to widen and
+//    narrow from there, and locks the 1×/2×/3× multiplier off for video — at the
 //    default 2× a project whose card reads 1080 × 1920 produced a 2160 × 3840 file.
+//
+//    The parenthetical here used to read «the four default targets never included the
+//    format the project was started in» — the defect that «مقاس المشروع فقط» was built
+//    to work around rather than fix. It is fixed at the source now
+//    (`defaultTargetsFor`), and the sizes a project opens with are measured on the
+//    worst case — a 1080×1350 project, whose size the old four never contained — in
+//    `qa/export-default-target.spec.mjs`.
 //
 // Run: node qa/motion-journey.spec.mjs   (dev server must be running on :1420)
 import { chromium } from 'playwright';
@@ -383,21 +390,60 @@ async function main() {
     docSeconds < 5 - 1e-6,
     `and it is genuinely derived, not the old constant: this project's clips end at ${docSeconds.toFixed(3)}s, under the 5 that every project used to report regardless of its content`,
   );
-  assert(/4 ملفات/.test(est4), `and that the four default targets mean four separate encodes: «${est4}»`);
+  // **This pair used to read `/4 ملفات/` here and `/ملف واحد/` after the narrowing
+  // button, and the four was the old hardcoded default** — `initialStudioState.targets`
+  // held `{ ig, x, tt, li }` literally, which was the whole of `SIZES` before 18
+  // October and four of thirteen after it. The header above this file already called
+  // that a defect («the four default targets never included the format the project was
+  // started in»); it is fixed now, and the default is the project's own size.
+  //
+  // What the assertion was *for* survives unchanged: **the stated file count is the
+  // number of selected targets**, so a designer learns the cost of a video batch
+  // before waiting for it. What changed is the gap it is measured over. Reading
+  // «ملف واحد» at the default and «ملف واحد» again after the narrowing button would
+  // be two readings of one state — an assertion that can no longer fail. So the
+  // selection is **widened on purpose** first, with the real «تحديد الكل» button, and
+  // the count is read at both ends: thirteen, then one. That is a wider gap than the
+  // old 4→1, and it keeps «مقاس المشروع فقط» doing twelve targets' worth of work.
+  assert(/ملف واحد/.test(est4), `and that one selected target means one encode, stated before committing to it: «${est4}»`);
 
   const onByDefault = await page.evaluate(() =>
     [...document.querySelectorAll('[data-testid^="export-target-"]')].filter((e) => e.dataset.on === 'true').map((e) => e.dataset.testid.replace('export-target-', '')),
   );
-  assert(onByDefault.length === 4, `the dialog still defaults to its four targets (${onByDefault.join(', ')}) — unchanged, so still/batch exports behave exactly as before`);
+  // 1080×1920 is «تيك توك» — this journey's own format, picked on the start screen in
+  // section 1. So this asserts the default **is derived from the document**, not that
+  // it happens to equal some constant: it breaks if the seed goes back to a written
+  // list, and it breaks if the seed reads the wrong document field.
+  assert(
+    onByDefault.length === 1 && onByDefault[0] === 'tt',
+    `the dialog defaults to the project's own size and nothing else (${onByDefault.join(', ') || 'none'}) — it used to default to ig, x, tt, li on every project ever opened, four encodes for a designer who asked for one`,
+  );
+
+  // ـــ widen deliberately, so the narrowing button has something to narrow ـــ
+  const sizeTiles = await page.evaluate(() => document.querySelectorAll('[data-testid^="export-target-"]:not([data-testid="export-target-custom"])').length);
+  await page.getByRole('button', { name: 'تحديد الكل', exact: true }).click();
+  await page.waitForTimeout(240);
+  const onAll = await page.evaluate(() =>
+    [...document.querySelectorAll('[data-testid^="export-target-"]')].filter((e) => e.dataset.on === 'true').map((e) => e.dataset.testid.replace('export-target-', '')),
+  );
+  assert(onAll.length === sizeTiles, `«تحديد الكل» really means all ${sizeTiles} sizes (${onAll.length}) — it too once held the same four-name literal`);
+  const estAll = await page.locator('[data-testid="export-estimate"]').innerText();
+  assert(
+    new RegExp(`${sizeTiles} ملفات`).test(estAll),
+    `and the estimate counts every one of them before the wait begins: «${estAll}» — ${sizeTiles} full encodes of this project, which is the number the line exists to show`,
+  );
 
   await page.locator('[data-testid="export-only-project-size"]').click();
   await page.waitForTimeout(220);
   const onAfter = await page.evaluate(() =>
     [...document.querySelectorAll('[data-testid^="export-target-"]')].filter((e) => e.dataset.on === 'true').map((e) => e.dataset.testid.replace('export-target-', '')),
   );
-  assert(onAfter.length === 1 && onAfter[0] === 'tt', `«مقاس المشروع فقط» narrows the batch to the format the project was started in, in one click (now: ${onAfter.join(', ')})`);
+  assert(
+    onAfter.length === 1 && onAfter[0] === 'tt',
+    `«مقاس المشروع فقط» narrows the batch from all ${onAll.length} back to the format the project was started in, in one click (now: ${onAfter.join(', ') || 'none'}) — twelve tiles' worth of clicking, and the button still earns its place now that it is no longer the only route to one file`,
+  );
   const est1 = await page.locator('[data-testid="export-estimate"]').innerText();
-  assert(/ملف واحد/.test(est1), `and the estimate follows it live: «${est1}»`);
+  assert(/ملف واحد/.test(est1), `and the estimate follows it live, down from ${onAll.length}: «${est1}»`);
   // The size number is calibrated against real exports from the built Tauri app, not
   // guessed: a 1080×1920 / 30fps / 5s MP4 of exactly this kind of content (Arabic
   // text and flat colour on one background) measured 91,314 bytes at عالية and
