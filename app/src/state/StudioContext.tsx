@@ -2298,8 +2298,36 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         }),
       selectNone: () => patch({ selectedIds: [], sel: null }),
       setAnim: (anim) => patchDoc({ anim }),
+      /** **وإسنادُ حركةِ دخولٍ يَسحب المؤشّرَ إلى لحظةِ وصولِ العنصر.**
+       *
+       * القاعدةُ مكتوبةٌ في البرنامج سلفًا، ومُطبَّقةٌ في موضعٍ واحدٍ فقط:
+       * `startDoc` تُسكِن المؤشّرَ عند لحظة الاستقرار **عند فتح المستند**،
+       * وتعليلُها هناك بالحرف — قالبٌ عند اللحظة صفر يكون في *منتصف* دخوله،
+       * فيُفتَح على إطارٍ شبه فارغ لا يشبه ما اختاره المستخدم.
+       *
+       * وذاك بعينُه ما يحدث عند **إضافة** حركةٍ بعد الفتح: المؤشّرُ واقفٌ عند
+       * لحظةٍ تسبق المقطعَ الذي صُنع الآن، فيُقَوَّم العنصرُ عند لحظته الأولى —
+       * ولم يصل فيها بعد. فيضغط المصمّمُ «ظهور تدريجي» فيَختفي نصُّه، ولا يَبقى
+       * إلا إطارُ تحديدٍ على فراغ. والقاعدةُ كانت تُطبَّق عند الفتح ولا تُصان
+       * بعده؛ وهذا صَونُها عند الفعل الوحيد الذي يَخلق الحالة.
+       *
+       * ولا تَرجع إلى الخلف أبدًا (`Math.max`): مَن وقف عند ٣ث بعد الاستقرار
+       * يبقى حيث وقف — فالمؤشّرُ مؤشّرُه، والقاعدةُ تُنقذه ولا تَقوده.
+       * و«بدون» لا تُحرّك شيئًا: لا وصولَ ينتظره أحد.
+       *
+       * والحرسُ على **ما وقع فعلًا** لا على ما طُلب: `withPreset` تَرفض متى كان
+       * للعنصر مسارٌ مبنيٌّ باليد، فلا يُسحَب المؤشّرُ لطلبٍ مرفوض. */
       setElementAnimPreset: (id, preset) =>
-        commitElements((els) => els.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e)), (state.lang === 'ar' ? AR : EN).entrance),
+        patch((s) => {
+          const elements = s.elements.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e));
+          const after = elements.find((e) => e.id === id);
+          const applied = !!after && after.anim.preset === preset && preset !== 'none';
+          return {
+            elements,
+            ...pushHistory(s, (s.lang === 'ar' ? AR : EN).entrance),
+            t: applied ? Math.max(s.t, after.anim.start + after.anim.duration) : s.t,
+          };
+        }),
       setElementText: (id, text) => patchTextEl(id, { text }),
       setElementFont: (id, fontFamily) => patchTextEl(id, { fontFamily }),
       setElementFontSize: (id, px) => patchTextEl(id, { fontSize: clamp(px, 8, 400) }),

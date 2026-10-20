@@ -8,7 +8,7 @@ import { geoToPx, pxToGeo, resizeBox, rotatePoint, computeSnap, boundsOfBoxes, c
 import { computeImageCropLayout } from '../lib/imageCrop';
 import { commandsToSvgPath, pathElementCommands } from '../lib/pathGeometry';
 import { closestTOnSegment, fitSmoothPath } from '../lib/pathSmoothing';
-import { entranceStyleAt } from '../lib/animTimeline';
+import { documentDuration, entranceStyleAt } from '../lib/animTimeline';
 import type { DocElement } from '../state/elements';
 import { defaultAnim, defaultTextStagger } from '../state/elements';
 import { dragIsBigEnough, floorDegenerate, shapeDragBox, shapeGeometryFor } from '../lib/shapeFactory';
@@ -68,7 +68,32 @@ export function Stage() {
   const lang = state.lang;
   const size = sizeAt(state.sizeIdx, state.customW, state.customH);
   const pal = PALETTES[state.postPalette];
-  const t = state.t;
+
+  /** **اللحظةُ التي تَعرضها اللوحة** — وهي كمّيةٌ أخرى غير `state.t`.
+   *
+   * `state.t` هو **المؤشّر**، ومفهومُ المؤشّر مفهومٌ مُوقَّت: المسطرةُ والمقابضُ
+   * وشريطُ التشغيل والساعة كلُّها محجوبةٌ عن المستند الساكن (`App.tsx` عند
+   * `<Timeline timed=…>`). فمستندٌ ساكنٌ **لا سطحَ فيه يُحرّك `state.t` بتّةً**،
+   * ومع ذلك كانت اللوحةُ تَعرضه عند تلك القيمة بعينها.
+   *
+   * **والعطلُ الذي يُنتجه ذلك عطلٌ صامت.** مشروعٌ جديد يبدأ عند `t = 0`
+   * (`initialStudioState`)، و`startDoc` تُسكِن المؤشّرَ عند لحظة الاستقرار
+   * **مرّةً واحدة: عند الفتح**. فكلُّ حركةِ دخولٍ تُضاف **بعد** الفتح تُقَوَّم
+   * عند مؤشّرٍ يَسبقها — أي عند لحظتها الأولى، وهي اللحظةُ التي لم يصل فيها
+   * العنصرُ بعد. ولا شأنَ لهذا بنمطٍ بعينه: «ظهور تدريجي» شفافيّتُها صفر،
+   * و«انزلاق» شفافيّةٌ صفر وإزاحةٌ قائمة، و«تكبير» `scale(0)` — أي صندوقٌ
+   * بعرضٍ صفر. الثلاثةُ تَختفي، ويبقى إطارُ التحديد مرسومًا على فراغ.
+   *
+   * **ولحظةُ الساكن معروفةٌ ومكتوبةٌ سلفًا**: `renderArtboardPng` تُصدِّر دائمًا
+   * عند `settledTimeOf(spec)` (`lib/exportArtboard.ts`) — أوّلِ لحظةٍ انتهت فيها
+   * كلُّ المقاطع. فكانت اللوحةُ تُناقض الملفَّ الذي تُنتجه هي نفسُها: الملفُّ
+   * فيه العنصرُ كاملًا، واللوحةُ خاليةٌ منه. وقراءةُ اللحظة من المصدر نفسِه
+   * (`documentDuration`) تَجعل التطابقَ **بالبناء** لا بالمصادفة — وهي القاعدةُ
+   * نفسُها التي يقوم عليها `AnimVisual` بين المعاينة ومُرمِّز الفيديو.
+   *
+   * والمُوقَّتُ لا يُمَسّ: مؤشّرُه مؤشّرُ المصمّم، وله أن يَقِف قبل الدخول ليراه
+   * — فذاك هو الغرضُ من المسطرة. */
+  const t = state.medium === 'timed' ? state.t : documentDuration(state.elements.map((e) => e.anim), state.fps);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const artboardRef = useRef<HTMLDivElement>(null);
