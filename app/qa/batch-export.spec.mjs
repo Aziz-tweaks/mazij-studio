@@ -12,7 +12,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { bootDemo } from './helpers/boot.mjs';
+import { bootDemo, setExportTargets } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -89,35 +89,11 @@ async function main() {
   // that needs a particular selection should say which one; what the export dialog
   // opens with is `qa/export-default-target.spec.mjs`'s subject, not this file's.
   //
-  // **And it is reached by «تحديد الكل» and then switching tiles off, on purpose.**
-  // The first repair of this route only switched the wanted tiles *on* — and since the
-  // wanted set is now a superset of what the dialog opens with, nothing was ever
-  // switched off, so a `toggleExportTarget` that could select but not deselect passed
-  // the whole file. That was coverage the old subtract-from-the-default route had and
-  // the repair had quietly dropped. Widening first and narrowing down restores it: the
-  // off direction is exercised eleven times before a single file is written, which is
-  // what makes the premise assertion below worth asserting.
+  // The naming is `setExportTargets` in `qa/helpers/boot.mjs`, shared with the three
+  // other specs that had borrowed the same premise — see that helper for why it widens
+  // before it narrows.
   const WANT = ['custom', 'ig', 'x'];
-  const targetsOn = () =>
-    page.evaluate(() =>
-      [...document.querySelectorAll('[data-testid^="export-target-"]')]
-        .filter((e) => e.dataset.on === 'true')
-        .map((e) => e.dataset.testid.replace('export-target-', ''))
-        .sort(),
-    );
-  await page.getByRole('button', { name: 'تحديد الكل', exact: true }).click();
-  await page.waitForTimeout(80);
-  const widened = await targetsOn();
-  assert(widened.length > WANT.length, `batch export: «تحديد الكل» widens past the three wanted targets first (${widened.length} on), so narrowing to them really exercises switching a tile **off**`);
-  for (const id of await targetsOn()) {
-    if (!WANT.includes(id)) await page.locator(`[data-testid="export-target-${id}"]`).click();
-  }
-  for (const id of WANT) {
-    const already = await page.locator(`[data-testid="export-target-${id}"]`).getAttribute('data-on');
-    if (already !== 'true') await page.locator(`[data-testid="export-target-${id}"]`).click();
-  }
-  await page.waitForTimeout(60);
-  const selected = await targetsOn();
+  const selected = await setExportTargets(page, WANT);
   assert(
     JSON.stringify(selected) === JSON.stringify(WANT),
     `batch export: the run starts from exactly the three intended targets — ${selected.join(', ')} (wanted ${WANT.join(', ')}). Stated here so a drift in what the dialog opens with, or a tile that cannot be switched off, shows up as a wrong *premise* rather than as three confusing count failures downstream`,

@@ -24,7 +24,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { bootDemo, resumeAfterReload } from './helpers/boot.mjs';
+import { bootDemo, resumeAfterReload, setExportTargets } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -249,11 +249,22 @@ async function main() {
   await page.waitForTimeout(60);
   await page.locator('button', { hasText: '1x' }).click();
   await page.waitForTimeout(60);
-  for (const label of ['بوست إنستقرام', 'تغريدة X', 'تيك توك', 'لينكدإن']) {
-    await page.locator('button', { hasText: label }).click();
-  }
-  await page.locator('[data-testid="export-target-custom"]').click();
-  await page.waitForTimeout(60);
+  // **One target, the artboard's own custom size** — this section is about *which*
+  // artboard gets exported and at *whose* size, so the size list has to be a single
+  // known entry or the file counts below stop meaning anything.
+  //
+  // This used to click the four preset names to switch them **off** and then switch
+  // custom on, and it only reached one target because `initialStudioState.targets`
+  // happened to hold exactly those four. It does not any more — it is seeded from the
+  // document (`defaultTargetsFor`) — and the very same clicks switched three of them
+  // **on** instead: four files where this asserts one, three at preset sizes, and
+  // `__x`/`__tt`/`__li` in the filenames further down. Named outright now, and checked.
+  const wantTargets = ['custom'];
+  const onTargets = await setExportTargets(page, wantTargets);
+  assert(
+    JSON.stringify(onTargets) === JSON.stringify(wantTargets),
+    `export setup: exactly one size target is selected, the artboard's own custom size — ${onTargets.join(', ') || 'none'}. Said here rather than subtracted from whatever the dialog opens with, so "exactly 1 file" and "2 artboards × 1 target" below are premises this spec owns`,
+  );
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mazij-qa-artboards-'));
 

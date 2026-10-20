@@ -104,7 +104,7 @@ async function main() {
   for (const fmt of ['MP4', 'GIF']) {
     await page.locator(`button:has-text("${fmt}")`).click();
     await page.waitForTimeout(80);
-    await page.getByRole('button', { name: /تصدير \d+ ملف/ }).click();
+    await page.locator('[data-testid="export-submit"]').click();
     body = await page.locator('body').innerText();
     assert(body.includes('يحتاج تطبيق سطح المكتب'), `${fmt}: browser preview shows the honest "needs the desktop app" message immediately`);
     assert(!body.includes('جاري التصدير'), `${fmt}: no "exporting…" busy state is ever shown — nothing to encode with in the browser`);

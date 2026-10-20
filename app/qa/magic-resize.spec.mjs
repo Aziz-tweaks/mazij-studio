@@ -23,7 +23,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { bootDemo, resumeAfterReload } from './helpers/boot.mjs';
+import { bootDemo, resumeAfterReload, setExportTargets } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -229,13 +229,22 @@ async function testExportReuse(page) {
   await page.locator('[data-testid="export-magic-resize-toggle"]').click();
   await page.waitForTimeout(60);
 
-  // Narrow the batch to just the 'tt' preset (1080×1920) — a 1:1 → 9:16 change from
-  // the current 1080×1080 artboard, so the export loop is forced through the
+  // Narrow the batch to just the 'tt' preset (1080×1920) — against the 800×800 artboard
+  // set above that is a 1:1 → 9:16 change, so the export loop is forced through the
   // magic-resize branch instead of reusing `state.elements` as-is.
-  await page.locator('button', { hasText: 'بوست إنستقرام' }).click();
-  await page.locator('button', { hasText: 'تغريدة X' }).click();
-  await page.locator('button', { hasText: 'لينكدإن' }).click();
-  await page.waitForTimeout(60);
+  //
+  // This used to switch ig / x / li **off**, relying on `initialStudioState.targets`
+  // having held `{ ig, x, tt, li }` so that tt was left standing. That default is
+  // seeded from the document now (`defaultTargetsFor`), so the very same three clicks
+  // switched three presets **on**, and the assertion that reads «really 1080×1920» was
+  // handed a 1600×900 file — the x preset — while still calling itself a magic-resize
+  // measurement. The target is named now, so what gets measured is what was asked for.
+  const wantTargets = ['tt'];
+  const onTargets = await setExportTargets(page, wantTargets);
+  assert(
+    JSON.stringify(onTargets) === JSON.stringify(wantTargets),
+    `export reuse: the batch is exactly the one 'tt' target this measurement needs — ${onTargets.join(', ') || 'none'}. Without this the file read below could be another preset's and still pass as a dimension check`,
+  );
 
   const downloads = [];
   page.on('download', (d) => downloads.push(d));

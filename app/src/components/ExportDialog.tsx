@@ -557,7 +557,17 @@ export function ExportDialog() {
             {(state.exportState === 'idle' || state.exportState === 'unavailable' || state.exportState === 'error') && (
               <>
                 <button onClick={actions.closeExport} style={{ height: 34, padding: '0 14px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontSize: 13 }}>{L.cancel}</button>
-                <button onClick={actions.startExport} style={{ height: 34, padding: '0 18px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', fontWeight: 600, fontSize: 13, opacity: exportCount ? 1 : 0.5 }}>
+                {/* **مقبضٌ ثابتٌ للفعل الرئيسيّ، ولِمَ لم يكن قبل اليوم.** لافتةُ
+                    هذا الزرِّ جملةٌ لا رقم: `exportN` تُصرِّف العددَ عربيًّا —
+                    «ملف واحد» ثمّ «ملفين» ثمّ «٣ ملفات» — فالواحدُ والاثنان لا
+                    يَحملان رقمًا أصلًا. وثلاثةُ اختباراتٍ (`controls` و
+                    `live-photo-export` و`video-export`) كانت تُمسِك الزرَّ بمطابقةِ
+                    رقمٍ في جملته، فكانت تُمسِكه بفضلِ أنّ الأهدافَ الافتراضيّة
+                    كانت أربعة. ويومَ صارت واحدًا اختفى الرقمُ فلم تَجد الثلاثةُ
+                    زرًّا تَضغطه، فسقطت بانتهاءِ المهلة لا بتأكيدٍ أحمر — وهو
+                    أسوأُ السقوطَين: لا يَقول ما العطل. فصار للزرِّ معرّفٌ يُمسَك
+                    به بما هو لا بنحويّةِ لافتته. */}
+                <button data-testid="export-submit" onClick={actions.startExport} style={{ height: 34, padding: '0 18px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', fontWeight: 600, fontSize: 13, opacity: exportCount ? 1 : 0.5 }}>
                   {L.exportN(exportCount)}
                 </button>
               </>

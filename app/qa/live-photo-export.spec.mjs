@@ -235,7 +235,7 @@ async function main() {
   // Export attempt in the browser preview: honest and synchronous, straight to
   // "unavailable" — same contract MP4/GIF/reference-video already established,
   // never a fake success or a transient busy state with nothing to encode with.
-  await page.getByRole('button', { name: /تصدير \d+ ملف/ }).click();
+  await page.locator('[data-testid="export-submit"]').click();
   body = await page.locator('body').innerText();
   assert(body.includes('أداة AVFoundation'), 'browser preview shows the Live-Photo-specific "needs the packaged macOS app" message');
   assert(!body.includes('جاري التصدير'), 'no fake "exporting…" busy state is ever shown');

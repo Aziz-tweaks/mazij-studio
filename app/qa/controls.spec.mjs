@@ -237,7 +237,7 @@ async function main() {
   await page.waitForTimeout(50);
   const transparentToggle = page.locator('button').filter({ has: page.locator('span') }).last();
 
-  const exportBtn = page.getByRole('button', { name: /تصدير \d+ ملف/ });
+  const exportBtn = page.locator('[data-testid="export-submit"]');
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 15000 }),
     exportBtn.click(),
@@ -263,7 +263,7 @@ async function main() {
   await page.waitForTimeout(150);
   await page.locator('button:has-text("MP4")').click();
   await page.waitForTimeout(50);
-  await page.getByRole('button', { name: /تصدير \d+ ملف/ }).click();
+  await page.locator('[data-testid="export-submit"]').click();
   await page.waitForTimeout(150);
   body = await page.locator('body').innerText();
   assert(body.includes('يحتاج تطبيق سطح المكتب'), 'export: MP4 in the browser preview shows an honest "needs the desktop app" message instead of a fake progress bar');

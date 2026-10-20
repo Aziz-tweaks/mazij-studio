@@ -84,6 +84,58 @@ export async function bootDemoTimed(page, baseUrl, formatId = 'ig-reel') {
   await switchToTimed(page, formatId);
 }
 
+/** **Sets the export dialog's size selection to exactly `ids`, by clicking.**
+ *
+ * WHY THIS EXISTS, added 20 October 2026. Four specs needed a particular set of
+ * export targets, and all four got there the same way: by *subtracting* from
+ * whatever `initialStudioState.targets` happened to hold. That literal was
+ * `{ ig, x, tt, li }` — the whole of `SIZES` before 18 October, four of thirteen
+ * after it, and tied to no document at all; it is seeded from the document's own
+ * size now (`defaultTargetsFor`).
+ *
+ * The moment it changed, every one of those four specs **kept clicking the same
+ * tiles and silently clicked them the other way**: a click meant to switch تيك توك
+ * off switched it on, the run produced four files where the assertions counted
+ * three, and `qa/magic-resize.spec.mjs` exported a 1600×900 file while asserting
+ * 1080×1920. Nothing was wrong with what those assertions *said* — only with the
+ * premise they had borrowed. A spec that needs a selection should name it.
+ *
+ * So this names it: every wanted tile ends on, every other ends off, and the
+ * caller gets back what was actually reached, so it can assert its premise before
+ * exporting anything.
+ *
+ * **And it widens with «تحديد الكل» before narrowing, on purpose.** Switching only
+ * the wanted tiles *on* would never switch anything off whenever the wanted set is
+ * a superset of what the dialog opens with — and then a `toggleExportTarget` that
+ * could select but not deselect would pass every caller. That was coverage the old
+ * subtract-from-the-default route had by accident; widening first keeps it on
+ * purpose. Measured, not assumed: with a selection-only version of this helper,
+ * breaking the toggle's off direction left `qa/batch-export.spec.mjs` fully green.
+ *
+ * `'custom'` is a legitimate id here. «تحديد الكل» does not reach it (it is not in
+ * `SIZES`), so the narrowing pass switches it on like any other. */
+export async function setExportTargets(page, ids) {
+  const on = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('[data-testid^="export-target-"]')]
+        .filter((e) => e.dataset.on === 'true')
+        .map((e) => e.dataset.testid.replace('export-target-', ''))
+        .sort(),
+    );
+  await page.getByRole('button', { name: 'تحديد الكل', exact: true }).click();
+  await page.waitForTimeout(80);
+  for (const id of await on()) {
+    if (!ids.includes(id)) await page.locator(`[data-testid="export-target-${id}"]`).click();
+  }
+  for (const id of ids) {
+    if ((await page.locator(`[data-testid="export-target-${id}"]`).getAttribute('data-on')) !== 'true') {
+      await page.locator(`[data-testid="export-target-${id}"]`).click();
+    }
+  }
+  await page.waitForTimeout(60);
+  return on();
+}
+
 /** Re-enters the editor after a real `page.reload()`, through the start screen's
  * resume card — the returning-user path.
  *
