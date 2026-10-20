@@ -23,7 +23,7 @@ import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShado
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
-import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, frameDuration, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
+import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, effectiveScale, frameDuration, resolveAnimAt, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
 import { splitAt } from '../lib/timelineEdit';
 import { fetchAndRegisterFont } from '../lib/loadFont';
 import type { PersistedArtboard, PersistedDoc } from '../lib/persist';
@@ -441,8 +441,24 @@ function armTool(s: StudioState, tool: StudioState['tool'], opts?: { keepSelecti
  * وجهةً، فطبيعةُ المستند لا تتغيّر بذلك. ومن أرادها أن تتغيّر اختار وجهةً
  * مُسمّاةً، وهي تقلبها في اللحظة. (ومستندٌ **جديد** بمقاسٍ مخصّص لا جوابَ سابقَ
  * له، فهو `still` كما تقول `sizeAt` — انظر `startBlankCustom`.) */
-function withDerivedMedium(sizeIdx: number, customW: number, customH: number, current: DocSnapshot['medium']): Pick<DocSnapshot, 'sizeIdx' | 'customW' | 'customH' | 'medium'> {
-  return { sizeIdx, customW, customH, medium: sizeIdx === CUSTOM_SIZE_IDX ? current : sizeAt(sizeIdx, customW, customH).kind };
+function withDerivedMedium(s: StudioState, sizeIdx: number, customW: number, customH: number): Pick<DocSnapshot, 'sizeIdx' | 'customW' | 'customH' | 'medium'> & { t?: number } {
+  const medium = sizeIdx === CUSTOM_SIZE_IDX ? s.medium : sizeAt(sizeIdx, customW, customH).kind;
+  const next = { sizeIdx, customW, customH, medium };
+  // **ومستندٌ صار ساكنًا يُسكَّن مؤشّرُه عند لحظة الاستقرار.**
+  //
+  // المسطرةُ والمؤشّرُ وشريطُ التشغيل تَغيب كلُّها عن الساكن، فالمؤشّرُ يَبقى
+  // حيث تركه المصمّمُ على المسطرة وقد زالت المسطرة — ولا سطحَ في البرنامج
+  // يُعيده. فمَن أوقفه عند لحظةٍ قبل الاستقرار ثم بدّل الوجهة يَجد عناصرَه
+  // نصفَ داخلةٍ أو غائبةً، بلا مَخرج.
+  //
+  // ولحظةُ الساكن معروفةٌ ومكتوبةٌ سلفًا: `renderArtboardPng` تُصدِّره عند
+  // `settledTimeOf(spec)`، وهي هذه بعينها. فيَتّفق ما يُرى وما يُكتَب.
+  //
+  // والشرطُ بـ`!==` كما هو في `splitAtPlayhead` أعلاه: التفرّعُ بـ`===` سطحُ
+  // واجهةٍ محصورٌ في ثلاثة ملفّاتٍ يَحرسها `qa/phase1-representation.spec.mjs`
+  // (A8)، وهذا حرسُ نموذجٍ لا سطحَ واجهة.
+  if (medium !== 'timed') return { ...next, t: settledTime(s.elements, s.fps ?? DEFAULT_DOC_FPS) };
+  return next;
 }
 
 function defaultArtboardName(n: number, lang: StudioState['lang']): string {
@@ -509,6 +525,23 @@ function migrateToDocFile(raw: unknown, lang: StudioState['lang']): LoadedDocFil
 function settledTime(elements: DocElement[], fps: number): number {
   if (!elements.length) return 0;
   return documentDuration(elements.map((el) => el.anim), fps);
+}
+
+/** **هل يُصيَّر هذا المقطعُ عدمًا عند هذه اللحظة؟** — أي هل لا يَبقى على الشاشة
+ * منه شيءٌ يُرى: شفافيّةٌ صفر، أو تحجيمٌ صفر على أحد المحورين.
+ *
+ * يُقرأ من `resolveAnimAt`/`effectiveScale` أنفسِهما — الصيغةِ الواحدة التي
+ * تَقرؤها المعاينةُ والمُصيِّر معًا — فلا يُعاد هنا حسابُ شيء، ولا يُذكَر نمطٌ
+ * جاهزٌ باسمه. فيَسري الحكمُ على «ظهور تدريجي» و«انزلاق» و«تكبير» وعلى كلّ
+ * نمطٍ يُضاف بعدُ، وعلى مسارٍ بناه المصمّمُ بيده كذلك.
+ *
+ * **والفرقُ بين العدم وبين النقصان هو مدارُ القاعدة كلِّها.** عنصرٌ شفافيّتُه
+ * ٠٫٢٧ في منتصف دخوله **مرئيٌّ**، وعرضُه على المصمّم هو عينُ الغرض من المسطرة.
+ * وعنصرٌ شفافيّتُه صفرٌ ليس ناقصًا بل **غائب**. */
+function rendersNothingAt(anim: DocElement['anim'], time: number): boolean {
+  const v = resolveAnimAt(anim, time);
+  const { sx, sy } = effectiveScale(v);
+  return v.opacity <= 0 || sx === 0 || sy === 0;
 }
 
 function startDoc(s: StudioState, doc: DocSnapshot, opts?: { paletteIdx?: number; sel?: ElementId | null }): StudioState {
@@ -2035,9 +2068,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // كلُّ تبديلِ مقاسٍ يُعيد اشتقاق الطبيعة. وهذا هو ما يجعل جواب «صورة أم
       // فيديو» **قابلًا للتراجع**: لا بدءَ من جديد، ولا إعادةَ تحميل — ولا حقلًا
       // يبقى يقول «فيديو» على بوسترٍ مربّع. انظر `DocSnapshot.medium`.
-      cycleSize: () => patchDoc((s) => withDerivedMedium((s.sizeIdx + 1) % SIZES.length, s.customW, s.customH, s.medium)),
-      setSizeIdx: (sizeIdx) => patchDoc((s) => withDerivedMedium(sizeIdx, s.customW, s.customH, s.medium)),
-      setCustomSize: (w, h) => patchDoc((s) => withDerivedMedium(CUSTOM_SIZE_IDX, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)), s.medium)),
+      cycleSize: () => patchDoc((s) => withDerivedMedium(s, (s.sizeIdx + 1) % SIZES.length, s.customW, s.customH)),
+      setSizeIdx: (sizeIdx) => patchDoc((s) => withDerivedMedium(s, sizeIdx, s.customW, s.customH)),
+      setCustomSize: (w, h) => patchDoc((s) => withDerivedMedium(s, CUSTOM_SIZE_IDX, Math.max(1, Math.round(w)), Math.max(1, Math.round(h)))),
       setMagicResizeOn: (magicResizeOn) => patch({ magicResizeOn }),
       // Roadmap #8: same "one undo step for the whole action" shape as `patchDoc`
       // (push the pre-change doc once, update doc fields + elements together) but
@@ -2053,7 +2086,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             elements,
             // «التحجيم الذكي» بابٌ رابعٌ لتبديل المقاس، فيمرّ بالمُشتِقّ نفسه —
             // وإلّا صار المستند مُوقَّتًا في الحقل وساكنًا في المقاس.
-            ...withDerivedMedium(sizeIdx, sizeIdx === CUSTOM_SIZE_IDX ? to.w : s.customW, sizeIdx === CUSTOM_SIZE_IDX ? to.h : s.customH, s.medium),
+            ...withDerivedMedium(s, sizeIdx, sizeIdx === CUSTOM_SIZE_IDX ? to.w : s.customW, sizeIdx === CUSTOM_SIZE_IDX ? to.h : s.customH),
             ...pushHistory(s),
           };
         }),
@@ -2298,34 +2331,37 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         }),
       selectNone: () => patch({ selectedIds: [], sel: null }),
       setAnim: (anim) => patchDoc({ anim }),
-      /** **وإسنادُ حركةِ دخولٍ يَسحب المؤشّرَ إلى لحظةِ وصولِ العنصر.**
+      /** **تعديلٌ لا يُصيِّر موضوعَه عدمًا.**
        *
-       * القاعدةُ مكتوبةٌ في البرنامج سلفًا، ومُطبَّقةٌ في موضعٍ واحدٍ فقط:
-       * `startDoc` تُسكِن المؤشّرَ عند لحظة الاستقرار **عند فتح المستند**،
-       * وتعليلُها هناك بالحرف — قالبٌ عند اللحظة صفر يكون في *منتصف* دخوله،
-       * فيُفتَح على إطارٍ شبه فارغ لا يشبه ما اختاره المستخدم.
+       * اللوحةُ تُقَوِّم كلَّ عنصرٍ عند `s.t`، و`s.t` لا تُسكَّن عند لحظة
+       * الاستقرار إلا **مرّةً واحدةً عند فتح المستند** (`startDoc`، وتعليلُها
+       * هناك: قالبٌ عند الصفر يكون في منتصف دخوله). فحركةٌ تُضاف **بعد** الفتح
+       * تُقَوَّم عند مؤشّرٍ يسبقها، أي عند لحظتها الأولى — ولم يصل العنصرُ فيها
+       * بعد. فيضغط المصمّمُ زرَّ حركةٍ فيَختفي نصُّه، ولا يبقى إلا إطارُ تحديدٍ
+       * على فراغ.
        *
-       * وذاك بعينُه ما يحدث عند **إضافة** حركةٍ بعد الفتح: المؤشّرُ واقفٌ عند
-       * لحظةٍ تسبق المقطعَ الذي صُنع الآن، فيُقَوَّم العنصرُ عند لحظته الأولى —
-       * ولم يصل فيها بعد. فيضغط المصمّمُ «ظهور تدريجي» فيَختفي نصُّه، ولا يَبقى
-       * إلا إطارُ تحديدٍ على فراغ. والقاعدةُ كانت تُطبَّق عند الفتح ولا تُصان
-       * بعده؛ وهذا صَونُها عند الفعل الوحيد الذي يَخلق الحالة.
+       * **والشرطُ «عدمٌ» لا «نقصان»، وهذا هو الحدُّ كلُّه.** مَن أوقف المؤشّرَ
+       * عند ٠٫١ث ليُقارن الأنماطَ عند لحظةٍ واحدة **يريد** أن يرى كلَّ نمطٍ في
+       * منتصف دخوله، ونقلُ المؤشّر من تحته يَهدم ما جاء يفعله — وهو عملٌ قائمٌ
+       * مقيسٌ في `qa/motion-journey.spec.mjs`. فالقاعدةُ لا تَعمل إلا حين لا
+       * يَبقى على الشاشة شيءٌ أصلًا (`rendersNothingAt`).
        *
-       * ولا تَرجع إلى الخلف أبدًا (`Math.max`): مَن وقف عند ٣ث بعد الاستقرار
-       * يبقى حيث وقف — فالمؤشّرُ مؤشّرُه، والقاعدةُ تُنقذه ولا تَقوده.
-       * و«بدون» لا تُحرّك شيئًا: لا وصولَ ينتظره أحد.
+       * والوجهةُ لحظةُ وصولِ العنصر، ولا تَرجع إلى الخلف أبدًا (`Math.max`) —
+       * فالمؤشّرُ مؤشّرُ المصمّم، والقاعدةُ تُنقذه ولا تَقوده.
        *
-       * والحرسُ على **ما وقع فعلًا** لا على ما طُلب: `withPreset` تَرفض متى كان
-       * للعنصر مسارٌ مبنيٌّ باليد، فلا يُسحَب المؤشّرُ لطلبٍ مرفوض. */
+       * والحكمُ على **ما وقع فعلًا** لا على ما طُلب: `withPreset` تَرفض متى كان
+       * للعنصر مسارٌ مبنيٌّ باليد، فتُقرَأ الحركةُ بعد الكتابة لا قبلها — ولذلك
+       * لا يُذكَر هنا اسمُ نمطٍ بتّةً، و«بدون» لا تُحرّك شيئًا لأنها لا تُصيِّر
+       * عدمًا. */
       setElementAnimPreset: (id, preset) =>
         patch((s) => {
           const elements = s.elements.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e));
           const after = elements.find((e) => e.id === id);
-          const applied = !!after && after.anim.preset === preset && preset !== 'none';
+          const vanished = !!after && rendersNothingAt(after.anim, s.t);
           return {
             elements,
             ...pushHistory(s, (s.lang === 'ar' ? AR : EN).entrance),
-            t: applied ? Math.max(s.t, after.anim.start + after.anim.duration) : s.t,
+            t: vanished ? Math.max(s.t, after.anim.start + after.anim.duration) : s.t,
           };
         }),
       setElementText: (id, text) => patchTextEl(id, { text }),
@@ -3232,7 +3268,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           anim: 'none',
           decorAccent: false,
           // «مستندٌ جديد» بابٌ خامسٌ لتبديل المقاس، فيمرّ بالمُشتِقّ نفسه.
-          ...withDerivedMedium(opts?.sizeIdx ?? s.sizeIdx, opts?.customW ?? s.customW, opts?.customH ?? s.customH, s.medium),
+          ...withDerivedMedium(s, opts?.sizeIdx ?? s.sizeIdx, opts?.customW ?? s.customW, opts?.customH ?? s.customH),
           fps: s.fps,
           ...pushHistory(s),
         })),
