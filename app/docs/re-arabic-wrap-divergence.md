@@ -5,6 +5,13 @@
 **الحالة / Status:** استطلاعٌ فقط. **لم يُغيَّر سلوكٌ، ولم يُصلَح شيء.** القرارُ لالمالك.
 **المُبلِّغ الأصل:** وكيل `verify`، الذي رفع الحالةَ لأنّ إثباتَ السبب خارج دوره.
 
+> **و`main` تقدَّمت أثناء هذا العمل** من `41dea6b` إلى `e381899` (دخلت فيها
+> `fix/parity-four`، ومعها إصلاحُ المعاينة `4e8437e`). وهذا الفرعُ ما يزال على
+> `41dea6b` كما أُمِر، و`41dea6b` سَلَفٌ لـ`e381899` فلا تضاربَ. **والنتيجةُ قائمةٌ
+> على الحالتين بلا تغييرِ سطرٍ واحد:** `ElementView.tsx:335` و`exportArtboard.ts:78`
+> و`exportArtboard.ts:592` هي هي في `e381899`. فدمجُ المعاينة لم يُحرِّك السبب —
+> وهو تأكيدٌ ثالثٌ لِما في §٣: **كَشَفَ ولم يُحدِث.**
+
 > **Language note.** Arabic prose, with every identifier, line reference and number in
 > Latin script verbatim. All numbers below are measured, not estimated; the harness that
 > produced each one is named at its first use.
