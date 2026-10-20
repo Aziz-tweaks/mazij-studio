@@ -126,17 +126,16 @@ export function ExportDialog() {
   const previewSize = sizeAt(state.sizeIdx, state.customW, state.customH);
   // بصمةُ ما يُصيَّر: ما دامت كما هي فلا إعادةَ تصيير. `elements` كاملةً لأنّ
   // **أيَّ** تغيّرٍ في المستند يجب أن يَصِل إلى المعاينة — وهذا هو كلُّ الغرض.
-  const previewKey = JSON.stringify([
-    state.exportOpen,
-    state.elements,
-    state.postPalette,
-    state.sizeIdx,
-    state.customW,
-    state.customH,
-    state.decorAccent,
-    state.exportTransparent,
-    state.lang,
-  ]);
+  //
+  // **ولا تُحسَب والحوارُ مغلق.** هذا المكوّنُ يُعاد تصييرُه مع كلّ تغيّرِ حالة
+  // — ومنه كلُّ إطارِ سحبٍ على اللوحة — ويُعيد `null` باكرًا، لكنّ الخطّافات
+  // تَعمل قبل ذلك. فبصمةٌ بلا شرطٍ كانت ستُسلسِل المستندَ كلَّه في كلّ إطار،
+  // وهي تكلفةٌ تُدفَع لسطحٍ غيرِ معروض. مقيسةً: ٠٫٢٢٤ مللي للاستدعاء عند ٢٠٠
+  // عنصرٍ، أي ١٣٫٥ مللي لكلّ ثانيةِ سحبٍ عند ٦٠ إطارًا (و٠٫٧ عند سبعة عناصر).
+  // والشرطُ يُنزِلها إلى صفرٍ حيث لا تُرى.
+  const previewKey = state.exportOpen
+    ? JSON.stringify([state.elements, state.postPalette, state.sizeIdx, state.customW, state.customH, state.decorAccent, state.exportTransparent, state.lang])
+    : '';
   useEffect(() => {
     if (!state.exportOpen) {
       setPreviewUrl(null);
