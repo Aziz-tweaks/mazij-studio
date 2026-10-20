@@ -90,6 +90,12 @@ export interface Dictionary {
   'l_badge-label': string; 'l_logo-label': string;
   ease_linear: string; ease_in: string; ease_in_out: string; ease_back: string; ease_bounce: string; ease_custom: string;
   no_easing_target: string; add_keyframe: string; delete_keyframe: string; kf_value: string; soon: string;
+  /** اسمُ خطوةِ التراجع لتغييرِ قيمةِ مفتاح — انظر `pushHistory`: كلُّ ما يُغيّر
+   * المستند خطوةٌ واحدةٌ **مُسمّاة**. */
+  kf_set_value: string;
+  /** تلميحُ الحقل الرقميّ في منبثقة المفتاح: ما يَفعله ولِمَ هو إلى جانب
+   * المِمسحة لا بدلًا منها. */
+  kf_value_field_hint: string;
   prop_opacity: string; prop_x: string; prop_y: string; prop_scale: string; prop_scaleX: string; prop_scaleY: string; prop_rotation: string; prop_blur: string;
   expand_tracks: string; collapse_tracks: string; kf_easing: string;
   entrance: string; tl_beyond_doc: string;
@@ -271,6 +277,8 @@ export const AR: Dictionary = {
   ease_bounce: 'ارتداد', ease_custom: 'مخصص',
   no_easing_target: 'حدّد عنصرًا لتغيير منحنى حركته', add_keyframe: 'إضافة مفتاح عند المؤشر',
   delete_keyframe: 'حذف المفتاح', kf_value: 'القيمة', soon: 'قريبًا',
+  kf_set_value: 'قيمة المفتاح',
+  kf_value_field_hint: 'اكتب القيمة بدقّة — منزلتان بعد الفاصلة. والمِمسحةُ إلى جانبه للتقريب السريع.',
   tl_beyond_doc: 'بعد نهاية المشروع — هذا المدى لا يدخل الملفّ المُصدَّر. اسحب حافّة مقطعٍ إلى هنا ليَطول المشروع.',
   split_clip: 'تقسيم', split_consequence: 'يُنتج عنصرين منفصلين بالنصّ نفسه',
   split_no_selection: 'حدّد مقطعًا لتقسيمه', split_locked: 'الطبقة مقفولة — افتح قفلها لتقسيمها',
@@ -509,6 +517,8 @@ export const EN: Dictionary = {
   ease_custom: 'Custom',
   no_easing_target: 'Select an element to edit its easing curve', add_keyframe: 'Add keyframe at playhead',
   delete_keyframe: 'Delete keyframe', kf_value: 'Value', soon: 'Coming soon',
+  kf_set_value: 'Keyframe value',
+  kf_value_field_hint: 'Type the value exactly — two decimal places. The slider beside it stays for quick approximation.',
   tl_beyond_doc: 'Past the end of the project — this range is not in the exported file. Drag a clip edge out here to make the project longer.',
   split_clip: 'Split', split_consequence: 'produces two separate elements carrying the same text',
   split_no_selection: 'Select a clip to split it', split_locked: 'This layer is locked — unlock it to split',

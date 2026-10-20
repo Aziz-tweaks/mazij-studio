@@ -2,7 +2,7 @@ import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { useStudio } from '../state/StudioContext';
-import { documentDuration, formatClock, formatDurationSec, frameDuration, tickLadder, timelineSpan, timelineTimeOf } from '../lib/animTimeline';
+import { KF_VALUE_STEP, documentDuration, formatClock, formatDurationSec, formatKfDisplay, frameDuration, kfValueFromDisplay, kfValueToDisplay, quantizeKfValue, tickLadder, timelineSpan, timelineTimeOf } from '../lib/animTimeline';
 import type { AnimProperty, DocElement } from '../state/elements';
 import { hasCustomAnimation } from '../state/elements';
 import { canSplitAt } from '../lib/timelineEdit';
@@ -79,11 +79,93 @@ function sliderRange(property: AnimProperty): [number, number] {
       return [-180, 180];
   }
 }
-function toSlider(property: AnimProperty, value: number): number {
-  return property === 'rotation' ? value : value * 100;
-}
-function fromSlider(property: AnimProperty, slider: number): number {
-  return property === 'rotation' ? slider : slider / 100;
+
+/** **الحقلُ الرقميُّ لقيمةِ المفتاح — الطريقُ الدقيق، إلى جانبِ المِمسحة لا بدلًا
+ * منها.**
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * لِمَ حقلٌ، ولِمَ لا تكفي `step` على المِمسحة
+ * ═══════════════════════════════════════════════════════════════════════════
+ * كانت المِمسحةُ وحدَها، بلا `step`، فخطوتُها ١ — و`x`/`y` كسرٌ من عرض اللوح،
+ * فأدقُّ إزاحةٍ على لوحٍ عرضُه ٢٥٦٠ بكسلًا **٢٥٫٦ بكسلًا**. وثلاثةُ قياساتٍ على
+ * المِمسحة نفسِها تقول إنّ `step` أدقَّ لا تُنقذها:
+ *
+ * ١. **عرضُها ٩٠ بكسلًا لمدًى ٢٠٠ وحدة** (مقيسٌ من `getBoundingClientRect`).
+ *    فبكسلُ الشاشة الواحدُ ٢٫٢٢ وحدة، ومقيسٌ فعلًا: سحبةٌ بمقدار بكسلٍ واحدٍ من
+ *    المنتصف أعطت `3`، وبكسلَين `5`، وثلاثةٍ `8`. فموضعُ ٠٫٧٤٪ يَحتاج من المؤشّر
+ *    دقّةَ ١/٢٢٢ من البكسل — وهي ليست عنده.
+ * ٢. **المفاتيحُ الأفقيّةُ لا تَصِل إليها أصلًا.** مقيسٌ: `ArrowRight` على مِمسحةٍ
+ *    مركَّزةٍ يُعطي `0 → 0`، لأنّ `onTrackKeyDown` أدناه يَملك `←`/`→` لتنقّل
+ *    الإطارات ويُنادي `preventDefault`. و`ArrowUp` وحدَها تَصِل، بخطوةٍ واحدة.
+ * ٣. **والمتصفّحُ يَرفض الكسورَ عليها.** `fill('0.74')` على المِمسحة يُعطي
+ *    `Error: Malformed value`، لأنّ قيمةَ `range` تُقصَر على مُضاعَفات `step`.
+ *
+ * فالطريقُ الدقيقُ لا بدّ أن يكون **مكتوبًا**. والمِمسحةُ تبقى لأنها الطريقُ
+ * السريع — وهو الدرسُ المكتوبُ في هذا المستودع يومَ هبط منتقي لون الحدّ:
+ * **أُبقيَت الشرائحُ إلى جانبه** لأنّ الدقّةَ لا تُلغي السرعة.
+ *
+ * **وسمةُ `step` تُوضَع على المِمسحة كذلك، ولسببٍ آخرَ تمامًا:** لا لتُدقّقَ السحبَ
+ * بل لتَقدر المِمسحةُ على **عرضِ** ما كتبه الحقل. مقيسٌ في Chromium: بلا `step`
+ * تُقرأ `.value = '0.74'` رجوعًا `'1'` — فلو بقيت بلا `step` لَعرَض السطحانِ عن
+ * القيمة الواحدة رقمَين مختلفَين، وهو الافتراقُ الذي عضَّ هذا المستودعَ مرّتين.
+ *
+ * **ومسوّدةٌ محلّيّةٌ بنمط `NumField`** (`left-panel/PropsTab.tsx`): `«‑»` و`«0.»`
+ * و`«»` حالاتٌ وسيطةٌ لا تُلزِم، وإلّا مُحِيَت الإشارةُ من تحت يد الكاتب. */
+function KfValueField({
+  property,
+  display,
+  onLive,
+  onCommit,
+  title,
+}: {
+  property: AnimProperty;
+  display: number;
+  onLive: (display: number) => void;
+  onCommit: () => void;
+  title: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [min, max] = sliderRange(property);
+  return (
+    <input
+      data-testid="kf-value-field"
+      dir="ltr"
+      type="number"
+      title={title}
+      step={KF_VALUE_STEP}
+      min={min}
+      max={max}
+      value={draft ?? formatKfDisplay(display)}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setDraft(raw);
+        if (raw.trim() === '') return;
+        const v = Number(raw);
+        if (Number.isFinite(v)) onLive(v);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter') return;
+        setDraft(null);
+        onCommit();
+      }}
+      onBlur={() => {
+        setDraft(null);
+        onCommit();
+      }}
+      style={{
+        width: 56,
+        height: 20,
+        border: '1px solid var(--line)',
+        borderRadius: 4,
+        background: 'var(--surface2)',
+        color: 'var(--text)',
+        fontSize: 11,
+        padding: '0 4px',
+        textAlign: 'center',
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    />
+  );
 }
 
 /** `timed` هي الجوابُ عن «صورةٌ أم فيديو؟» واصلًا من `App.tsx`، وهو موضعُ التفرّع
@@ -127,6 +209,17 @@ export function Timeline({ timed }: { timed: boolean }) {
   const layers = [...state.elements].reverse();
   const selectedKfEl = selectedKf ? state.elements.find((e) => e.id === selectedKf.elId) : undefined;
   const selectedKfData = selectedKfEl && selectedKf ? selectedKfEl.anim.tracks[selectedKf.property]?.find((k) => k.id === selectedKf.kfId) : undefined;
+
+  /** **ضامنُ إغلاقِ الإيماءة.** `onPointerUp`/`onKeyUp`/`onBlur` تُغلق إيماءةَ
+   * القيمة في الحالات الثلاث التي يَمرّ بها إنسان. وهذا السطرُ للرابعة: مفتاحٌ
+   * آخرُ يُحدَّد، أو تُغلَق المنبثقةُ، أو يُحذَف المفتاحُ من تحتها — فلو بقيت
+   * لقطةُ ما قبل الإيماءة معلَّقةً لَنزلت بعد حينٍ فوق عملٍ آخر، فقفز التراجعُ
+   * قفزةً لا يَفهمها أحد. و`commitElementEdit` لا تدفع شيئًا إن لم يتغيّر
+   * المستند، فالإغلاقُ هنا بلا ثمن. */
+  useEffect(() => {
+    actions.commitElementEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKf?.elId, selectedKf?.property, selectedKf?.kfId]);
 
   // Cumulative top offset of each layer's row block, in track-column pixels below the
   // ruler — needed because expanded layers are taller than collapsed ones, so a flat
@@ -676,10 +769,41 @@ export function Timeline({ timed }: { timed: boolean }) {
               // bezier editor when a keyframe's easing is 'custom').
               const placeBelow = rowTop - RULER_H < 90;
               const [min, max] = sliderRange(selectedKf.property);
-              const sliderValue = toSlider(selectedKf.property, selectedKfData.value);
+              // **رقمٌ واحدٌ يُغذّي السطحَين.** القيمةُ المخزونةُ تُحوَّل إلى الوحدة
+              // المعروضة وتُقصَر على الشبكة **مرّةً واحدة**، ثم تَقرأ المِمسحةُ
+              // والحقلُ والمقياسُ هذا الرقمَ بعينه. ولو حَسَب كلُّ سطحٍ لنفسه لَجاز
+              // أن تَعرض المِمسحةُ `1` والحقلُ `0.74` عن القيمة الواحدة — وهو
+              // مقيسٌ: هكذا يَفعل `range` بلا `step`.
+              const display = kfValueToDisplay(selectedKf.property, quantizeKfValue(selectedKf.property, selectedKfData.value));
+              // **قُمعُ الكتابة في هذه المنبثقة.** السطحانِ لا يُناديان الفعلَ
+              // مباشرةً: يَمرّان من هنا، فيُفتَح للإيماءة اسمٌ مرّةً واحدة
+              // (`beginElementEdit` مُتعادِيةُ الاستدعاء) ثم تُكتَب القيمةُ حيّةً
+              // بلا تاريخ. والإغلاقُ عند الإفلات أو الخروج من الحقل، فتَنزل
+              // **خطوةٌ واحدةٌ مُسمّاة** — وهي قاعدةُ `pushHistory` بالحرف.
+              //
+              // و`clamp` على المدى المعروض **داخلَ القُمع لا على المِمسحة**: فعلُ
+              // `range` الأصليُّ يَقصُر على `min`/`max` بنفسه، و`number` لا يَقصُر
+              // (السمّتان عليه إرشادٌ لا حَدّ). فلولا هذا السطرُ لَقَبِل الحقلُ
+              // ١٥٠٪ وخزّنها، وعرضت المِمسحةُ ١٠٠٪ عن القيمة نفسِها. والمدى هو
+              // مدى المِمسحة لا مدى النموذج، لأنّ المقصودَ **ألّا يَفترق سطحان عن
+              // قيمةٍ كتبها هذا اللوحُ** — وقيمةٌ كتبها غيرُه تبقى كما هي، كما
+              // يقول تعليقُ `sliderRange` عن الضبابيّة.
+              const writeValue = (next: number) => {
+                actions.beginElementEdit(L.kf_set_value);
+                actions.liveUpdateTrackKeyframeValue(selectedKf.elId, selectedKf.property, selectedKf.kfId, kfValueFromDisplay(selectedKf.property, clamp(next, min, max)));
+              };
               return (
                 <div
                   data-testid="kf-popover"
+                  // **مفاتيحُ الحقلِ تَبقى للحقل.** `onTrackKeyDown` على الحاضن
+                  // يَملك `←`/`→` و`Home`/`End` لتنقّلِ الإطارات ويُنادي
+                  // `preventDefault` — فبدون هذا السطر لا يَتحرّك مؤشّرُ الكتابة
+                  // داخلَ رقمٍ مكتوب، ولا تَصِل المِمسحةَ سهمٌ أفقيّ. والإيقافُ
+                  // محدودٌ بما صدر عن مُدخَلٍ داخل المنبثقة، فيبقى للحاضن ما هو
+                  // له متى لم يكن أحدٌ يَكتب.
+                  onKeyDown={(e) => {
+                    if ((e.target as HTMLElement).tagName === 'INPUT') e.stopPropagation();
+                  }}
                   style={{
                     position: 'absolute',
                     left: `calc(${((timelineTimeOf(selectedKfEl.anim, selectedKfData.time) / span) * 100).toFixed(2)}% - 90px)`,
@@ -699,16 +823,32 @@ export function Timeline({ timed }: { timed: boolean }) {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: 'var(--muted)', minWidth: 42 }}>{propLabel(selectedKf.property)}</span>
+                    {/* الطريقُ السريع. و`onChange` تُنادي `beginElementEdit`
+                        فتُغطّي تغييرَ المِمسحة بالسهمَين أيضًا — وهو مسارٌ لا يمرّ
+                        بـ`onPointerDown` إطلاقًا؛ نمطُ `fx-blur` نفسُه في
+                        `PropsTab.tsx`. */}
                     <input
                       type="range"
                       min={min}
                       max={max}
-                      value={Math.round(sliderValue)}
+                      step={KF_VALUE_STEP}
+                      value={display}
                       data-testid="kf-value-slider"
-                      onChange={(e) => actions.setTrackKeyframeValue(selectedKf.elId, selectedKf.property, selectedKf.kfId, fromSlider(selectedKf.property, Number(e.target.value)))}
-                      style={{ width: 90 }}
+                      onChange={(e) => writeValue(Number(e.target.value))}
+                      onPointerUp={() => actions.commitElementEdit()}
+                      onKeyUp={() => actions.commitElementEdit()}
+                      onBlur={() => actions.commitElementEdit()}
+                      style={{ width: 72 }}
                     />
-                    <span style={{ width: 32, textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>{Math.round(sliderValue)}{selectedKf.property === 'rotation' ? '°' : '%'}</span>
+                    {/* الطريقُ الدقيق — انظر ترويسة `KfValueField`. */}
+                    <KfValueField
+                      property={selectedKf.property}
+                      display={display}
+                      onLive={writeValue}
+                      onCommit={() => actions.commitElementEdit()}
+                      title={L.kf_value_field_hint}
+                    />
+                    <span data-testid="kf-value-unit" style={{ width: 10, color: 'var(--muted)' }}>{selectedKf.property === 'rotation' ? '°' : '%'}</span>
                     <button
                       data-testid="kf-delete"
                       title={L.delete_keyframe}

@@ -23,7 +23,7 @@ import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShado
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
-import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, effectiveScale, frameDuration, resolveAnimAt, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
+import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, effectiveScale, frameDuration, quantizeKfValue, resolveAnimAt, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
 import { splitAt } from '../lib/timelineEdit';
 import { fetchAndRegisterFont } from '../lib/loadFont';
 import type { PersistedArtboard, PersistedDoc } from '../lib/persist';
@@ -244,6 +244,27 @@ function clampAnimPropertyValue(property: AnimProperty, v: number): number {
     case 'rotation':
       return v;
   }
+}
+
+/** **قُمعُ قيمةِ المفتاح: موضعٌ واحدٌ تُقصَر فيه القيمةُ على الشبكة ثم على المدى.**
+ *
+ * ولِمَ دالّةٌ لا سطرانِ مُكرَّران: السطحانِ اللذان يَكتبان قيمةَ مفتاحٍ — المِمسحةُ
+ * والحقلُ الرقميُّ في منبثقة الخطّ الزمنيّ — يَصِلان إلى الحالة من بابَين
+ * (`liveUpdateTrackKeyframeValue` أثناء الإيماءة و`setTrackKeyframeValue` خارجَها)،
+ * فلو حَمل كلُّ بابٍ حسابَه لَجاز أن يَفترقا. وهذا المستودعُ عُضَّ بذلك مرّتين:
+ * افتراقُ كسرِ السطر بين اللوحة والتصدير، وقراءتا المركز في المعاير. فالقاعدةُ
+ * المستفادةُ مكتوبةٌ هنا بنيويًّا: **سؤالٌ واحدٌ، جوابٌ واحد.**
+ *
+ * والترتيبُ مقصود: الشبكةُ أوّلًا ثم المدى. حدودُ `clampAnimPropertyValue` كلُّها
+ * واقعةٌ على الشبكة (±٢، ±١، ٠)، فقَصْرُ قيمةٍ مُشبَّكةٍ عليها يُبقيها مُشبَّكة —
+ * والعكسُ لا يَصحّ دائمًا. */
+function writeKeyframeValue(els: DocElement[], id: ElementId, property: AnimProperty, kfId: string, value: number): DocElement[] {
+  const next = clampAnimPropertyValue(property, quantizeKfValue(property, value));
+  return els.map((e) => {
+    if (e.id !== id || !e.anim.tracks[property]) return e;
+    const track = e.anim.tracks[property]!.map((k) => (k.id === kfId ? { ...k, value: next } : k));
+    return { ...e, anim: { ...e.anim, tracks: { ...e.anim.tracks, [property]: track } } };
+  });
 }
 
 function visibleCmds(query: string) {
@@ -666,7 +687,15 @@ export interface StudioActions {
   setElementEasing: (id: ElementId, easing: EasingId) => void;
   addTrackKeyframeAtPlayhead: (id: ElementId, property: AnimProperty) => void;
   deleteTrackKeyframe: (id: ElementId, property: AnimProperty, kfId: string) => void;
+  /** يَكتب قيمةَ مفتاحٍ **بخطوةِ تراجعٍ واحدةٍ مُسمّاة** — لكتابةٍ مُفردةٍ ليست
+   * جزءًا من إيماءةٍ مستمرّة. وداخلَ إيماءةٍ (سحبُ المِمسحة، أو طَرْقٌ متتابعٌ في
+   * الحقل) تُستعمل `liveUpdateTrackKeyframeValue` محوطةً
+   * بـ`beginElementEdit`/`commitElementEdit`، وإلّا صارت الإيماءةُ الواحدةُ
+   * خطواتٍ — **مقيسٌ على `main`: سحبةٌ واحدةٌ للمِمسحة كلّفت خمسَ ضغطاتِ تراجع.** */
   setTrackKeyframeValue: (id: ElementId, property: AnimProperty, kfId: string, value: number) => void;
+  /** كتابةٌ حيّةٌ بلا تاريخ — نصفُ `setTrackKeyframeValue`، وتَمرّ بقُمعِ القيمة
+   * نفسِه (`writeKeyframeValue`) فلا تَقدر على قيمةٍ لا تَقدر عليها أختُها. */
+  liveUpdateTrackKeyframeValue: (id: ElementId, property: AnimProperty, kfId: string, value: number) => void;
   setTrackKeyframeEasing: (id: ElementId, property: AnimProperty, kfId: string, easing: EasingId) => void;
   setTrackKeyframeBezier: (id: ElementId, property: AnimProperty, kfId: string, bezier: Bezier) => void;
   setZoom: (zoom: number) => void;
@@ -2284,15 +2313,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           }),
           (state.lang === 'ar' ? AR : EN).delete_keyframe,
         ),
-      setTrackKeyframeValue: (id, property, kfId, value) =>
-        commitElements((els) =>
-          els.map((e) => {
-            if (e.id !== id || !e.anim.tracks[property]) return e;
-            const clamped = clampAnimPropertyValue(property, value);
-            const nextTrack = e.anim.tracks[property]!.map((k) => (k.id === kfId ? { ...k, value: clamped } : k));
-            return { ...e, anim: { ...e.anim, tracks: { ...e.anim.tracks, [property]: nextTrack } } };
-          }),
-        ),
+      setTrackKeyframeValue: (id, property, kfId, value) => commitElements((els) => writeKeyframeValue(els, id, property, kfId, value), (state.lang === 'ar' ? AR : EN).kf_set_value),
+      liveUpdateTrackKeyframeValue: (id, property, kfId, value) => liveUpdateElements((els) => writeKeyframeValue(els, id, property, kfId, value)),
       setTrackKeyframeEasing: (id, property, kfId, easing) =>
         commitElements((els) =>
           els.map((e) => {
