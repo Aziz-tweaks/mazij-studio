@@ -41,6 +41,13 @@
 // والعلاجُ حذفُ الرسم لا تدقيقُه: تُنادى `renderArtboardPng` — المُصيِّرُ نفسُه
 // الذي يكتب الملفَّ — فتَصير المعاينةُ الملفَّ مصغَّرًا.
 //
+// ═══════════════════════════════════════════════════════════════════════════
+// (٤) شاشةُ البداية تفيض أفقيًّا
+// ═══════════════════════════════════════════════════════════════════════════
+// والعتبةُ **٨٨٠ لا ٩٠٠**: `minWidth: 880` كانت على جذر القشرة (`App.tsx`) ومعها
+// `overflow: 'hidden'`، فالفائضُ **مقصوصٌ لا مُمَرَّر** — ولا شريطَ تمريرٍ أفقيٍّ
+// يَصِل إليه (`documentElement.scrollWidth === clientWidth`). وهي أرضيّةُ
+// **المحرِّر** بأعمدته الأربعة، ورثَتها شاشةُ بدايةٍ عمودُها واحدٌ مركزيّ.
 //
 // التشغيل: QA_PORT=<منفذ حرّ> QA_SPECS=parity-four npm test
 import { chromium } from 'playwright';
@@ -149,6 +156,35 @@ function countNear(px, rgb) {
     if (Math.abs(r - rgb[0]) <= 2 && Math.abs(g - rgb[1]) <= 2 && Math.abs(b - rgb[2]) <= 2) n += c;
   }
   return n;
+}
+
+/** قياسُ الفيض: عرضُ ما يُمكن تمريرُ المستند إليه مقابل عرضِ المنفذ، وكلُّ سليلٍ
+ * من شاشة البداية يَخرج عن أيٍّ من الحافّتين. */
+const overflowReport = (page) =>
+  page.evaluate(() => {
+    const ss = document.querySelector('[data-testid="start-screen"]');
+    const out = [];
+    for (const n of ss.querySelectorAll('*')) {
+      const r = n.getBoundingClientRect();
+      if (r.width > 0 && (r.right > window.innerWidth + 0.5 || r.left < -0.5)) {
+        out.push(`${n.tagName}${n.dataset.testid ? `[${n.dataset.testid}]` : ''} ${Math.round(r.left)}…${Math.round(r.right)}`);
+      }
+    }
+    return {
+      innerW: window.innerWidth,
+      docScrollW: document.documentElement.scrollWidth,
+      rootW: Math.round(document.querySelector('[dir]').getBoundingClientRect().width),
+      clipped: out.slice(0, 4),
+      clippedCount: out.length,
+    };
+  });
+
+async function openStartScreen(page) {
+  await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+  await page.evaluate((k) => window.localStorage.removeItem(k), AUTOSAVE_KEY);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="start-screen"]');
+  await page.waitForTimeout(400);
 }
 
 async function main() {
@@ -351,6 +387,59 @@ async function main() {
   }
   await page.getByRole('button', { name: 'إلغاء', exact: true }).click();
   await page.waitForTimeout(300);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ٥. شاشةُ البداية لا تَفيض أفقيًّا
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n٥. شاشةُ البداية: لا فيضَ أفقيّ');
+  // ٨٨٠ هي العتبةُ المقيسة، لا ٩٠٠: `minWidth: 880`. فالعرضانِ ٨٨٠ و٨٧٩ هما
+  // حدُّ الاختبار بالضبط، وما دونهما كان مقصوصًا كلُّه.
+  for (const w of [1440, 900, 880, 879, 820, 768, 700, 640]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await openStartScreen(page);
+    const r = await overflowReport(page);
+    // ثلاثةُ شروطٍ لا اثنان، و**عرضُ الجذر** أهمُّها: بين ٨٨٠ و٨٠٠ تقريبًا يكون
+    // الجذرُ أعرضَ من المنفذ بالفعل ولا يَظهر أثرُه بعدُ على عنصرٍ بعينه (العمودُ
+    // الداخليُّ ما زال داخلَ المنظور). فالاكتفاءُ بعدّ المقصوصات كان سيُمرِّر
+    // العتبةَ نفسَها التي يَقيسها هذا البند.
+    assert(
+      r.rootW <= r.innerW + 0.5 && r.docScrollW <= r.innerW + 0.5 && r.clippedCount === 0,
+      `عند ${w} بكسلًا: لا فيضَ (جذرٌ ${r.rootW} ≤ المنفذ ${r.innerW}، قابلُ التمرير ${r.docScrollW}، مقصوصاتٌ ${r.clippedCount}${r.clipped.length ? ` — ${r.clipped.join(' · ')}` : ''})`,
+    );
+  }
+
+  // ─── والإنجليزيّة (LTR) كذلك، فالفيضُ كان يُقصّ الطرفين فيها ───
+  await page.setViewportSize({ width: 760, height: 900 });
+  await openStartScreen(page);
+  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await page.waitForTimeout(500);
+  const ltr = await overflowReport(page);
+  assert(
+    (await page.evaluate(() => document.querySelector('[dir]').getAttribute('dir'))) === 'ltr',
+    'وبالإنجليزيّة اتجاهُ الجذر `ltr` — فالقياسُ على الاتجاهين لا على واحد',
+  );
+  assert(
+    ltr.rootW <= ltr.innerW + 0.5 && ltr.docScrollW <= ltr.innerW + 0.5 && ltr.clippedCount === 0,
+    `وعند ٧٦٠ بكسلًا بالإنجليزيّة: لا فيض (${ltr.docScrollW} ≤ ${ltr.innerW}، مقصوصاتٌ ${ltr.clippedCount}) — وكان الجذرُ يمتدّ من ‎−84‎ إلى ٧٩٦ فيُقصّ الطرفان معًا`,
+  );
+
+  // ─── والضابطُ: أرضيّةُ المحرِّر باقيةٌ كما كانت، فالإصلاحُ مقصورٌ على مَن لا يحتاجها ───
+  //
+  // بدون هذا البند يمكن «إصلاحُ» الفيض بحذف الأرضيّة من البرنامج كلِّه، فتَمرّ
+  // البنودُ أعلاه وينهار المحرِّرُ بأعمدته الأربعة على شاشةٍ ضيّقة.
+  await page.setViewportSize({ width: 700, height: 900 });
+  await openStartScreen(page);
+  const homeRootW = (await overflowReport(page)).rootW;
+  assert(homeRootW === 700, `شاشةُ البداية عند ٧٠٠ تَنساب إلى ٧٠٠ (${homeRootW}) — بلا أرضيّة`);
+  await page.locator('[data-testid="format-row-ig"]').click();
+  await page.waitForSelector('[data-testid="artboard"]');
+  await page.waitForTimeout(420);
+  const editorRootW = await page.evaluate(() => Math.round(document.querySelector('[dir]').getBoundingClientRect().width));
+  assert(
+    editorRootW === 880,
+    `**وأرضيّةُ المحرِّر باقيةٌ بحرفها** (${editorRootW} = ٨٨٠ عند منفذٍ عرضُه ٧٠٠) — القيدُ نزل إلى صاحبه ولم يُحذَف، فسلوكُ المحرِّر لم يتغيّر بتّةً`,
+  );
+  await page.setViewportSize({ width: 1600, height: 1000 });
 
   // ═══════════════════════════════════════════════════════════════════════
   console.log('');
