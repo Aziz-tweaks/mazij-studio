@@ -30,6 +30,17 @@
 // `settledTimeOf(spec)` — أي أنّ الملفَّ المكتوب يحمل النصَّ كاملًا واللوحةُ
 // خاليةٌ منه. اللوحةُ تُناقض ما تُنتجه هي.
 //
+// ═══════════════════════════════════════════════════════════════════════════
+// (٢) معاينةُ التصدير تَعرض تصميمًا آخر
+// ═══════════════════════════════════════════════════════════════════════════
+// لم تكن معاينةً أصلًا: أربعةُ عناصرِ DOM مكتوبةٍ باليد في `ExportDialog.tsx` —
+// قرصٌ في الزاوية، وشارةُ «٥٠٪»، ومربّعٌ منقّط، وسطرٌ يقرأ نصَّ العنصر ذي المعرّف
+// `'head'`. وتلك قطعُ **البوستر التجريبيّ**، و`'head'` معرّفٌ لا يملكه سواه؛ فأيُّ
+// مستندٍ صنعه مستخدم يُعايَن بتصميمٍ ليس تصميمَه وبعنوانٍ فارغ.
+//
+// والعلاجُ حذفُ الرسم لا تدقيقُه: تُنادى `renderArtboardPng` — المُصيِّرُ نفسُه
+// الذي يكتب الملفَّ — فتَصير المعاينةُ الملفَّ مصغَّرًا.
+//
 //
 // التشغيل: QA_PORT=<منفذ حرّ> QA_SPECS=parity-four npm test
 import { chromium } from 'playwright';
@@ -51,6 +62,14 @@ function assert(cond, msg) {
     console.error('FAIL:', msg);
   }
 }
+
+/** لونانِ **لا تُعطيهما أيُّ لوحةٍ في `PALETTES`**، فلا يمكن أن يُصادَف أحدُهما من
+ * شريحةٍ جاهزة ولا من زخرفةِ لوح. مأخوذانِ من ألوان هدف `t02-kashida` كما في
+ * `qa/appearance-hex.spec.mjs` و`qa/picker-and-tool-clear.spec.mjs`. */
+const BRAND = '#d93025';
+const BRAND_RGB = [217, 48, 37];
+const BRAND2 = '#1f8f55';
+const BRAND2_RGB = [31, 143, 85];
 
 const PRESETS = [
   ['fade', 'ظهور تدريجي'],
@@ -89,6 +108,47 @@ async function addText(page) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
   return lastElId(page);
+}
+
+/** يكتب لونًا في حقلٍ ستّ عشريٍّ بضغطاتِ مفاتيحَ حقيقيّة — لا `fill()`. */
+async function typeHex(page, locator, value) {
+  await locator.click({ clickCount: 3 });
+  await page.keyboard.press('Meta+a');
+  await page.keyboard.type(value, { delay: 20 });
+  await page.waitForTimeout(320);
+}
+
+/** يَعُدّ بكسلاتِ **صورةِ المعاينة التي أنتجها البرنامج**، مجمَّعةً باللون. قراءةٌ
+ * محضة: الصورةُ تُرسَم على قماشٍ مؤقّتٍ ثم تُقرأ، ولا شيءَ يُكتَب في البرنامج. */
+const previewPixels = (page) =>
+  page.evaluate(async () => {
+    const img = document.querySelector('[data-testid="export-preview-image"]');
+    if (!img) return null;
+    if (!img.complete) await img.decode().catch(() => undefined);
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    if (!c.width || !c.height) return null;
+    const g = c.getContext('2d');
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    const counts = new Map();
+    for (let i = 0; i < d.length; i += 4) {
+      const k = `${d[i]},${d[i + 1]},${d[i + 2]}`;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    return { w: c.width, h: c.height, counts: [...counts.entries()] };
+  });
+
+/** عددُ البكسلات التي لونُها اللونُ المطلوب بالضبط (تسامحُ ترميزٍ ±2 لكلّ قناة،
+ * لأن PNG يمرّ بضغطٍ بلا فقد لكنّ التصيير قد يُقرِّب حافّةً). */
+function countNear(px, rgb) {
+  let n = 0;
+  for (const [key, c] of px.counts) {
+    const [r, g, b] = key.split(',').map(Number);
+    if (Math.abs(r - rgb[0]) <= 2 && Math.abs(g - rgb[1]) <= 2 && Math.abs(b - rgb[2]) <= 2) n += c;
+  }
+  return n;
 }
 
 async function main() {
@@ -209,6 +269,88 @@ async function main() {
     afterSwitch.opacity > 0.99 && afterSwitch.w > 0 && afterSwitch.h > 0,
     `**والعنصرُ ظاهرٌ بعد التبديل** (شفافيّة ${afterSwitch.opacity}، ${afterSwitch.w}×${afterSwitch.h}) — وعلى \`main\` كان يَبقى عند الشفافيّة التي تركه المؤشّرُ عندها ثم يَفقد كلَّ سطحٍ يُعيده`,
   );
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ٤. معاينةُ التصدير هي المستندُ المفتوح
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n٤. معاينةُ التصدير: التصميمُ المفتوح لا تصميمٌ آخر');
+  await page.evaluate((k) => window.localStorage.removeItem(k), AUTOSAVE_KEY);
+  await bootBlank(page, BASE_URL, 'ig-reel');
+  await page.locator('[data-tool="shape"]').click();
+  await page.waitForTimeout(340);
+  await page.locator('[data-shape-tile="rect"]').click();
+  await page.waitForTimeout(540);
+  const rect = await lastElId(page);
+  await typeHex(page, page.locator(`[data-testid="shape-fill-hex-${rect}"]`), BRAND);
+
+  // ─── النفيُ أوّلًا، **بمعايرةٍ ذاتيّة** ───
+  //
+  // عددُ العناصر المنقّطة يُقاس **قبل** فتح الحوار وبعده، فلا يُثبَّت في الاختبار
+  // رقمٌ عن بقيّة الواجهة ولا يُستثنى زرٌّ بالاسم: المقيسُ هو **ما أضافه الحوار**.
+  // (المحرِّرُ نفسُه فيه منقّطٌ واحدٌ مشروع: زرُّ «خيارات متقدمة».)
+  const dashedCount = () =>
+    page.evaluate(() => [...document.querySelectorAll('*')].filter((n) => getComputedStyle(n).borderTopStyle === 'dashed' && n.getBoundingClientRect().width > 0).length);
+  const hasFifty = () => page.evaluate(() => (document.body.innerText || '').includes('٥٠٪'));
+  const dashedBefore = await dashedCount();
+  assert((await hasFifty()) === false, 'قبل الفتح: لا «٥٠٪» في الصفحة — فالمستندُ لا يحتوي على شيءٍ كهذا');
+
+  await page.getByRole('button', { name: 'تصدير', exact: true }).first().click();
+  await page.waitForTimeout(600);
+  assert((await page.locator('[data-testid="export-target-ig"]').count()) === 1, 'حوارُ التصدير مفتوحٌ ومقروء');
+
+  assert(
+    (await hasFifty()) === false,
+    '**وفتحُ الحوار لا يُحضِر شارةَ «٥٠٪»** — وهي إحدى قطع البوستر التجريبيّ الثلاث التي كان لوحُ المعاينة يَرسمها لكلّ مستند مهما كان',
+  );
+  const dashedAfter = await dashedCount();
+  assert(
+    dashedAfter === dashedBefore,
+    `**ولا مربّعًا منقّطًا** — المنقّطاتُ ${dashedAfter} كما كانت ${dashedBefore} قبل الفتح. والقرصُ في الزاوية كانت القطعةَ الثالثة`,
+  );
+
+  // ─── والإثباتُ: بكسلاتُ المعاينة هي بكسلاتُ المستند ───
+  //
+  // وانتظارٌ ليّنٌ لا قاسٍ: غيابُ المعاينة **بندٌ ساقطٌ باسمه**، لا انهيارُ ملفٍّ
+  // يَكتم ما بعده. (وهذا هو بعينه ما يَجعل بقيّةَ الملفّ تُقاس على `main` كذلك.)
+  const previewReady = await page
+    .waitForSelector('[data-testid="export-preview"][data-preview-ready="true"]', { timeout: 20000 })
+    .then(() => true)
+    .catch(() => false);
+  assert(previewReady, '**ولوحُ المعاينة يُعلن أنه صيَّر المستند** (`data-preview-ready`) — وقبل هذا العمل لم يكن هناك تصييرٌ أصلًا بل أربعةُ عناصرِ DOM مكتوبةٍ باليد');
+  await page.waitForTimeout(400);
+  const px = await previewPixels(page);
+  assert(px !== null && px.w > 0, `المعاينةُ صورةٌ حقيقيّةٌ أنتجها البرنامج (${px?.w}×${px?.h} بكسلًا)`);
+  if (px) {
+    const brandPx = countNear(px, BRAND_RGB);
+    assert(
+      brandPx > 500,
+      `**ولونُ الشكل الذي وضعه المصمّمُ موجودٌ في المعاينة** (${BRAND} ⇒ ${brandPx} بكسلًا) — وهو لونٌ لا تُعطيه أيُّ لوحةٍ في البرنامج، فلا يمكن أن يكون مصادفةً من خلفيّةٍ أو زخرفة`,
+    );
+
+    // ─── وأنّها حيّةٌ لا لقطةٌ واحدة: تغييرُ اللون يَصِل إليها ───
+    await page.getByRole('button', { name: 'إلغاء', exact: true }).click();
+    await page.waitForTimeout(360);
+    await page.locator(`[data-el-id="${rect}"]`).click({ force: true });
+    await page.waitForTimeout(300);
+    await typeHex(page, page.locator(`[data-testid="shape-fill-hex-${rect}"]`), BRAND2);
+    await page.getByRole('button', { name: 'تصدير', exact: true }).first().click();
+    await page.waitForSelector('[data-testid="export-preview"][data-preview-ready="true"]', { timeout: 20000 }).catch(() => undefined);
+    await page.waitForTimeout(500);
+    const px2 = await previewPixels(page);
+    const brand2Px = px2 ? countNear(px2, BRAND2_RGB) : 0;
+    const brand1Left = px2 ? countNear(px2, BRAND_RGB) : -1;
+    assert(
+      brand2Px > 500 && brand1Left === 0,
+      `**وتعديلٌ على المستند يَصِل إلى المعاينة** (${BRAND2} ⇒ ${brand2Px} بكسلًا، ولم يَبقَ من ${BRAND} إلا ${brand1Left}) — فهي تَقرأ المستندَ الحيَّ لا لقطةً أُخذت مرّة`,
+    );
+  } else {
+    // بلا صورةٍ لا بكسلَ يُقاس — يُسجَّل البندان ساقطَين **باسمهما** ويَكمل الملفُّ
+    // إلى القسم ٥، فلا يَكتم انهيارٌ واحدٌ قياسَ عطلٍ آخر.
+    assert(false, `**ولونُ الشكل الذي وضعه المصمّمُ موجودٌ في المعاينة** (${BRAND}) — لا صورةَ معاينةٍ في الحوار أصلًا`);
+    assert(false, `**وتعديلٌ على المستند يَصِل إلى المعاينة** (${BRAND2}) — لا صورةَ معاينةٍ في الحوار أصلًا`);
+  }
+  await page.getByRole('button', { name: 'إلغاء', exact: true }).click();
+  await page.waitForTimeout(300);
 
   // ═══════════════════════════════════════════════════════════════════════
   console.log('');

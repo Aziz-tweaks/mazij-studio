@@ -6,6 +6,7 @@ import type { ExportResult } from '../state/types';
 import { effectiveExportScale, estimateVideoExport } from '../lib/exportEstimate';
 import { documentDuration } from '../lib/animTimeline';
 import { SHUTTER_SAMPLE_OPTIONS } from '../lib/motionBlur';
+import { renderArtboardPng } from '../lib/exportArtboard';
 
 const IMG_FORMATS = ['png', 'jpg', 'svg'] as const;
 const VID_FORMATS = ['mp4', 'gif'] as const;
@@ -99,6 +100,77 @@ export function ExportDialog() {
     if (state.exportOpen && !showVideoFormats && videoFormatSelected) actions.setExportFormat('png');
   }, [state.exportOpen, showVideoFormats, videoFormatSelected, actions]);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // المعاينة **هي** الملفّ، لا رسمٌ يُشبهه
+  // ═══════════════════════════════════════════════════════════════════════
+  //
+  // كان لوحُ المعاينة أربعةَ عناصرِ DOM مكتوبةٍ باليد: قرصٌ في الزاوية، وشارةُ
+  // «٥٠٪»، ومربّعٌ منقّط، وسطرٌ يقرأ نصَّ العنصر ذي المعرّف `'head'`. وتلك قطعُ
+  // **البوستر التجريبيّ** بعينها — و`'head'` معرّفٌ لا يملكه إلا هو، فأيُّ مستندٍ
+  // صنعه المستخدم (معرّفاته `text-<طابع زمني>`) كان يُعايَن بتصميمٍ ليس تصميمَه،
+  // وبعنوانٍ فارغ. مستندٌ فيه مستطيلٌ رماديٌّ واحد يُعرَض قرصًا وشارةً ومربّعًا
+  // منقّطًا لا وجودَ لأيٍّ منها فيه.
+  //
+  // **والعلاجُ ليس رسمًا أدقّ بل حذفُ الرسم:** تُنادى `renderArtboardPng` —
+  // المُصيِّرُ نفسُه الذي سيكتب الملفَّ عند الضغط على «تصدير» — فتَصير المعاينةُ
+  // الملفَّ مصغَّرًا، ويَستحيل أن يفترقا. وهذه قاعدةُ `AnimVisual` نفسُها بين
+  // المعاينة ومُرمِّز الفيديو: مصدرٌ واحدٌ للحقيقة لا نسختان تتباعدان.
+  //
+  // ولا `time` تُمرَّر: `renderArtboardPng` تُصيِّر عند `settledTimeOf(spec)` —
+  // اللحظةُ التي تنتهي عندها كلُّ المقاطع، وهي اللحظةُ التي يُكتَب عندها الملفُّ
+  // الساكنُ فعلًا.
+  //
+  // **وعند التعذّر لا يُخترَع شيء:** تبقى خلفيّةُ اللوحة وحدها. لوحٌ فارغٌ صادقٌ
+  // خيرٌ من تصميمٍ كاذب — وهو عينُ القاعدة الرابعة في الميثاق.
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const previewSize = sizeAt(state.sizeIdx, state.customW, state.customH);
+  // بصمةُ ما يُصيَّر: ما دامت كما هي فلا إعادةَ تصيير. `elements` كاملةً لأنّ
+  // **أيَّ** تغيّرٍ في المستند يجب أن يَصِل إلى المعاينة — وهذا هو كلُّ الغرض.
+  const previewKey = JSON.stringify([
+    state.exportOpen,
+    state.elements,
+    state.postPalette,
+    state.sizeIdx,
+    state.customW,
+    state.customH,
+    state.decorAccent,
+    state.exportTransparent,
+    state.lang,
+  ]);
+  useEffect(() => {
+    if (!state.exportOpen) {
+      setPreviewUrl(null);
+      return;
+    }
+    let dead = false;
+    let url: string | null = null;
+    // مقياسٌ يكفي صندوقَ المعاينة على شاشةٍ مضاعفةِ الكثافة، لا دقّةُ التصدير
+    // كاملةً: ٣٠٠ بكسلًا على الضلع الأطول ثم ×٢.
+    const scale = Math.min(1, (300 * 2) / Math.max(previewSize.w, previewSize.h));
+    renderArtboardPng({
+      size: previewSize,
+      palette: PALETTES[state.postPalette],
+      elements: state.elements,
+      transparent: state.exportTransparent,
+      scale,
+      lang: state.lang,
+      decorAccent: state.decorAccent,
+    })
+      .then((blob) => {
+        if (dead) return;
+        url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (!dead) setPreviewUrl(null);
+      });
+    return () => {
+      dead = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewKey]);
+
   if (!state.exportOpen) return null;
 
   const pal = PALETTES[state.postPalette];
@@ -107,18 +179,13 @@ export function ExportDialog() {
   const docDuration = documentDuration(state.elements.map((e) => e.anim), state.fps);
   const ratio = size.w / size.h;
   const tall = ratio < 1;
-  const headEl = state.elements.find((e) => e.id === 'head');
-  const headlineText = headEl?.type === 'text' ? headEl.text : '';
   const thumbStyle = {
     position: 'relative' as const,
     aspectRatio: `${size.w}/${size.h}`,
     ...(tall ? { height: '300px' } : { width: '244px' }),
-    background: pal.bg,
-    color: pal.fg,
+    background: state.exportTransparent ? 'transparent' : pal.bg,
     overflow: 'hidden',
     borderRadius: 4,
-    containerType: 'inline-size' as const,
-    fontFamily: 'Alexandria, sans-serif',
     boxShadow: '0 12px 30px rgba(0,0,0,.25)',
   };
 
@@ -156,11 +223,8 @@ export function ExportDialog() {
         style={{ width: 800, maxWidth: '94vw', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'calc(var(--r) + 2px)', boxShadow: '0 30px 80px rgba(0,0,0,.35)', overflow: 'hidden', display: 'grid', gridTemplateColumns: '300px minmax(0,1fr)' }}
       >
         <div style={{ background: 'var(--canvas)', display: 'grid', placeItems: 'center', padding: 28, borderInlineEnd: '1px solid var(--line)' }}>
-          <div dir="rtl" style={thumbStyle}>
-            <span style={{ position: 'absolute', insetInlineStart: '-14%', top: '-16%', width: '46%', aspectRatio: '1', borderRadius: '50%', background: pal.ac }} />
-            <span style={{ position: 'absolute', insetInlineStart: '8%', top: '31%', width: '56%', fontSize: '8cqw', lineHeight: 1.15, fontWeight: 800 }}>{headlineText}</span>
-            <span style={{ position: 'absolute', insetInlineEnd: '10%', top: '9%', width: '18%', aspectRatio: '1', borderRadius: '50%', background: pal.ac, color: pal.bg, display: 'grid', placeItems: 'center', fontSize: '5.4cqw', fontWeight: 800, transform: 'rotate(-8deg)' }}>٥٠٪</span>
-            <span style={{ position: 'absolute', insetInlineEnd: '8%', bottom: '9%', width: '34%', aspectRatio: '4/5', border: '0.4cqw dashed currentColor', borderRadius: '2cqw', opacity: 0.5 }} />
+          <div data-testid="export-preview" data-preview-ready={previewUrl ? 'true' : 'false'} style={thumbStyle}>
+            {previewUrl && <img data-testid="export-preview-image" src={previewUrl} alt={L.ex_preview_alt} style={{ display: 'block', width: '100%', height: '100%' }} />}
           </div>
         </div>
         <div style={{ padding: '20px 22px 22px', display: 'flex', flexDirection: 'column', gap: 18 }}>

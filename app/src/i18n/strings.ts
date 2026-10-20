@@ -34,6 +34,8 @@ export interface Dictionary {
   r_generic: string; apply: string;
   cmd_ph: string; cmd_hint: string; no_results: string;
   ex_title: string; ex_format: string; ex_image: string; ex_video: string; ex_sizes: string;
+  /** بديلُ صورةِ المعاينة في حوار التصدير — وهي الآن تصييرُ المستند نفسِه. */
+  ex_preview_alt: string;
   select_all: string; quality: string; q_high: string; q_med: string; scale: string; transparent: string;
   exporting: string; ex_done: string; open_folder: string; cancel: string;
   ex_unavailable: string; ex_error: string; font_error: string; reveal_folder: string; ex_results: string;
@@ -199,6 +201,7 @@ export const AR: Dictionary = {
   cmd_ph: 'اكتب أمراً أو اسم أداة…', cmd_hint: '↑↓ للتنقل · Enter للتنفيذ · Esc للإغلاق',
   no_results: 'لا توجد نتائج',
   ex_title: 'تصدير', ex_format: 'الصيغة', ex_image: 'صورة', ex_video: 'فيديو', ex_sizes: 'المقاسات',
+  ex_preview_alt: 'معاينة التصميم الحالي',
   select_all: 'تحديد الكل', quality: 'الجودة', q_high: 'عالية', q_med: 'متوسطة', scale: 'الدقة',
   transparent: 'خلفية شفافة', exporting: 'جاري التصدير…', ex_done: 'تم التصدير',
   open_folder: 'فتح المجلد', cancel: 'إلغاء',
@@ -437,6 +440,7 @@ export const EN: Dictionary = {
   cmd_ph: 'Type a command or tool name…', cmd_hint: '↑↓ navigate · Enter run · Esc close',
   no_results: 'No results',
   ex_title: 'Export', ex_format: 'Format', ex_image: 'Image', ex_video: 'Video', ex_sizes: 'Sizes',
+  ex_preview_alt: 'Preview of the current design',
   select_all: 'Select all', quality: 'Quality', q_high: 'High', q_med: 'Medium', scale: 'Scale',
   transparent: 'Transparent background', exporting: 'Exporting…', ex_done: 'Exported',
   open_folder: 'Open folder', cancel: 'Cancel',
