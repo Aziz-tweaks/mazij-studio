@@ -26,7 +26,13 @@
 //  (8) every row makes its own medium legible — no row relies on the filter;
 //  (9) custom size is pinned between the search and the list (أداة تصميم شائعة §1.4);
 // (10) the blank path is first AND visually dominant (Express's dashed border +
-//      محرّر فيديو شائع's one-dominant-action), measured by real area;
+//      محرّر فيديو شائع's one-dominant-action) — measured by real geometry, re-measured
+//      22 October 2026 after the owner's hand-drawn redesign: dominance is now
+//      height + distinction (a tall rail spanning the grid beside it), not
+//      raw area, and the sizes/templates sections became big real-proportioned
+//      cards instead of a 40px list. Two assertions below are REPLACEMENTS of
+//      18-October measurements the new geometry structurally cannot satisfy —
+//      not deletions. See `HomeScreen.tsx`'s header comment for the full case;
 // (11) the demo poster was MOVED, not deleted: it is reachable from the
 //      templates section and still produces its exact original 7 elements;
 // (12) the chooser is not a gate — the format choice is reversible inside the
@@ -236,10 +242,32 @@ async function main() {
   );
   assert(rows[0].medium === 'still' && rows[1].medium === 'timed', 'interleaving: a timed format appears as early as row 2, mixed in by rank rather than pushed below the stills');
 
-  // ============ 3. أداة تصميم شائعة's measured geometry ===============================
-  const rowBoxes = await page.locator('[data-testid^="format-row-"]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
-  const pitch = Math.round(rowBoxes[1] - rowBoxes[0]);
-  assert(pitch === 40, `geometry: the ranked list's row pitch is exactly 40px, matching أداة تصميم شائعة's measured create-picker (got ${pitch}px)`);
+  // ============ 3. The sizes grid: a big real-proportioned example each =====
+  // REPLACES the 18 October "40px row pitch" measurement (أداة تصميم شائعة's create
+  // picker). That assertion measured the vertical gap between consecutive
+  // rows in a single column — a number with no meaning once formats sit in a
+  // WRAPPING GRID of big cards (several share the same `top`, so "pitch"
+  // would read as 0, not a regression). The owner asked by hand-drawn sketch,
+  // 22 October 2026, for "each size with a big example below it, in its real
+  // ratio" — so what gets measured now is exactly that: card size, and the
+  // glyph's aspect ratio against the format's own real w/h.
+  const sizeCardBoxes = await page.locator('[data-testid^="format-row-"]').evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      const glyph = el.querySelector('span > span'); // the glyphStyle() box, un-named on purpose — see HomeScreen.tsx
+      const g = glyph.getBoundingClientRect();
+      return { id: el.getAttribute('data-testid'), w: r.width, h: r.height, glyphW: g.width, glyphH: g.height, dataW: Number(el.getAttribute('data-w')), dataH: Number(el.getAttribute('data-h')) };
+    }),
+  );
+  // "Big" threshold: at least 3x the old 40px row's height in BOTH dimensions —
+  // enough that the proportion glyph inside reads as a shape, not an icon.
+  const smallestCardSide = Math.min(...sizeCardBoxes.map((b) => Math.min(b.w, b.h)));
+  assert(smallestCardSide >= 120, `geometry: every format card is at least 120×120px — 3x the old 40px row (smallest side seen: ${smallestCardSide.toFixed(1)}px)`);
+  // The glyph has to carry the format's REAL aspect ratio, not a fixed icon
+  // box: measured against the format's own w/h, with a 2% tolerance for
+  // sub-pixel rounding in glyphStyle()'s own width/height calc.
+  const worstRatioErr = Math.max(...sizeCardBoxes.map((b) => Math.abs(b.glyphW / b.glyphH - b.dataW / b.dataH) / (b.dataW / b.dataH)));
+  assert(worstRatioErr < 0.02, `geometry: every format's proportion glyph matches its real w/h ratio within 2% (worst error ${(worstRatioErr * 100).toFixed(2)}%)`);
 
   const searchBox = await page.locator('[data-testid="format-search"]').boundingBox();
   const customBox = await page.locator('[data-testid="custom-size-row"]').boundingBox();
@@ -255,16 +283,44 @@ async function main() {
     (await page.locator('[data-testid="start-blank"]').evaluate((el) => getComputedStyle(el).borderStyle)) === 'dashed',
     'blank-first: the blank action carries a dashed border, marking it as categorically different from the content-bearing template rows (مزوّد كبير Express convention)',
   );
-  let starterArea = 0;
-  for (const id of ['demo-poster', 'quote', 'hiring', 'product', 'reel', 'tweet']) {
-    const b = await page.locator(`[data-testid="starter-${id}"]`).boundingBox();
-    starterArea += b.width * b.height;
-  }
-  const blankArea = blankBox.width * blankBox.height;
+  // REPLACES the 18 October "blank area > six template rows combined" measure.
+  // That comparison is structurally meaningless now: templates are no longer
+  // six 40px rows but ten more besides, shown as a scrollable strip of big
+  // picture cards (22 October redesign) — "combined row area" was never a
+  // stable yardstick, and it is exactly what the redesign discarded on
+  // purpose. The owner's new sketch replaces "dominant by area" with
+  // "dominant by spanning the full height of the grid beside it, and staying
+  // visually distinct" — so that is what gets measured: the rail's real
+  // height against its sibling content column's real height, and that it
+  // stays a narrow column rather than another competing block.
+  const contentBox = await page.locator('[data-testid="start-content"]').boundingBox();
   assert(
-    blankArea > starterArea,
-    `dominance: the blank action's area (${Math.round(blankArea)}px²) exceeds all six template rows combined (${Math.round(starterArea)}px²) — one unmistakable primary action, the way محرّر فيديو شائع's create button outweighs its four task cards`,
+    Math.abs(blankBox.height - contentBox.height) < 2,
+    `dominance: the blank rail's height (${blankBox.height.toFixed(1)}px) matches the full height of the templates+sizes column beside it (${contentBox.height.toFixed(1)}px) — alignItems:'stretch' makes it span the whole grid, the way محرّر فيديو شائع's one dominant action owns its own visual weight`,
   );
+  assert(
+    blankBox.width < contentBox.width / 2,
+    `dominance: the blank rail stays a narrow column (${blankBox.width.toFixed(1)}px) beside the much wider content grid (${contentBox.width.toFixed(1)}px) — tall and distinct, not another competing block fighting the templates/sizes for area`,
+  );
+
+  // The template category switcher ("مبدّل... مثلًا عروضات خصم") the owner
+  // asked for today: it has to actually filter, not just decorate — the same
+  // bar it was proven to that `medium-filter` really narrows a list, not just
+  // toggle a visual state.
+  await page.locator('[data-testid="template-category-offers"]').click();
+  await page.waitForTimeout(80);
+  const offersCards = await page.locator('[data-testid^="starter-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-category')));
+  assert(offersCards.length > 0 && offersCards.every((c) => c === 'offers'), `template category filter: picking "عروض وخصومات" narrows the strip to only offers templates (got ${offersCards.join(',')})`);
+  await page.locator('[data-testid="template-category-all"]').click();
+  await page.waitForTimeout(80);
+  const allTemplateCards = await page.locator('[data-testid^="starter-"]').count();
+  assert(allTemplateCards === 16, `template category filter: "الكل" restores the full 16-template strip (got ${allTemplateCards})`);
+
+  // And the cards themselves are big enough to show a real preview — not
+  // shrunk back down to the old 40px icon row.
+  const starterBoxes = await page.locator('[data-testid^="starter-"]').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { w: r.width, h: r.height }; }));
+  const smallestStarterSide = Math.min(...starterBoxes.map((b) => Math.min(b.w, b.h)));
+  assert(smallestStarterSide >= 160, `dominance: every template card is at least 160×160px — 4x the old 40px row (smallest side seen: ${smallestStarterSide.toFixed(1)}px) — a legible preview needs real pixels, not an icon strip`);
 
   // ============ 5. The video/image question, answered as a filter ==========
   assert((await page.locator('[data-testid="medium-filter"]').count()) === 1, 'medium filter: the "image or video" question is asked explicitly on the start screen');
