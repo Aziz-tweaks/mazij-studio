@@ -160,22 +160,48 @@ function countNear(px, rgb) {
 
 /** قياسُ الفيض: عرضُ ما يُمكن تمريرُ المستند إليه مقابل عرضِ المنفذ، وكلُّ سليلٍ
  * من شاشة البداية يَخرج عن أيٍّ من الحافّتين. */
+/** **حُدِّث ٢٢ أكتوبر ٢٠٢٦ بطلب المالك، ولم يُحذَف.** كان يَعُدّ كلَّ عنصرٍ يخرج
+ * عن المنظور «مقصوصًا»، وهو صحيحٌ ما دامت الشاشةُ بلا شريطٍ يُمرَّر أفقيًّا — وقد
+ * كانت. ثم طلب المالك (برسمةٍ بخطّ يده) شريطَ قوالبَ كبيرةً **يُمرَّر سَحبًا**
+ * وشرائحَ تصنيفٍ فوقه، **وخروجُ المحتوى عن المنظور هو عملُ الشريط نفسِه** لا
+ * عطلٌ فيه: فالبندُ بصيغته القديمة يمنع الميزةَ بالتعريف، لا يَكشف خللًا.
+ *
+ * **وما يَحرسه البندُ حقًّا باقٍ كما هو، بل أدقّ:** الصفحةُ لا تفيض
+ * (`docScrollW`/`rootW` ≤ المنظور — وهما أقوى الشرطين ولم يُمَسّا)، **ولا عنصرَ
+ * خارجَ المنظور إلّا داخل حاويةٍ تُمرَّر فعلًا** فيَبلغه المستخدم. فعنصرٌ مقصوصٌ
+ * في حاويةٍ غيرِ قابلةٍ للتمرير — وهو العطلُ الأصليّ — ما زال يُسقِط البند.
+ * وقيسَ على الشاشة الجديدة: ١١١ عنصرًا خارج المنظور، كلُّها داخل
+ * `template-strip` و`template-categories`، و`docScrollW` = `innerW` = ١٤٤٠. */
 const overflowReport = (page) =>
   page.evaluate(() => {
     const ss = document.querySelector('[data-testid="start-screen"]');
     const out = [];
+    const unreachable = [];
     for (const n of ss.querySelectorAll('*')) {
       const r = n.getBoundingClientRect();
-      if (r.width > 0 && (r.right > window.innerWidth + 0.5 || r.left < -0.5)) {
-        out.push(`${n.tagName}${n.dataset.testid ? `[${n.dataset.testid}]` : ''} ${Math.round(r.left)}…${Math.round(r.right)}`);
+      if (!(r.width > 0 && (r.right > window.innerWidth + 0.5 || r.left < -0.5))) continue;
+      const label = `${n.tagName}${n.dataset.testid ? `[${n.dataset.testid}]` : ''} ${Math.round(r.left)}…${Math.round(r.right)}`;
+      out.push(label);
+      // أقربُ جدٍّ يُمرَّر أفقيًّا **ويَملك فائضًا فعليًّا** — لا مجرّد تصريحِ CSS.
+      let a = n.parentElement;
+      let reachable = false;
+      while (a && a !== ss) {
+        const ox = getComputedStyle(a).overflowX;
+        if ((ox === 'auto' || ox === 'scroll') && a.scrollWidth > a.clientWidth + 0.5) {
+          reachable = true;
+          break;
+        }
+        a = a.parentElement;
       }
+      if (!reachable) unreachable.push(label);
     }
     return {
       innerW: window.innerWidth,
       docScrollW: document.documentElement.scrollWidth,
       rootW: Math.round(document.querySelector('[dir]').getBoundingClientRect().width),
-      clipped: out.slice(0, 4),
-      clippedCount: out.length,
+      offscreenCount: out.length,
+      clipped: unreachable.slice(0, 4),
+      clippedCount: unreachable.length,
     };
   });
 

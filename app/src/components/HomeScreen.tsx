@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { ICONS, PALETTES, PLATFORM_GROUPS, SIZES, START_FORMATS, dimsOf, glyphStyle, nameOf, sizeAt, sizeIdxOf, type Palette, type SizePreset } from '../data/constants';
-import { STARTER_TEMPLATES } from '../lib/starterTemplates';
+import { ICONS, PALETTES, SIZES, START_FORMATS, dimsOf, glyphStyle, nameOf, sizeAt, sizeIdxOf, type Palette, type SizePreset } from '../data/constants';
+import { STARTER_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategory } from '../lib/starterTemplates';
 import { renderArtboardPng } from '../lib/exportArtboard';
 import { useStudio } from '../state/StudioContext';
 import type { DocElement } from '../state/elements';
@@ -47,11 +47,37 @@ import type { Lang } from '../i18n/strings';
  * وقابلية التراجع مضمونة فعليًا لا وعدًا: المقاس يُغيَّر داخل المحرّر من
  * `ArtboardSizeMenu`، و`SizePreset.kind` مشتقٌّ من المقاس — فتبديل المقاس يقلب
  * الطبيعة، بلا بدءٍ من جديد. هذا هو درس محرّر الفيديو الشائع مُطبَّقًا.
+ *
+ * ---------------------------------------------------------------------------
+ * **نقضٌ صريحٌ بتاريخ ٢٢ أكتوبر ٢٠٢٦** لقرار قسم «القوالب» وحده (لا لبقيّة ما
+ * فوق): قرارُ ١٨ أكتوبر كان صفوفًا مُدمَجة بمصغّرة صغيرة، بحجّتين: (أ) الهيمنة
+ * البصرية لصالح «ابدأ من فراغ»، و(ب) أن الستّة قوالب كانت كلّها بنية البوستر
+ * التجريبي نفسها بلوحةٍ مختلفة، فمعاينةٌ ضخمة كانت ستُوهم بتنويعٍ غير موجود.
+ *
+ * الحجّة (ب) سقطت فعليًّا: صار في المكتبة عشرةُ قوالبَ (`offer-split` حتى
+ * `event-ad`، ٢٢ أكتوبر) ببنى تخطيطٍ مختلفة فعلًا — لا نسخةٌ من بوستر «رواق»
+ * بأرقامٍ مختلفة. فالمعاينة الضخمة الآن تُوهم بتنويعٍ **موجود**، لا مزيَّف.
+ * والمالك طلب صراحةً اليوم (رسمةٌ بخطّ يده) قوالبَ كبيرة في شريطٍ يُمرَّر
+ * سَحبًا، مع مبدِّل تصنيفٍ فوقها، ومقاساتٍ تحتها كلٌّ بمثالٍ بنسبته الحقيقية.
+ *
+ * الحجّة (أ) بقيت، لكن حلّها تغيَّر: الهيمنةُ الآن **بالارتفاع والتمييز** لا
+ * بالمساحة المطلقة — «ابدأ من فراغ» عمودٌ طويلٌ بإطارٍ منقّط يمتدّ بكامل ارتفاع
+ * الشبكة المجاورة له (`alignItems: 'stretch'`)، تمامًا كرسمة المالك. فالنقض
+ * يخصّ **طريقة** الهيمنة لا **وجودها**.
  * ========================================================================== */
 
 type MediumFilter = 'all' | 'still' | 'timed';
+type CategoryFilter = 'all' | TemplateCategory;
 
-const ROW_H = 40; // خطوة الصفّ المقيسة في منتقي الأداة الشائعة — `re-canva-flows.md` §1.4.
+/** عرضُ بطاقة القالب في الشريط الأفقي المُمرَّر — كبيرةٌ قصدًا (قرار ٢٢ أكتوبر):
+ * أكبر من أربعة أمثال مساحة الصفّ القديم (٤٠px ارتفاعًا)، لأن معاينةً حقيقية
+ * تحتاج بكسلاتٍ فعلية لتُقرأ، لا شريط أيقونةٍ. */
+const TEMPLATE_CARD_W = 180;
+const TEMPLATE_THUMB_H = 144;
+
+/** أقصى بُعدٍ لمربّع نسبة المقاس أسفل الشاشة — كبيرٌ بما يكفي ليُقرأ شكله
+ * فعلًا (البند ٣ في طلب المالك)، لا أيقونةً ١٥px كما كانت. */
+const SIZE_GLYPH_M = 56;
 
 /** هل يطابق المقاس نصّ البحث؟ يطابق الاسم العربي والإنجليزي والمعرّف والأبعاد،
  * لأن المصمّم قد يكتب «ستوري» أو «reel» أو «1920» وكلّها نوايا صحيحة. */
@@ -145,6 +171,11 @@ export function HomeScreen() {
   // عرضٍ محليّةٌ تُضيّق قائمةً واحدة، وذاك صفةُ مستندٍ تُحفَظ ويتفرّع عليها ثلاثةُ
   // أسطح. والاسمُ مُفرَّقٌ صراحةً كي لا يَخلِط بينهما قارئٌ ولا `grep`.
   const [mediumFilter, setMediumFilter] = useState<MediumFilter>('all');
+  // مُرشِّحُ القوالب — طلبُ المالك الصريح اليوم: «مبدّل فوق [القوالب] مثلًا
+  // عروضات خصم ومن ذا النوع». كمّيةٌ ثالثةٌ مستقلّة عن `mediumFilter` (الذي
+  // يُصفّي المقاسات لا القوالب) وعن `DocSnapshot.medium` — ثلاثُ تصفياتٍ، كلٌّ
+  // على محورٍ مختلف تمامًا، فلا تتقاطع أسماؤها عمدًا.
+  const [templateCategory, setTemplateCategory] = useState<CategoryFilter>('all');
   const [customW, setCustomW] = useState(state.customW);
   const [customH, setCustomH] = useState(state.customH);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -168,40 +199,10 @@ export function HomeScreen() {
     [query, mediumFilter],
   );
 
-  /** اسمُ المنصّة لمعرّف مقاس — من `PLATFORM_GROUPS` نفسِها التي تجمّع أهدافَ
-   * التصدير في `ExportDialog.tsx`، لا جدولٌ ثانٍ. */
-  const platformNameOf = (id: string): string | null => {
-    const g = PLATFORM_GROUPS.find((g) => g.sizeIds.includes(id));
-    return g ? (state.lang === 'ar' ? g.ar : g.en) : null;
-  };
-
-  /** عنوانُ مجموعةٍ فوق أوّل صفٍّ من كلّ بُعدٍ **يتكرّر** في `rows` الحاليّة —
-   * القائمةُ نفسُها والعددُ نفسُه لم يتغيّرا (كلُّ صفٍّ يبقى عنصره وزرّه
-   * و`data-testid`ه بالحرف، فلا ينكسر ما ينقر `format-row-ig-reel` أو
-   * `format-row-snap` أو `format-row-tt` بعينه، ولا ما يَعُدّ عناصر
-   * `format-row-*` ليُثبت أن التصفية مُرشِّحٌ لا بوّابة §1.4). العنوانُ طبقةُ
-   * عرضٍ فوق الصفوف القائمة، لا بديلٌ عنها: «١٠٨٠×١٩٢٠» مرّةً واحدة، وأسماءُ
-   * المنصّات التي تتشارك البُعد قريبةً منها — وهو طلبُ المالك حرفًا، محقَّقًا
-   * بلا حذف صفّ. */
-  const dimGroupHeaderAt = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of rows) {
-      const k = `${r.z.w}x${r.z.h}`;
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-    const seen = new Set<string>();
-    const headers = new Map<number, { dims: string; platforms: string }>();
-    rows.forEach((r, i) => {
-      const k = `${r.z.w}x${r.z.h}`;
-      if ((counts.get(k) ?? 0) <= 1 || seen.has(k)) return;
-      seen.add(k);
-      const members = rows.filter((x) => `${x.z.w}x${x.z.h}` === k);
-      const platforms = Array.from(new Set(members.map((m) => platformNameOf(m.z.id)).filter((p): p is string => !!p)));
-      headers.set(i, { dims: dimsOf(r.z), platforms: platforms.join(' · ') });
-    });
-    return headers;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, state.lang]);
+  /** القوالب المُصفّاة بالتصنيف المختار — «الكل» الافتراضي، فلا يُحجَب
+   * `starter-demo-poster` ولا أيّ قالبٍ آخر عن أيّ مواصفةٍ تنقره مباشرةً من دون
+   * اختيار تصنيفٍ أولًا (`qa/helpers/boot.mjs` ونحوه). */
+  const filteredTemplates = useMemo(() => STARTER_TEMPLATES.filter((tp) => templateCategory === 'all' || tp.category === templateCategory), [templateCategory]);
 
   // تفاصيل بطاقة المتابعة من **الحالة الحيّة**، لا من لقطةٍ تُؤخَذ عند الإقلاع:
   // البطاقة تصف المشروع الذي سيفتحه النقر عليها فعلًا. ولقطةٌ مجمّدة كانت تكذب
@@ -217,9 +218,16 @@ export function HomeScreen() {
     { id: 'timed', label: L.h_medium_timed },
   ];
 
+  // تبويباتُ مبدِّل القوالب: «الكل» (تُعيد `L.h_medium_all` نفسها، فلا حاجة
+  // لمفتاح ترجمةٍ جديد لنصٍّ موجودٍ أصلًا) ثم العشرة من `TEMPLATE_CATEGORIES`.
+  const categoryTabs: Array<{ id: CategoryFilter; label: string }> = [
+    { id: 'all', label: L.h_medium_all },
+    ...TEMPLATE_CATEGORIES.map((c) => ({ id: c.id as CategoryFilter, label: state.lang === 'ar' ? c.ar : c.en })),
+  ];
+
   return (
     <div data-testid="start-screen" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '40px 48px 60px' }}>
-      <div style={{ maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div style={{ maxWidth: 1180, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
         <h1 style={{ margin: 0, fontSize: 32, fontWeight: 800, letterSpacing: '-.01em' }}>{L.h_greet}</h1>
 
         {/* بطاقة المتابعة، فوق كل شيء وقبل المُنتقي. العائد الذي يريد أن يُكمل
@@ -289,246 +297,275 @@ export function HomeScreen() {
           <button onClick={actions.startFromPrompt} style={{ height: 36, padding: '0 18px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', fontWeight: 600, fontSize: 13 }}>{L.start}</button>
         </div>
 
-        {/* ===== الفعل الأساسي المهيمن: ابدأ من فراغ =====
-            مهيمنٌ بالمساحة عن قصد، كزر «إنشاء مشروع» في محرّر الفيديو الشائع. وبإطارٍ منقّط،
-            كبطاقة «Start From Scratch» في إكسبرس. نقرةٌ واحدة، بلا أي قرار: يفتح
-            فارغًا بالمقاس الحالي — وأبعاده مكتوبة على البطاقة فلا تكون مفاجأة.
+        {/* ===== العمودُ المهيمن «ابدأ من فراغ» إلى جانب الشبكة =====
+            رسمةُ المالك بخطّ يده (٢٢ أكتوبر ٢٠٢٦): عمودٌ طويلٌ يمتدّ بكامل
+            ارتفاع الشبكة المجاورة له، لا بطاقةٌ عريضة فوقها. `alignItems:
+            'stretch'` هو ما يصنع الامتداد فعليًا: ارتفاع الزرّ يصبح ارتفاع أطول
+            عمودٍ في الصفّ (عمود المحتوى)، بلا رقمٍ مكتوبٍ باليد قد ينفصل عنه
+            لاحقًا. الهيمنةُ الآن بالارتفاع والتمييز (إطارٌ منقّط، أيقونة، نصٌّ
+            أكبر) بدل المساحة المطلقة — انظر النقض المسجَّل في رأس الملف.
 
-            ولاحِظ أنه ليس فرعًا منافسًا للقائمة أسفله: **كل** صفّ في تلك القائمة
-            يفتح فارغًا أيضًا، لأن المستند الافتتاحي صار فارغًا فعلًا. فالفرق أن
-            هذه البطاقة لا تطلب حتى اختيار وجهة. ومن هنا جاء أن القوالب — وحدها —
-            هي ما يُحضر محتوى، وهي مفصولةٌ في قسمها أسفل الشاشة (محرّر الفيديو الشائع §1.6:
-            المشروع الفارغ والقوالب وجهتان منفصلتان تمامًا، لا تُخلَطان). */}
-        <button
-          data-testid="start-blank"
-          data-size-id={sizeAt(state.sizeIdx, state.customW, state.customH).id}
-          onClick={() => (state.sizeIdx < 0 ? actions.startBlankCustom(state.customW, state.customH) : actions.startBlank(state.sizeIdx))}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            // ١٤٠px هو ارتفاع زر «إنشاء مشروع» المقيس في محرّر الفيديو الشائع (§1.1). والارتفاع
-            // مقصودٌ لا تجميلي: مساحة هذه البطاقة (٨٦٠×١٤٠ ≈ 120,400px²) تتجاوز
-            // مساحة صفوف القوالب الستّة مجتمعةً (≈102,240px²) — وهي نفس الحجّة
-            // التي تجعل فعل محرّر الفيديو الشائع الأساسي لا لبسَ فيه (159,600 مقابل 95,316).
-            minHeight: 140,
-            padding: '0 22px',
-            border: '2px dashed var(--accent)',
-            borderRadius: 'var(--r)',
-            background: 'var(--surface)',
-            color: 'var(--text)',
-            textAlign: 'start',
-          }}
-        >
-          <span style={{ width: 46, height: 46, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: '50%', background: 'var(--accentSoft)', color: 'var(--accent)' }}>
-            <Icon size={22} strokeWidth={2} path="M10 4v12M4 10h12" />
-          </span>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontWeight: 800, fontSize: 19 }}>{L.h_blank}</span>
-            <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>{L.h_blank_hint}</span>
-          </span>
-          <span dir="ltr" style={{ flex: 'none', fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(sizeAt(state.sizeIdx, state.customW, state.customH))}</span>
-        </button>
-
-        {/* ===== المُنتقي: بحث ← مقاس مخصص مثبَّت ← مُرشِّح ← قائمة واحدة ===== */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <input
-            ref={searchRef}
-            data-testid="format-search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={L.h_search_ph}
-            style={{ height: 44, padding: '0 14px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, outline: 0, boxShadow: 'var(--shadow)' }}
-          />
-
-          {/* «مقاس مخصص» مثبَّتٌ تحت البحث مباشرةً وفوق القائمة — لا مدفونًا في
-              ذيلها. هذا موضعه المقيس في الأداة الشائعة (§1.4، البند ٢): مخرج الخبير على
-              مرمى نظرة، ولا يكلّف المبتدئ شيئًا. ولا يختفي مع المُرشِّح ولا مع
-              البحث، فهو ليس صفًّا من القائمة. */}
-          <div
-            data-testid="custom-size-row"
-            style={{ display: 'flex', alignItems: 'center', gap: 10, height: 52, padding: '0 12px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' }}
+            ولاحِظ أنه ليس فرعًا منافسًا لما بجانبه: **كل** قالبٍ وكل مقاسٍ في
+            الشبكة يفتح فارغًا أيضًا من حيث المستند؛ الفرق أن هذه البطاقة لا
+            تطلب حتى اختيار وجهة — نقرةٌ واحدة بلا أي قرار. */}
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 16 }}>
+          <button
+            data-testid="start-blank"
+            data-size-id={sizeAt(state.sizeIdx, state.customW, state.customH).id}
+            onClick={() => (state.sizeIdx < 0 ? actions.startBlankCustom(state.customW, state.customH) : actions.startBlank(state.sizeIdx))}
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 18,
+              flex: '0 0 208px',
+              padding: '28px 18px',
+              border: '2px dashed var(--accent)',
+              borderRadius: 'var(--r)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              textAlign: 'center',
+            }}
           >
-            <span style={{ width: 22, height: 22, flex: 'none', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
-              <Icon size={16} path={ICONS.resize} />
+            <span style={{ width: 52, height: 52, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: '50%', background: 'var(--accentSoft)', color: 'var(--accent)' }}>
+              <Icon size={24} strokeWidth={2} path="M10 4v12M4 10h12" />
             </span>
-            <span style={{ fontWeight: 600, fontSize: 13, flex: 'none' }}>{L.custom_size}</span>
-            {/* زوج الأرقام وحده هو `dir="ltr"` (العرض ثم الارتفاع، وهو ترتيب
-                يُقرأ من اليسار في كل اللغات)، أمّا الزرّ فخارج هذا الزوج ليبقى
-                في ترتيبه المنطقي داخل الصفّ العربي: التسمية ثم الحقلان ثم الفعل.
-                لو بقي داخل الزوج لظهر — بقراءةٍ من اليمين — **قبل** الحقلين
-                اللذين يعمل عليهما. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginInlineStart: 'auto' }} dir="ltr">
-              <input
-                type="number"
-                min={1}
-                value={customW}
-                data-testid="home-custom-w"
-                onChange={(e) => setCustomW(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                style={{ width: 72, height: 30, border: '1px solid var(--line)', borderRadius: 'calc(var(--rs) - 2px)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, padding: '0 8px' }}
-              />
-              <span style={{ color: 'var(--muted)', fontSize: 12 }}>×</span>
-              <input
-                type="number"
-                min={1}
-                value={customH}
-                data-testid="home-custom-h"
-                onChange={(e) => setCustomH(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                style={{ width: 72, height: 30, border: '1px solid var(--line)', borderRadius: 'calc(var(--rs) - 2px)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, padding: '0 8px' }}
-              />
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontWeight: 800, fontSize: 19 }}>{L.h_blank}</span>
+              <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>{L.h_blank_hint}</span>
+            </span>
+            <span dir="ltr" style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(sizeAt(state.sizeIdx, state.customW, state.customH))}</span>
+          </button>
+
+          <div data-testid="start-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 28 }}>
+            {/* ===== القوالب: بطاقاتٌ كبيرة في شريطٍ أفقيٍّ يُمرَّر سَحبًا =====
+                مفصولةٌ عن المقاسات أسفلها. مبدِّلُ التصنيف فوقها طلبٌ صريحٌ من
+                المالك اليوم («مبدّل فوق [القوالب] مثلًا عروضات خصم») — انظر
+                `TEMPLATE_CATEGORIES` في `starterTemplates.ts`. وهنا يسكن
+                البوستر التجريبي: كان المستند الافتتاحي، فصار قالبًا يُطلَب. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="mz-label">{L.templates}</div>
+
+              {/* شريطٌ يُمرَّر سَحبًا، لا صفًّا ثابتًا — نفس اتّجاه `overflowX`
+                  الذي تستعمله `medium-filter` لو زاد عدد شرائحها، وهنا مُستغَلٌّ
+                  لمحتوى البطاقات نفسه لا لأشرطة التبويب فقط. */}
+              {/* الاسمُ «template-categories» لا «template-category-…» عمدًا: لو
+                  شارك جذرَ `template-category-{id}` لوقع في عدّادات
+                  `[data-testid^="template-category-"]` بالخطأ، كما وقع فعليًا
+                  حين جُرِّبت الشاشة قبل هذا الاسم. */}
+              <div data-testid="template-categories" role="tablist" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+                {categoryTabs.map((c) => {
+                  const on = templateCategory === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      role="tab"
+                      aria-selected={on}
+                      data-testid={`template-category-${c.id}`}
+                      onClick={() => setTemplateCategory(c.id)}
+                      style={{
+                        flex: 'none',
+                        whiteSpace: 'nowrap',
+                        height: 30,
+                        padding: '0 14px',
+                        border: 0,
+                        borderRadius: 999,
+                        background: on ? 'var(--accent)' : 'var(--surface2)',
+                        color: on ? 'var(--onAccent)' : 'var(--muted)',
+                        fontSize: 12.5,
+                        fontWeight: on ? 700 : 500,
+                      }}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* الشريط الأفقي — كلُّ بطاقةٍ تعرض المعاينة الحقيقية عبر
+                  `ArtboardThumb` (مسار `renderArtboardPng` نفسه، لا مُصيِّرٌ
+                  ثانٍ)، بحجمٍ كبيرٍ يُقرَأ فعلًا لا شريط أيقونةٍ ٣٤×٢٦. كلُّ
+                  تصنيفٍ في `TEMPLATE_CATEGORIES` يحمل قالبًا واحدًا على الأقل،
+                  فهذا الشريط لا يفرغ أبدًا — ولذلك بلا فرع «لا نتائج». */}
+              <div data-testid="template-strip" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
+                {filteredTemplates.map((tp) => {
+                  const pal = PALETTES[tp.paletteIdx];
+                  const size = SIZES[tp.sizeIdx];
+                  return (
+                    <button
+                      key={tp.id}
+                      data-testid={`starter-${tp.id}`}
+                      data-size-id={size.id}
+                      data-category={tp.category}
+                      onClick={() => actions.startFromStarter(tp.id)}
+                      style={{ display: 'flex', flexDirection: 'column', flex: 'none', width: TEMPLATE_CARD_W, border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden', background: 'var(--surface)', textAlign: 'start', color: 'var(--text)' }}
+                    >
+                      <ArtboardThumb size={size} palette={pal} elements={tp.elements()} decorAccent={tp.decorAccent} lang={state.lang} w={TEMPLATE_CARD_W} h={TEMPLATE_THUMB_H} radius={0} />
+                      <span style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px' }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L[tp.nameKey]}</span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <MediumBadge kind={size.kind} label={size.kind === 'timed' ? L.h_timed : L.h_still} />
+                          <span dir="ltr" style={{ fontSize: 10.5, color: 'var(--muted)' }}>{dimsOf(size)}</span>
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <button
-              data-testid="home-custom-start"
-              onClick={() => actions.startBlankCustom(customW, customH)}
-              style={{ height: 30, padding: '0 14px', flex: 'none', border: 0, borderRadius: 'calc(var(--rs) - 2px)', background: 'var(--accent)', color: 'var(--onAccent)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
-            >
-              {L.h_custom_start}
-            </button>
-          </div>
 
-          {/* شريط «صورة أم فيديو» — جوابُ سؤال المالك، مُرشِّحًا لا بوّابةً.
-              انظر التعليق الطويل في رأس الملف. */}
-          <div data-testid="medium-filter" role="tablist" style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 'var(--rs)', background: 'var(--surface2)', alignSelf: 'flex-start' }}>
-            {mediumTabs.map((t) => {
-              const on = mediumFilter === t.id;
-              return (
-                <button
-                  key={t.id}
-                  role="tab"
-                  aria-selected={on}
-                  data-testid={`medium-tab-${t.id}`}
-                  onClick={() => setMediumFilter(t.id)}
-                  style={{
-                    height: 30,
-                    padding: '0 16px',
-                    border: 0,
-                    borderRadius: 'calc(var(--rs) - 2px)',
-                    background: on ? 'var(--surface)' : 'transparent',
-                    color: on ? 'var(--text)' : 'var(--muted)',
-                    fontSize: 12.5,
-                    fontWeight: on ? 700 : 500,
-                    boxShadow: on ? '0 1px 2px rgba(0,0,0,.10)' : 'none',
-                  }}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
+            {/* ===== المُنتقي: بحث ← مقاس مخصص مثبَّت ← مُرشِّح ← شبكة أمثلةٍ كبيرة ===== */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input
+                ref={searchRef}
+                data-testid="format-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={L.h_search_ph}
+                style={{ height: 44, padding: '0 14px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', color: 'var(--text)', fontSize: 14, outline: 0, boxShadow: 'var(--shadow)' }}
+              />
 
-          {/* العنوان الوحيد في القائمة كلها. الأداة الشائعة حلّت مشكلة التجميع بالترتيب لا
-              بالتصنيف: لا «تسويق» ولا «مناسبات» ولا «مكتبي» — عنوانٌ واحد
-              «مقترح» وصفوفٌ مرتّبة (§1.4، البند ٣). */}
-          <div className="mz-label" style={{ marginTop: 6 }}>{L.h_suggested}</div>
-
-          {rows.length === 0 ? (
-            // سطرٌ صريح داخل القائمة، لا لوحٌ فارغ — كما تفعل الأداة الشائعة بنصّها
-            // «No results found for …» (§1.4، البند ١).
-            <div data-testid="format-no-results" style={{ padding: '14px 12px', fontSize: 13, color: 'var(--muted)' }}>{L.h_no_results(query)}</div>
-          ) : (
-            <div data-testid="format-list" style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', overflow: 'hidden' }}>
-              {rows.map((r, i) => {
-                const header = dimGroupHeaderAt.get(i);
-                return (
-                <div key={r.z.id} style={{ display: 'contents' }}>
-                {header && (
-                  // عنوانُ عرضٍ فوق الصفّ، لا صفٌّ جديد: لا `data-testid="format-row-…"`
-                  // فلا يُحتسَب في عدّادات `format-row-*` ولا يُنقَر كهدف.
-                  <div
-                    data-testid={`format-group-${header.dims.replace(/\s|×/g, 'x')}`}
-                    style={{ padding: '10px 12px 2px', borderTop: i === 0 ? 0 : '1px solid var(--line)', fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'baseline', gap: 8 }}
-                  >
-                    <span dir="ltr" style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{header.dims}</span>
-                    {header.platforms && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{header.platforms}</span>}
-                  </div>
-                )}
-                <button
-                  data-testid={`format-row-${r.z.id}`}
-                  data-medium={r.z.kind}
-                  data-w={r.z.w}
-                  data-h={r.z.h}
-                  onClick={() => actions.startBlank(r.idx)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    height: ROW_H,
-                    flex: 'none',
-                    padding: '0 12px',
-                    border: 0,
-                    borderTop: i === 0 || header ? 0 : '1px solid var(--line)',
-                    background: 'transparent',
-                    color: 'var(--text)',
-                    textAlign: 'start',
-                  }}
-                >
-                  {/* الأيقونة الصدارية تحمل نسبة الأبعاد الحقيقية للمقاس — فهي
-                      تؤدّي عملَ التصنيف الذي كانت ستؤدّيه العناوين (§1.4). */}
-                  <span style={{ width: 20, height: 20, flex: 'none', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
-                    <span style={glyphStyle(r.z, 15)} />
-                  </span>
-                  <span style={{ flex: 1, minWidth: 0, fontWeight: 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(r.z, state.lang)}</span>
-                  <MediumBadge kind={r.z.kind} label={r.z.kind === 'timed' ? L.h_timed : L.h_still} />
-                  {/* الأبعادُ تُحذَف من الصفّ حين تظهر فوقه في عنوان المجموعة —
-                      لا تتكرّر مرّتين على ارتفاع ٤٠px. */}
-                  {!header && <span dir="ltr" style={{ flex: 'none', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', minWidth: 76, textAlign: 'end' }}>{dimsOf(r.z)}</span>}
-                </button>
+              {/* «مقاس مخصص» مثبَّتٌ تحت البحث مباشرةً وفوق القائمة — لا مدفونًا
+                  في ذيلها. هذا موضعه المقيس في الأداة الشائعة (§1.4، البند ٢): مخرج
+                  الخبير على مرمى نظرة، ولا يكلّف المبتدئ شيئًا. ولا يختفي مع
+                  المُرشِّح ولا مع البحث، فهو ليس صفًّا من القائمة. */}
+              {/* `flexWrap` لا `nowrap` ثابتًا — صفُّ المقاس المخصّص يحمل أيقونةً
+                  وتسميةً وحقلين وزرًّا بعرضٍ أدنى ثابت، وعلى عمودٍ ضيّقٍ (٦٤٠–
+                  ٧٠٠px، حيث يضيق عمودُ المحتوى نفسُه لصالح عمود «ابدأ من فراغ»
+                  الطويل) كان الزرّ يخرج عن حدود الصفّ بلا تمريرٍ يبلغه — قيسَ:
+                  `البند ٥` في `parity-four.spec.mjs` أسقط `home-custom-start`
+                  بإحداثياتٍ سالبة. والالتفافُ يبقي كلَّ عنصرٍ داخل عرض العمود
+                  مهما ضاق، بسطرٍ ثانٍ عند اللزوم لا بقصٍّ غيرِ مرئي. */}
+              <div
+                data-testid="custom-size-row"
+                style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, minHeight: 52, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' }}
+              >
+                <span style={{ width: 22, height: 22, flex: 'none', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
+                  <Icon size={16} path={ICONS.resize} />
+                </span>
+                <span style={{ fontWeight: 600, fontSize: 13, flex: 'none' }}>{L.custom_size}</span>
+                {/* زوج الأرقام وحده هو `dir="ltr"` (العرض ثم الارتفاع، وهو ترتيب
+                    يُقرأ من اليسار في كل اللغات)، أمّا الزرّ فخارج هذا الزوج ليبقى
+                    في ترتيبه المنطقي داخل الصفّ العربي: التسمية ثم الحقلان ثم الفعل.
+                    لو بقي داخل الزوج لظهر — بقراءةٍ من اليمين — **قبل** الحقلين
+                    اللذين يعمل عليهما. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginInlineStart: 'auto' }} dir="ltr">
+                  <input
+                    type="number"
+                    min={1}
+                    value={customW}
+                    data-testid="home-custom-w"
+                    onChange={(e) => setCustomW(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                    style={{ width: 72, height: 30, border: '1px solid var(--line)', borderRadius: 'calc(var(--rs) - 2px)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, padding: '0 8px' }}
+                  />
+                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>×</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={customH}
+                    data-testid="home-custom-h"
+                    onChange={(e) => setCustomH(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                    style={{ width: 72, height: 30, border: '1px solid var(--line)', borderRadius: 'calc(var(--rs) - 2px)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12, padding: '0 8px' }}
+                  />
                 </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ===== القوالب: الوجهة الوحيدة التي تُحضر محتوى جاهزًا =====
-            مفصولةٌ عن كل ما سبق وآخرُ الشاشة. وهنا يسكن البوستر التجريبي الآن: كان هو
-            المستند الافتتاحي، فصار قالبًا يُطلَب. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="mz-label">{L.templates}</div>
-          {/* صفوفٌ مُدمَجة بمصغّرة صغيرة، لا شبكةُ بطاقاتٍ كبيرة بمعاينات ٤:٣.
-              سببان:
-              (١) الهيمنة البصرية: الشاشة يجب أن يكون فيها **فعل أساسي واحد
-                  مهيمن** (محرّر الفيديو الشائع §1.1)، وهو «ابدأ من فراغ». وستُّ بطاقاتٍ ملوّنة
-                  كبيرة كانت تثقل أسفل الشاشة حتى تطغى على المسار الفارغ — أي
-                  إعادةُ العيب الأصلي بصورةٍ أخرى: المحتوى الجاهز يتصدّر.
-              (٢) الصدق: الستّة كلها بنيةُ البوستر التجريبي نفسها بلوحةٍ ومقاسٍ مختلفين،
-                  فمعاينةٌ ضخمة لكلٍّ منها تُوهم بتنويعٍ غير موجود. */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
-            {STARTER_TEMPLATES.map((tp) => {
-              const pal = PALETTES[tp.paletteIdx];
-              const size = SIZES[tp.sizeIdx];
-              return (
                 <button
-                  key={tp.id}
-                  data-testid={`starter-${tp.id}`}
-                  data-size-id={size.id}
-                  onClick={() => actions.startFromStarter(tp.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, height: ROW_H, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', textAlign: 'start', color: 'var(--text)' }}
+                  data-testid="home-custom-start"
+                  onClick={() => actions.startBlankCustom(customW, customH)}
+                  style={{ height: 30, padding: '0 14px', flex: 'none', border: 0, borderRadius: 'calc(var(--rs) - 2px)', background: 'var(--accent)', color: 'var(--onAccent)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}
                 >
-                  <ArtboardThumb size={size} palette={pal} elements={tp.elements()} decorAccent={tp.decorAccent} lang={state.lang} w={34} h={26} />
-                  <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L[tp.nameKey]}</span>
-                  <MediumBadge kind={size.kind} label={size.kind === 'timed' ? L.h_timed : L.h_still} />
-                  <span dir="ltr" style={{ flex: 'none', fontSize: 10.5, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(size)}</span>
+                  {L.h_custom_start}
                 </button>
-              );
-            })}
-          </div>
+              </div>
 
-          {/* القاعدة الصارمة: ما لا يعمل يظهر معطّلًا بوسم «قريبًا»، لا حيًّا
-              قابلًا للنقر. والمحفوظ على القرص اليوم **مشروع واحد** (خانة حفظ
-              تلقائي واحدة في `persist.ts`)، فلا توجد «مشاريع أخيرة» بصيغة
-              الجمع — وقائمةٌ كهذه كانت ستكون تاريخًا ملفَّقًا. وقد كانت كذلك
-              فعلًا: ثلاثة أسماء وثلاثة أوقات مكتوبة في الكود («قبل ساعتين»،
-              «أمس»، «قبل 3 أيام») لا تمثّل أي ملفٍ حقيقي — أُزيلت، وحلّت محلّها
-              بطاقة المتابعة أعلى الشاشة، وهي تقرأ المشروع المحفوظ فعلًا. */}
-          <div
-            data-testid="projects-soon"
-            aria-disabled="true"
-            style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', border: '1px dashed var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', cursor: 'not-allowed', opacity: 0.75 }}
-          >
-            <Icon size={15} path={ICONS.folder} />
-            <span style={{ fontSize: 12.5, flex: 1 }}>{L.h_projects_soon}</span>
-            <span style={{ flex: 'none', height: 20, padding: '0 8px', borderRadius: 999, background: 'var(--surface2)', fontSize: 10.5, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{L.soon}</span>
+              {/* شريط «صورة أم فيديو» — جوابُ سؤال المالك، مُرشِّحًا لا بوّابةً.
+                  انظر التعليق الطويل في رأس الملف. */}
+              <div data-testid="medium-filter" role="tablist" style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 'var(--rs)', background: 'var(--surface2)', alignSelf: 'flex-start' }}>
+                {mediumTabs.map((t) => {
+                  const on = mediumFilter === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      role="tab"
+                      aria-selected={on}
+                      data-testid={`medium-tab-${t.id}`}
+                      onClick={() => setMediumFilter(t.id)}
+                      style={{
+                        height: 30,
+                        padding: '0 16px',
+                        border: 0,
+                        borderRadius: 'calc(var(--rs) - 2px)',
+                        background: on ? 'var(--surface)' : 'transparent',
+                        color: on ? 'var(--text)' : 'var(--muted)',
+                        fontSize: 12.5,
+                        fontWeight: on ? 700 : 500,
+                        boxShadow: on ? '0 1px 2px rgba(0,0,0,.10)' : 'none',
+                      }}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* العنوان الوحيد في القائمة كلها. الأداة الشائعة حلّت مشكلة التجميع بالترتيب لا
+                  بالتصنيف: لا «تسويق» ولا «مناسبات» ولا «مكتبي» — عنوانٌ واحد
+                  «مقترح» وبطاقاتٌ مرتّبة (§1.4، البند ٣). */}
+              <div className="mz-label" style={{ marginTop: 6 }}>{L.h_suggested}</div>
+
+              {rows.length === 0 ? (
+                // سطرٌ صريح داخل القائمة، لا لوحٌ فارغ — كما تفعل الأداة الشائعة بنصّها
+                // «No results found for …» (§1.4، البند ١).
+                <div data-testid="format-no-results" style={{ padding: '14px 12px', fontSize: 13, color: 'var(--muted)' }}>{L.h_no_results(query)}</div>
+              ) : (
+                // شبكةُ أمثلةٍ كبيرة، لا عمودًا بارتفاعٍ ثابت ٤٠px (نقضُ ١٨
+                // أكتوبر، انظر رأس الملف): كلُّ مقاسٍ مستطيلٌ يحمل نسبته
+                // الحقيقية (`glyphStyle`، أكبر بأكثر من ٣ أمثال من الأيقونة
+                // ١٥px القديمة) فوق اسمه وبُعديه.
+                <div data-testid="format-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(132px,1fr))', gap: 10 }}>
+                  {rows.map((r) => (
+                    <button
+                      key={r.z.id}
+                      data-testid={`format-row-${r.z.id}`}
+                      data-medium={r.z.kind}
+                      data-w={r.z.w}
+                      data-h={r.z.h}
+                      onClick={() => actions.startBlank(r.idx)}
+                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '16px 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', textAlign: 'center', color: 'var(--text)' }}
+                    >
+                      <span style={{ height: SIZE_GLYPH_M, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {/* بلا `data-testid` هنا عمدًا: أيّ اسمٍ يبدأ بـ«format-row-»
+                            كان سيدخل في عدّادات `[data-testid^="format-row-"]`
+                            التي يعتمد عليها `qa/start-screen.spec.mjs` لعدّ
+                            المقاسات ذاتها — وهذا بالضبط ما وقع فعليًا حين جُرِّب
+                            `data-testid="format-row-glyph"` هنا. */}
+                        <span style={{ ...glyphStyle(r.z, SIZE_GLYPH_M), background: 'var(--surface2)' }} />
+                      </span>
+                      <span style={{ fontWeight: 600, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{nameOf(r.z, state.lang)}</span>
+                      <MediumBadge kind={r.z.kind} label={r.z.kind === 'timed' ? L.h_timed : L.h_still} />
+                      <span dir="ltr" style={{ fontSize: 10.5, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(r.z)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* القاعدة الصارمة: ما لا يعمل يظهر معطّلًا بوسم «قريبًا»، لا حيًّا
+                قابلًا للنقر. والمحفوظ على القرص اليوم **مشروع واحد** (خانة حفظ
+                تلقائي واحدة في `persist.ts`)، فلا توجد «مشاريع أخيرة» بصيغة
+                الجمع — وقائمةٌ كهذه كانت ستكون تاريخًا ملفَّقًا. وقد كانت كذلك
+                فعلًا: ثلاثة أسماء وثلاثة أوقات مكتوبة في الكود («قبل ساعتين»،
+                «أمس»، «قبل 3 أيام») لا تمثّل أي ملفٍ حقيقي — أُزيلت، وحلّت محلّها
+                بطاقة المتابعة أعلى الشاشة، وهي تقرأ المشروع المحفوظ فعلًا. */}
+            <div
+              data-testid="projects-soon"
+              aria-disabled="true"
+              style={{ display: 'flex', alignItems: 'center', gap: 10, height: 44, padding: '0 12px', border: '1px dashed var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', cursor: 'not-allowed', opacity: 0.75 }}
+            >
+              <Icon size={15} path={ICONS.folder} />
+              <span style={{ fontSize: 12.5, flex: 1 }}>{L.h_projects_soon}</span>
+              <span style={{ flex: 'none', height: 20, padding: '0 8px', borderRadius: 999, background: 'var(--surface2)', fontSize: 10.5, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{L.soon}</span>
+            </div>
           </div>
         </div>
       </div>

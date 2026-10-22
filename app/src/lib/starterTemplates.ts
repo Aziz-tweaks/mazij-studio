@@ -235,13 +235,18 @@ export const DEMO_POSTER_SLOTS: TemplateSlot[] = [
 ];
 
 // ============================================================================
-// عشرة قوالب، ٢٢ أكتوبر ٢٠٢٦ — كلّ واحدةٍ دالّةُ بناءٍ مستقلّة ببنية تخطيطٍ
+// خمسةَ عشرَ قالبًا، ٢٢ أكتوبر ٢٠٢٦ — كلّ واحدةٍ دالّةُ بناءٍ مستقلّة ببنية تخطيطٍ
 // مختلفة عن أخواتها (لا نسخة من `createDemoPosterElements` بأرقامٍ مختلفة، وهي
-// العلّة التي كانت فيها الستّة القوالب أعلاه). التنويع بنيويٌّ لا لونيٌّ فقط:
-// قُطريّ، تمركزٌ كامل، شبكةٌ بعمودٍ فاصل، تذكرةٌ بشقٍّ وثُلمتَين، إطارٌ مزدوجٌ
-// متناظر، انقسامٌ رأسيٌّ نصٌّ/صورة، أعمدةٌ إحصائيّة، قائمةُ بنودٍ بخطوطِ فصل،
-// إطارٌ مذهَّبٌ بختمٍ متراكب، وطبقاتُ فقاعاتٍ غير متناظرة. كل واحدةٍ بلوحتها
-// الخاصّة من `PALETTES` (لا لوحة مكرَّرة بين العشرة)، وخطّها، وثقلِ حبرها.
+// العلّة التي حُذفت بها خمسةُ قوالبَ زائفة في هذا التاريخ — انظر الفقرة عند
+// `STARTER_TEMPLATES` أدناه). التنويع بنيويٌّ لا لونيٌّ فقط: قُطريّ، تمركزٌ كامل،
+// شبكةٌ بعمودٍ فاصل، تذكرةٌ بشقٍّ وثُلمتَين، إطارٌ مزدوجٌ متناظر، انقسامٌ رأسيٌّ
+// نصٌّ/صورة، أعمدةٌ إحصائيّة، قائمةُ بنودٍ بخطوطِ فصل، إطارٌ مذهَّبٌ بختمٍ متراكب،
+// طبقاتُ فقاعاتٍ غير متناظرة — والخمسةُ المُضافة في هذا التاريخ نفسه: خلفيّةٌ
+// كاملةٌ بشريطٍ سفليٍّ وشارةٍ قُطريّةٍ في الزاوية (عقار)، أشرطةُ خطابٍ رسميٍّ
+// علويّةٌ وسفليّةٌ بلا إطار (إعلانٌ مؤسّسي)، سلسلةُ دوائرَ مرقَّمةٍ يصلها خطٌّ
+// رأسيّ (خطوات)، نصفانِ متقابلانِ بخاتمٍ مركزيٍّ على الدَّرز (قبل/بعد)، وبطاقةُ
+// شاشةٍ مائلةٌ فوق تركيبةٍ من أيقونةٍ وتقييمٍ ودعوة (إعلان تطبيق). كل واحدةٍ
+// بلوحتها الخاصّة من `PALETTES`، وخطّها، وثقلِ حبرها، ومقاسِها الذي بُنيت له.
 // ============================================================================
 
 /** ١. عرضٌ/خصمٌ — قُطريّ. مثلّثٌ قُطريّ حقيقيّ (شكلُ `path`، لا مستطيلٌ مُدار)
@@ -371,12 +376,12 @@ export const OCCASION_CARD_SLOTS: TemplateSlot[] = [
 export function createProductCardElements(): DocElement[] {
   return [
     mkImage('photo', { x: 0.5, y: 0, w: 0.5, h: 1, rotation: 0 }, { anim: defaultAnim('fade', 0, 0.6, 'easeOut') }),
-    mkText('eyebrow', 'وصل حديثًا', { x: 0.07, y: 0.1, w: 0.3, h: 0.05, rotation: 0 }, { fontSize: 22, weight: 'bold', color: '#0FA06B', fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.1, 0.5, 'easeOut') }),
-    mkText('name', 'سماعة الصوت اللاسلكيّة X1', { x: 0.07, y: 0.2, w: 0.4, h: 0.16, rotation: 0 }, { fontSize: 46, weight: 'bold', fontFamily: "'Readex Pro'", anim: defaultAnim('slide', 0.2, 0.6, 'easeOut') }),
-    mkText('description', 'صوتٌ نقيٌّ وبطاريةٌ تدوم طوال اليوم', { x: 0.07, y: 0.4, w: 0.38, h: 0.14, rotation: 0 }, { fontSize: 24, fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.3, 0.5, 'easeOut') }),
+    mkText('eyebrow', 'وصل حديثًا', { x: 0.07, y: 0.1, w: 0.3, h: 0.05, rotation: 0 }, { fontSize: 15, weight: 'bold', color: '#0FA06B', fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.1, 0.5, 'easeOut') }),
+    mkText('name', 'سماعة الصوت اللاسلكيّة X1', { x: 0.07, y: 0.2, w: 0.4, h: 0.16, rotation: 0 }, { fontSize: 31, weight: 'bold', fontFamily: "'Readex Pro'", anim: defaultAnim('slide', 0.2, 0.6, 'easeOut') }),
+    mkText('description', 'صوتٌ نقيٌّ وبطاريةٌ تدوم طوال اليوم', { x: 0.07, y: 0.4, w: 0.38, h: 0.14, rotation: 0 }, { fontSize: 16, fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.3, 0.5, 'easeOut') }),
     mkShape('price-tag', 'rect', { x: 0.07, y: 0.62, w: 0.26, h: 0.12, rotation: 0 }, { fillToken: 'ac', radius: 0.1, anim: defaultAnim('pop', 0.45, 0.5, 'back') }),
-    mkText('price-label', '٢٤٩ ر.س', { x: 0.07, y: 0.62, w: 0.26, h: 0.12, rotation: 0 }, { fontSize: 30, weight: 'bold', color: '#08402F', halign: 'center', valign: 'middle', fontFamily: "'Readex Pro'", anim: defaultAnim('pop', 0.45, 0.5, 'back') }),
-    mkText('cta', 'تسوّق الآن ←', { x: 0.07, y: 0.8, w: 0.3, h: 0.06, rotation: 0 }, { fontSize: 22, weight: 'medium', fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.55, 0.4, 'easeOut') }),
+    mkText('price-label', '٢٤٩ ر.س', { x: 0.07, y: 0.62, w: 0.26, h: 0.12, rotation: 0 }, { fontSize: 20, weight: 'bold', color: '#08402F', halign: 'center', valign: 'middle', fontFamily: "'Readex Pro'", anim: defaultAnim('pop', 0.45, 0.5, 'back') }),
+    mkText('cta', 'تسوّق الآن ←', { x: 0.07, y: 0.8, w: 0.3, h: 0.06, rotation: 0 }, { fontSize: 15, weight: 'medium', fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.55, 0.4, 'easeOut') }),
   ];
 }
 
@@ -464,14 +469,14 @@ export function createCertificateElements(): DocElement[] {
   return [
     mkShape('frame-outer', 'rect', { x: 0.03, y: 0.04, w: 0.94, h: 0.92, rotation: 0 }, { fillToken: 'ac', radius: 0.01, anim: defaultAnim('fade', 0, 0.5, 'easeOut') }),
     mkShape('frame-inner', 'rect', { x: 0.045, y: 0.06, w: 0.91, h: 0.88, rotation: 0 }, { fillToken: 'bg', radius: 0.005, anim: defaultAnim('fade', 0.1, 0.5, 'easeOut') }),
-    mkText('kicker', 'شهادة تقدير', { x: 0.2, y: 0.12, w: 0.6, h: 0.12, rotation: 0 }, { fontSize: 56, weight: 'bold', halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.2, 0.5, 'easeOut') }),
-    mkText('recipient-line', 'يُقدَّم هذا التقدير إلى', { x: 0.25, y: 0.28, w: 0.5, h: 0.05, rotation: 0 }, { fontSize: 22, halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.3, 0.4, 'easeOut') }),
-    mkText('name', 'محمد العبدالله', { x: 0.15, y: 0.35, w: 0.7, h: 0.14, rotation: 0 }, { fontSize: 60, weight: 'bold', color: '#F4D35E', halign: 'center', valign: 'middle', anim: defaultAnim('slide', 0.4, 0.6, 'easeOut') }),
-    mkText('body', 'تقديرًا لجهوده المتميّزة وتفانيه في العمل خلال عام ٢٠٢٦', { x: 0.2, y: 0.52, w: 0.6, h: 0.1, rotation: 0 }, { fontSize: 22, halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.5, 0.5, 'easeOut') }),
+    mkText('kicker', 'شهادة تقدير', { x: 0.2, y: 0.12, w: 0.6, h: 0.12, rotation: 0 }, { fontSize: 38, weight: 'bold', halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.2, 0.5, 'easeOut') }),
+    mkText('recipient-line', 'يُقدَّم هذا التقدير إلى', { x: 0.25, y: 0.28, w: 0.5, h: 0.05, rotation: 0 }, { fontSize: 15, halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.3, 0.4, 'easeOut') }),
+    mkText('name', 'محمد العبدالله', { x: 0.15, y: 0.35, w: 0.7, h: 0.14, rotation: 0 }, { fontSize: 40, weight: 'bold', color: '#F4D35E', halign: 'center', valign: 'middle', anim: defaultAnim('slide', 0.4, 0.6, 'easeOut') }),
+    mkText('body', 'تقديرًا لجهوده المتميّزة وتفانيه في العمل خلال عام ٢٠٢٦', { x: 0.2, y: 0.52, w: 0.6, h: 0.1, rotation: 0 }, { fontSize: 15, halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.5, 0.5, 'easeOut') }),
     mkShape('signature-line', 'rect', { x: 0.6, y: 0.74, w: 0.2, h: 0.003, rotation: 0 }, { fillToken: 'fg', opacity: 60, anim: defaultAnim('fade', 0.6, 0.4, 'linear') }),
-    mkText('signature-label', 'التوقيع', { x: 0.6, y: 0.75, w: 0.2, h: 0.04, rotation: 0 }, { fontSize: 18, halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.65, 0.4, 'easeOut') }),
+    mkText('signature-label', 'التوقيع', { x: 0.6, y: 0.75, w: 0.2, h: 0.04, rotation: 0 }, { fontSize: 12, halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.65, 0.4, 'easeOut') }),
     mkShape('seal', 'ellipse', { x: 0.06, y: 0.68, w: 0.16, h: 0.16, rotation: -10 }, { fillToken: 'ac', anim: defaultAnim('pop', 0.55, 0.5, 'back') }),
-    mkText('seal-label', 'معتمد', { x: 0.06, y: 0.68, w: 0.16, h: 0.16, rotation: -10 }, { fontSize: 20, weight: 'bold', color: '#1E2A3A', halign: 'center', valign: 'middle', anim: defaultAnim('pop', 0.55, 0.5, 'back') }),
+    mkText('seal-label', 'معتمد', { x: 0.06, y: 0.68, w: 0.16, h: 0.16, rotation: -10 }, { fontSize: 14, weight: 'bold', color: '#1E2A3A', halign: 'center', valign: 'middle', anim: defaultAnim('pop', 0.55, 0.5, 'back') }),
   ];
 }
 
@@ -489,12 +494,12 @@ export function createEventAdElements(): DocElement[] {
   return [
     mkShape('blob-back', 'ellipse', { x: 0.55, y: -0.25, w: 0.7, h: 0.7, rotation: 0 }, { fillToken: 'ac', opacity: 15, anim: defaultAnim('fade', 0, 0.6, 'easeOut') }),
     mkShape('blob-front', 'ellipse', { x: 0.68, y: 0.5, w: 0.45, h: 0.45, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('pop', 0.15, 0.6, 'back') }),
-    mkText('eyebrow', 'ورشة تطوير', { x: 0.06, y: 0.1, w: 0.3, h: 0.07, rotation: 0 }, { fontSize: 22, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.2, 0.5, 'easeOut') }),
-    mkText('title', 'بناء واجهاتٍ بِريأكت من الصفر', { x: 0.06, y: 0.2, w: 0.52, h: 0.28, rotation: 0 }, { fontSize: 42, weight: 'bold', fontFamily: 'Vazirmatn', anim: defaultAnim('slide', 0.3, 0.6, 'easeOut') }),
-    mkText('instructor', 'تقديم: م. فرقةُ الليل', { x: 0.06, y: 0.52, w: 0.5, h: 0.06, rotation: 0 }, { fontSize: 22, weight: 'medium', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.4, 0.5, 'easeOut') }),
+    mkText('eyebrow', 'ورشة تطوير', { x: 0.06, y: 0.1, w: 0.3, h: 0.07, rotation: 0 }, { fontSize: 19, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.2, 0.5, 'easeOut') }),
+    mkText('title', 'بناء واجهاتٍ بِريأكت من الصفر', { x: 0.06, y: 0.2, w: 0.52, h: 0.28, rotation: 0 }, { fontSize: 35, weight: 'bold', fontFamily: 'Vazirmatn', anim: defaultAnim('slide', 0.3, 0.6, 'easeOut') }),
+    mkText('instructor', 'تقديم: م. فرقةُ الليل', { x: 0.06, y: 0.52, w: 0.5, h: 0.06, rotation: 0 }, { fontSize: 19, weight: 'medium', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.4, 0.5, 'easeOut') }),
     mkShape('date-badge', 'rect', { x: 0.06, y: 0.62, w: 0.26, h: 0.09, rotation: 0 }, { fillToken: 'ac', radius: 0.1, anim: defaultAnim('pop', 0.5, 0.5, 'back') }),
-    mkText('date-label', '٥ نوفمبر · ٧ مساءً', { x: 0.06, y: 0.62, w: 0.26, h: 0.09, rotation: 0 }, { fontSize: 18, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.5, 0.5, 'back') }),
-    mkText('cta', 'سجّل مجّانًا ←', { x: 0.06, y: 0.78, w: 0.3, h: 0.06, rotation: 0 }, { fontSize: 22, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.6, 0.4, 'easeOut') }),
+    mkText('date-label', '٥ نوفمبر · ٧ مساءً', { x: 0.06, y: 0.62, w: 0.26, h: 0.09, rotation: 0 }, { fontSize: 15, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.5, 0.5, 'back') }),
+    mkText('cta', 'سجّل مجّانًا ←', { x: 0.06, y: 0.78, w: 0.3, h: 0.06, rotation: 0 }, { fontSize: 19, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.6, 0.4, 'easeOut') }),
   ];
 }
 
@@ -504,6 +509,225 @@ export const EVENT_AD_SLOTS: TemplateSlot[] = [
   { id: 'slot-instructor', label: 'المدرّب', elementId: 'instructor', kind: 'text' },
   { id: 'slot-date', label: 'التاريخ والوقت', elementId: 'date-label', kind: 'text' },
   { id: 'slot-cta', label: 'زرّ الدعوة', elementId: 'cta', kind: 'text' },
+];
+
+/** ١١. عقارٌ وضيافة — خلفيّةٌ كاملة. صورةٌ تملأ اللوحة حافّةً إلى حافّة (لا نصفًا
+ * منها كبطاقة المنتج، بل اللوحة كلّها)، وشارةٌ قُطريّةٌ حقيقيّة (شكلُ `path`
+ * ثلاثيٌّ، لا مستطيلٌ مُدار) في الزاوية العلويّة، وشريطٌ سفليٌّ معتمٌ يحمل السعر
+ * والعنوان — دورُ الصورة هنا «الخلفيّة كلّها»، وهو دورٌ لا يتكرّر في العشرة
+ * السابقة. بُني لمقاس ١٩٢٠×١٠٨٠ (الفراغ العرضيّ الذي لم يكن له قالب). */
+export function createPropertyListingElements(): DocElement[] {
+  const ribbon: ShapeElement = {
+    ...(mkShape('ribbon', 'path', { x: 0.82, y: 0, w: 0.18, h: 0.12, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('pop', 0.1, 0.5, 'back') }) as ShapeElement),
+    points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
+    closed: true,
+  };
+  return [
+    mkImage('photo', { x: 0, y: 0, w: 1, h: 1, rotation: 0 }, { anim: defaultAnim('fade', 0, 0.6, 'easeOut') }),
+    ribbon,
+    // **`fontSize` ليس بكسلاتٍ مطلقة، وهذا أصلُ كلّ نصٍّ متراكبٍ في القوالب.**
+    // عقدُه مكتوبٌ فوق الحقل في `state/elements.ts:466`: «Reference px against
+    // a 1080-wide artboard» — بكسلاتٌ **نسبةً إلى لوحٍ عرضُه ١٠٨٠**، فالنصُّ
+    // يكبر مع عرض اللوحة بالتصميم. وتسعةُ مواضعَ في المستودع تحترم الاصطلاحَ
+    // نفسَه (المعاينةُ والتصديرُ والتشكيلُ والنصُّ على مسارٍ والتبريرُ
+    // والتحجيمُ الذكيّ)، ولهذا لا تختلف الشاشةُ عن الملفّ: النظامُ متّسقٌ،
+    // والمخطئُ من يقرأ الرقمَ بكسلًا.
+    //
+    // وعلى هذا اللوح ١٩٢٠×١٠٨٠ تُضرَب كلُّ قيمةٍ في **١٫٧٧٨**. قيسَ حرفيًّا:
+    // `fontSize: 68` رسم **١٢٠٫٨٨px** وارتفاعُ سطرِه **١٣٩px**، فابتلع ثلثَ
+    // ارتفاع اللوحة بسطرٍ واحدٍ وتراكب مع سطر الموقع تحته. فالأرقامُ أدناه
+    // مقسومةٌ على ١٫٧٧٨ — **مكتوبةٌ بالاصطلاح الصحيح، لا تعويضًا عن عطل**.
+    //
+    // **والقاعدةُ لمن يُضيف قالبًا:** اكتب الحجمَ الذي تريده بالبكسل ثم اقسمه
+    // على (عرضِ لوحك ÷ ١٠٨٠). واللوحُ المربّعُ ١٠٨٠×١٠٨٠ وحده يَقبل الرقمَ كما
+    // هو — وتلك الصدفةُ هي ما ضلّل القوالبَ غيرَ المربّعة كلَّها.
+    mkText('ribbon-label', 'للبيع', { x: 0.855, y: 0.015, w: 0.12, h: 0.05, rotation: 21 }, { fontSize: 14, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.1, 0.5, 'back') }),
+    mkShape('panel', 'rect', { x: 0, y: 0.78, w: 1, h: 0.22, rotation: 0 }, { fillToken: 'fg', opacity: 82, anim: defaultAnim('slide', 0.2, 0.5, 'easeOut') }),
+    mkText('price', '١٬٢٥٠٬٠٠٠ ريال', { x: 0.06, y: 0.8, w: 0.5, h: 0.08, rotation: 0 }, { fontSize: 38, weight: 'bold', color: '#FFFFFF', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.3, 0.5, 'back') }),
+    mkText('address', 'فيلا للبيع · حي النرجس، شمال الرياض', { x: 0.06, y: 0.915, w: 0.55, h: 0.055, rotation: 0 }, { fontSize: 15, weight: 'medium', color: '#FFFFFF', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.4, 0.4, 'easeOut') }),
+    mkText('agent', 'عقارات الواجهة · تواصل للاستفسار', { x: 0.62, y: 0.83, w: 0.32, h: 0.14, rotation: 0 }, { fontSize: 12, weight: 'medium', color: '#FFFFFF', halign: 'end', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.5, 0.4, 'easeOut') }),
+  ];
+}
+
+export const PROPERTY_LISTING_SLOTS: TemplateSlot[] = [
+  { id: 'slot-ribbon-label', label: 'شارة الزاوية', elementId: 'ribbon-label', kind: 'text' },
+  { id: 'slot-price', label: 'السعر', elementId: 'price', kind: 'text' },
+  { id: 'slot-address', label: 'الموقع', elementId: 'address', kind: 'text' },
+  { id: 'slot-agent', label: 'المُعلِن', elementId: 'agent', kind: 'text' },
+  { id: 'slot-photo', label: 'صورة العقار', elementId: 'photo', kind: 'image' },
+];
+
+/** ١٢. إعلانٌ مؤسّسيٌّ رسميّ — أشرطةُ خطابٍ لا إطار. شريطٌ علويٌّ وشريطٌ سفليٌّ
+ * بعرض اللوحة كاملةً (ترويسةُ الخطاب الرسميّ)، بينهما عمودٌ متمركزٌ: عنوانٌ،
+ * خطٌّ فاصل، فقرةٌ، ثم تاريخٌ وتوقيعٌ جنبًا إلى جنب — لا إطار محيطٌ كالتهنئة
+ * والشهادة؛ الإيقاعُ هنا أشرطةٌ أفقيّةٌ لا حدودٌ متداخلة. بُني لمقاس A4
+ * (٣٠٠ نقطة/بوصة، ٢٤٨٠×٣٥٠٨ — الفراغ المطبوع الذي لم يكن له قالب)، وأحجامُ
+ * الخطّ بمقاييس نقطيّةٍ حقيقيّة على هذه الدقّة (العنوانُ ~٢٨pt، الفقرةُ ~١٢pt). */
+export function createCorporateNoticeElements(): DocElement[] {
+  return [
+    mkShape('band-top', 'rect', { x: 0, y: 0, w: 1, h: 0.045, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('fade', 0, 0.4, 'linear') }),
+    mkShape('logo-chip', 'rect', { x: 0.08, y: 0.012, w: 0.03, h: 0.021, rotation: 0 }, { fillToken: 'bg', radius: 0.2, anim: defaultAnim('pop', 0.1, 0.4, 'back') }),
+    mkText('org-name', 'شركة الأفق للاستشارات', { x: 0.13, y: 0.008, w: 0.5, h: 0.03, rotation: 0 }, { fontSize: 44, weight: 'bold', color: '#FFFFFF', valign: 'middle', anim: defaultAnim('fade', 0.15, 0.4, 'easeOut') }),
+    mkText('kicker', 'إعلانٌ رسمي', { x: 0.1, y: 0.13, w: 0.8, h: 0.035, rotation: 0 }, { fontSize: 40, weight: 'medium', halign: 'center', anim: defaultAnim('fade', 0.2, 0.4, 'easeOut') }),
+    // صندوقُ العنوان مرتفعٌ عمدًا (٠٫١٨ من ارتفاع الصفحة ≈ ٦٣١px على A4) — قياسٌ
+    // واقعيٌّ لثلاثة أسطرَ محتملة بخطّ ٨٤px عريض، لا سطرين مفترَضَين بخطّ ١٠٠px
+    // كما كانت المحاولة الأولى: ذاك كان يُخرج السطر الثالث خارج الصندوق فيتراكب
+    // مع الفقرة تحته — عيبٌ من فئة «حُشِر البوسترُ في مقاسٍ لا يخصّه» نفسها،
+    // مقيسًا هنا بلقطة شاشةٍ فعليّةٍ قبل الإصلاح (انظر تقرير التسليم).
+    mkText('title', 'تحديث ساعات العمل الرسمية لعام ٢٠٢٧', { x: 0.08, y: 0.18, w: 0.84, h: 0.18, rotation: 0 }, { fontSize: 84, weight: 'bold', halign: 'center', anim: defaultAnim('slide', 0.3, 0.6, 'easeOut') }),
+    mkShape('rule', 'rect', { x: 0.35, y: 0.37, w: 0.3, h: 0.003, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('fade', 0.4, 0.4, 'linear') }),
+    mkText(
+      'body',
+      'تُعلن الإدارة عن تطبيق نظام ساعاتٍ جديد، من الثامنة صباحًا حتى الرابعة مساءً، ابتداءً من مطلع الشهر القادم، ضمن خطّة تحسين الإنتاجية وتوازن الحياة المهنية.',
+      { x: 0.1, y: 0.4, w: 0.8, h: 0.18, rotation: 0 },
+      { fontSize: 46, weight: 'regular', anim: defaultAnim('fade', 0.5, 0.5, 'easeOut') },
+    ),
+    mkText('date', 'الرياض، ١ محرم ١٤٤٨هـ', { x: 0.1, y: 0.85, w: 0.35, h: 0.03, rotation: 0 }, { fontSize: 34, weight: 'regular', anim: defaultAnim('fade', 0.6, 0.4, 'easeOut') }),
+    mkShape('signature-rule', 'rect', { x: 0.55, y: 0.85, w: 0.25, h: 0.003, rotation: 0 }, { fillToken: 'fg', opacity: 60, anim: defaultAnim('fade', 0.65, 0.4, 'linear') }),
+    mkText('signature-label', 'المدير التنفيذي', { x: 0.55, y: 0.858, w: 0.25, h: 0.03, rotation: 0 }, { fontSize: 32, weight: 'medium', halign: 'center', anim: defaultAnim('fade', 0.7, 0.4, 'easeOut') }),
+    mkShape('band-bottom', 'rect', { x: 0, y: 0.955, w: 1, h: 0.045, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('fade', 0.1, 0.4, 'linear') }),
+    mkText('footer-note', 'جميع الحقوق محفوظة © ١٤٤٨هـ', { x: 0.1, y: 0.962, w: 0.8, h: 0.03, rotation: 0 }, { fontSize: 28, weight: 'medium', color: '#FFFFFF', halign: 'center', valign: 'middle', anim: defaultAnim('fade', 0.2, 0.4, 'easeOut') }),
+  ];
+}
+
+export const CORPORATE_NOTICE_SLOTS: TemplateSlot[] = [
+  { id: 'slot-org-name', label: 'اسم الجهة', elementId: 'org-name', kind: 'text' },
+  { id: 'slot-title', label: 'عنوان الإعلان', elementId: 'title', kind: 'text' },
+  { id: 'slot-body', label: 'نصّ الإعلان', elementId: 'body', kind: 'text' },
+  { id: 'slot-date', label: 'التاريخ', elementId: 'date', kind: 'text' },
+  { id: 'slot-signature', label: 'التوقيع', elementId: 'signature-label', kind: 'text' },
+];
+
+/** ١٣. خطواتٌ مرقَّمة (كيف تفعل) — سلسلةُ دوائرَ يصلها خطٌّ. ثلاثُ دوائرَ
+ * مرقَّمةٍ مرصوفةٍ عموديًّا، كلُّ دائرتين متتاليتين يصل بينهما خطٌّ رأسيٌّ قصير —
+ * دورُ الشكل هنا رابطٌ بين بنودٍ متسلسلة، لا رقمٌ معزولٌ ولا شريطُ قياسٍ كما في
+ * الإنفوجرافيك. */
+export function createHowtoStepsElements(): DocElement[] {
+  const step = (idx: number, yTop: number, num: string, title: string, desc: string): DocElement[] => [
+    mkShape(`circle${idx}`, 'rect', { x: 0.1, y: yTop, w: 0.15, h: 0.12, rotation: 0 }, { fillToken: 'ac', radius: 0.5, anim: defaultAnim('pop', 0.15 + idx * 0.15, 0.5, 'back') }),
+    mkText(`num${idx}`, num, { x: 0.1, y: yTop, w: 0.15, h: 0.12, rotation: 0 }, { fontSize: 52, weight: 'bold', color: '#111111', halign: 'center', valign: 'middle', fontFamily: "'Readex Pro'", anim: defaultAnim('pop', 0.15 + idx * 0.15, 0.5, 'back') }),
+    mkText(`step${idx}-title`, title, { x: 0.3, y: yTop + 0.015, w: 0.62, h: 0.05, rotation: 0 }, { fontSize: 30, weight: 'bold', fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.25 + idx * 0.15, 0.4, 'easeOut') }),
+    mkText(`step${idx}-desc`, desc, { x: 0.3, y: yTop + 0.068, w: 0.62, h: 0.06, rotation: 0 }, { fontSize: 22, fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.3 + idx * 0.15, 0.4, 'easeOut') }),
+  ];
+  return [
+    mkText('title', 'كيف تحضّر قهوة الفلتر؟', { x: 0.08, y: 0.06, w: 0.84, h: 0.1, rotation: 0 }, { fontSize: 44, weight: 'bold', halign: 'center', fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0, 0.5, 'easeOut') }),
+    ...step(0, 0.21, '١', 'طحن البنّ', 'اطحن ٢٥ غرامًا من حبوب البنّ طحنًا متوسطًا'),
+    mkShape('connector0', 'rect', { x: 0.172, y: 0.33, w: 0.012, h: 0.13, rotation: 0 }, { fillToken: 'ac', opacity: 55, anim: defaultAnim('fade', 0.35, 0.3, 'linear') }),
+    ...step(1, 0.46, '٢', 'الصبّ البطيء', 'اسكب الماء الساخن ببطء وعلى دفعاتٍ دائريّة'),
+    mkShape('connector1', 'rect', { x: 0.172, y: 0.58, w: 0.012, h: 0.13, rotation: 0 }, { fillToken: 'ac', opacity: 55, anim: defaultAnim('fade', 0.5, 0.3, 'linear') }),
+    ...step(2, 0.71, '٣', 'الانتظار والتقديم', 'انتظر أربع دقائق ثمّ قدّم القهوة فورًا'),
+  ];
+}
+
+export const HOWTO_STEPS_SLOTS: TemplateSlot[] = [
+  { id: 'slot-title', label: 'العنوان', elementId: 'title', kind: 'text' },
+  { id: 'slot-step0-title', label: 'خطوة ١ — العنوان', elementId: 'step0-title', kind: 'text' },
+  { id: 'slot-step0-desc', label: 'خطوة ١ — الوصف', elementId: 'step0-desc', kind: 'text' },
+  { id: 'slot-step1-title', label: 'خطوة ٢ — العنوان', elementId: 'step1-title', kind: 'text' },
+  { id: 'slot-step1-desc', label: 'خطوة ٢ — الوصف', elementId: 'step1-desc', kind: 'text' },
+  { id: 'slot-step2-title', label: 'خطوة ٣ — العنوان', elementId: 'step2-title', kind: 'text' },
+  { id: 'slot-step2-desc', label: 'خطوة ٣ — الوصف', elementId: 'step2-desc', kind: 'text' },
+];
+
+/** ١٤. قبل وبعد — نصفانِ متقابلانِ بخاتمٍ على الدَّرز. صورتان تتقاسمان اللوحة
+ * ٥٠/٥٠ كبطاقة المنتج، لكن الدورَ مختلفٌ تمامًا: كلتاهما صورةٌ (لا نصٌّ مقابل
+ * صورة)، وخاتمٌ دائريٌّ يتمركز على خطّ القَسمة نفسه، مستعارًا من استعارة شريط
+ * التمرير في تطبيقات المقارنة. */
+export function createBeforeAfterElements(): DocElement[] {
+  return [
+    mkImage('photo-before', { x: 0, y: 0, w: 0.5, h: 1, rotation: 0 }, { anim: defaultAnim('fade', 0, 0.5, 'easeOut') }),
+    mkImage('photo-after', { x: 0.5, y: 0, w: 0.5, h: 1, rotation: 0 }, { anim: defaultAnim('fade', 0.1, 0.5, 'easeOut') }),
+    mkShape('seam', 'rect', { x: 0.492, y: 0, w: 0.016, h: 1, rotation: 0 }, { fillToken: 'bg', anim: defaultAnim('fade', 0.2, 0.4, 'linear') }),
+    mkShape('before-chip', 'rect', { x: 0.04, y: 0.05, w: 0.26, h: 0.08, rotation: 0 }, { fillToken: 'fg', opacity: 80, radius: 0.5, anim: defaultAnim('pop', 0.15, 0.5, 'back') }),
+    mkText('before-label', 'قبل', { x: 0.04, y: 0.05, w: 0.26, h: 0.08, rotation: 0 }, { fontSize: 30, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.15, 0.5, 'back') }),
+    mkShape('after-chip', 'rect', { x: 0.7, y: 0.05, w: 0.26, h: 0.08, rotation: 0 }, { fillToken: 'ac', radius: 0.5, anim: defaultAnim('pop', 0.2, 0.5, 'back') }),
+    mkText('after-label', 'بعد', { x: 0.7, y: 0.05, w: 0.26, h: 0.08, rotation: 0 }, { fontSize: 30, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.2, 0.5, 'back') }),
+    mkShape('badge', 'ellipse', { x: 0.41, y: 0.41, w: 0.18, h: 0.18, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('pop', 0.3, 0.6, 'back') }),
+    mkText('badge-value', '٣٠ يومًا', { x: 0.41, y: 0.41, w: 0.18, h: 0.18, rotation: 0 }, { fontSize: 24, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.3, 0.6, 'back') }),
+  ];
+}
+
+export const BEFORE_AFTER_SLOTS: TemplateSlot[] = [
+  { id: 'slot-before-label', label: 'تسمية "قبل"', elementId: 'before-label', kind: 'text' },
+  { id: 'slot-after-label', label: 'تسمية "بعد"', elementId: 'after-label', kind: 'text' },
+  { id: 'slot-badge-value', label: 'نصّ الخاتم', elementId: 'badge-value', kind: 'text' },
+  { id: 'slot-photo-before', label: 'صورة قبل', elementId: 'photo-before', kind: 'image' },
+  { id: 'slot-photo-after', label: 'صورة بعد', elementId: 'photo-after', kind: 'image' },
+];
+
+/** ١٥. إعلانُ تطبيق — أيقونةٌ وتقييمٌ وبطاقةُ شاشةٍ مائلة. أيقونةٌ دائريّةُ
+ * الزوايا أعلى اليسار، تقييمٌ نجميٌّ، ثم بطاقةٌ مستطيلةٌ مُدارةٌ بزاويةٍ صغيرة
+ * (محاكاةُ لقطة شاشة طافية، بخطوطِ واجهةٍ داخليّةٍ مُقلَّدة) تتراكب أسفل الوسط —
+ * الدورانُ الصغير على بطاقةٍ كبيرةٍ لا على ختمٍ صغير هو ما يجعل هذا التراكب
+ * مختلفًا عن طبقات إعلان الدورة. */
+export function createAppAdElements(): DocElement[] {
+  return [
+    mkShape('icon', 'rect', { x: 0.08, y: 0.08, w: 0.2, h: 0.1125, rotation: 0 }, { fillToken: 'ac', radius: 0.28, anim: defaultAnim('pop', 0, 0.5, 'back') }),
+    mkText('icon-letter', 'و', { x: 0.08, y: 0.08, w: 0.2, h: 0.1125, rotation: 0 }, { fontSize: 88, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: "'Readex Pro'", anim: defaultAnim('pop', 0, 0.5, 'back') }),
+    mkText('app-name', 'تطبيق وقتي', { x: 0.08, y: 0.225, w: 0.7, h: 0.06, rotation: 0 }, { fontSize: 50, weight: 'bold', fontFamily: "'Readex Pro'", anim: defaultAnim('slide', 0.15, 0.6, 'easeOut') }),
+    mkText('tagline', 'نظّم يومك بذكاء، في مكانٍ واحد', { x: 0.08, y: 0.295, w: 0.74, h: 0.08, rotation: 0 }, { fontSize: 26, fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.25, 0.5, 'easeOut') }),
+    mkText('rating', '★★★★★ ٤٫٩ من ٥', { x: 0.08, y: 0.385, w: 0.6, h: 0.04, rotation: 0 }, { fontSize: 26, weight: 'medium', fontFamily: "'Readex Pro'", anim: defaultAnim('fade', 0.35, 0.4, 'easeOut') }),
+    mkShape('screenshot', 'rect', { x: 0.18, y: 0.48, w: 0.64, h: 0.38, rotation: -6 }, { fillToken: 'bg', radius: 0.06, anim: defaultAnim('slide', 0.3, 0.6, 'easeOut') }),
+    mkShape('screenshot-bar', 'rect', { x: 0.22, y: 0.5, w: 0.56, h: 0.025, rotation: -6 }, { fillToken: 'fg', opacity: 15, anim: defaultAnim('fade', 0.4, 0.4, 'linear') }),
+    mkShape('screenshot-line1', 'rect', { x: 0.22, y: 0.58, w: 0.5, h: 0.02, rotation: -6 }, { fillToken: 'fg', opacity: 20, anim: defaultAnim('fade', 0.45, 0.4, 'linear') }),
+    mkShape('screenshot-line2', 'rect', { x: 0.22, y: 0.63, w: 0.4, h: 0.02, rotation: -6 }, { fillToken: 'fg', opacity: 20, anim: defaultAnim('fade', 0.5, 0.4, 'linear') }),
+    mkShape('screenshot-accent', 'rect', { x: 0.22, y: 0.7, w: 0.3, h: 0.05, rotation: -6 }, { fillToken: 'ac', radius: 0.3, anim: defaultAnim('pop', 0.55, 0.5, 'back') }),
+    mkShape('cta', 'rect', { x: 0.08, y: 0.88, w: 0.5, h: 0.08, rotation: 0 }, { fillToken: 'ac', radius: 0.5, anim: defaultAnim('pop', 0.6, 0.5, 'back') }),
+    mkText('cta-label', 'نزّل الآن', { x: 0.08, y: 0.88, w: 0.5, h: 0.08, rotation: 0 }, { fontSize: 30, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: "'Readex Pro'", anim: defaultAnim('pop', 0.6, 0.5, 'back') }),
+  ];
+}
+
+export const APP_AD_SLOTS: TemplateSlot[] = [
+  { id: 'slot-app-name', label: 'اسم التطبيق', elementId: 'app-name', kind: 'text' },
+  { id: 'slot-tagline', label: 'الوصف التسويقي', elementId: 'tagline', kind: 'text' },
+  { id: 'slot-rating', label: 'التقييم', elementId: 'rating', kind: 'text' },
+  { id: 'slot-cta', label: 'زرّ الدعوة', elementId: 'cta-label', kind: 'text' },
+  { id: 'slot-icon-letter', label: 'حرف الأيقونة', elementId: 'icon-letter', kind: 'text' },
+];
+
+/** تصنيفُ القالب — المُبدِّل الجديد فوق شريط القوالب في شاشة البداية (طلب
+ * المالك، ٢٢ أكتوبر ٢٠٢٦: رسمةٌ بخطّ يده فيها مبدّلٌ فوق القوالب، مثالُه
+ * الحرفيّ «عروضات خصم»). خمسَ عشرةَ فئةً حقيقية (عشرٌ أصليّة وخمسٌ أُضيفت مع
+ * القوالب الخمسة الجديدة في هذا التاريخ نفسه)، لا فئة «عام» تَلتقط الباقي —
+ * كلُّ قالبٍ من الستّة عشر يقع في واحدةٍ منها بالضبط، فالمبدِّل مُرشِّحٌ حقيقي
+ * لا واجهةٌ تتظاهر بالتصفية بينما كلُّ شيءٍ يسقط في نفس السلّة. */
+export type TemplateCategory =
+  | 'offers'
+  | 'quotes'
+  | 'hiring'
+  | 'events'
+  | 'greetings'
+  | 'products'
+  | 'stats'
+  | 'menus'
+  | 'certificates'
+  | 'courses'
+  | 'realestate'
+  | 'corporate'
+  | 'howto'
+  | 'beforeafter'
+  | 'appad';
+
+/** أسماءُ الفئات بالعربي والإنجليزي مباشرةً — نفسُ نمط `PLATFORM_GROUPS` في
+ * `src/data/constants.ts`، لا مفاتيحَ جديدة في `Dictionary`: هذه تسمياتُ تصنيفٍ
+ * ثابتة، لا نصوصَ واجهةٍ تتفرّع سلوكًا. الخمسُ الأخيرة أُضيفت مع القوالب الخمسة
+ * الجديدة — مُذيَّلةٌ هنا لا مُدرجةٌ وسط المصفوف، نفس قاعدة `SIZES`/`PALETTES`. */
+export const TEMPLATE_CATEGORIES: { id: TemplateCategory; ar: string; en: string }[] = [
+  { id: 'offers', ar: 'عروض وخصومات', en: 'Offers & discounts' },
+  { id: 'quotes', ar: 'اقتباسات', en: 'Quotes' },
+  { id: 'hiring', ar: 'توظيف', en: 'Hiring' },
+  { id: 'events', ar: 'فعاليّات', en: 'Events' },
+  { id: 'greetings', ar: 'تهنئة', en: 'Greetings' },
+  { id: 'products', ar: 'منتجات', en: 'Products' },
+  { id: 'stats', ar: 'إحصائيّات', en: 'Stats' },
+  { id: 'menus', ar: 'قوائم طعام', en: 'Menus' },
+  { id: 'certificates', ar: 'شهادات', en: 'Certificates' },
+  { id: 'courses', ar: 'دورات', en: 'Courses' },
+  { id: 'realestate', ar: 'عقار وضيافة', en: 'Real estate & hospitality' },
+  { id: 'corporate', ar: 'إعلانٌ مؤسّسي', en: 'Corporate notice' },
+  { id: 'howto', ar: 'خطوات', en: 'How-to steps' },
+  { id: 'beforeafter', ar: 'قبل وبعد', en: 'Before & after' },
+  { id: 'appad', ar: 'إعلان تطبيق', en: 'App ad' },
 ];
 
 /** قالب جاهز مدمج في التطبيق (لا يأتي من مكتبة المستخدم المحفوظة).
@@ -517,6 +741,8 @@ export interface StarterTemplate {
    * `t7`..`t16` هي العشرة المضافة في ٢٢ أكتوبر ٢٠٢٦ — انظر التعليق على
    * `STARTER_TEMPLATES` أدناه. */
   nameKey: 't1' | 't2' | 't3' | 't4' | 't5' | 't6' | 't7' | 't8' | 't9' | 't10' | 't11' | 't12' | 't13' | 't14' | 't15' | 't16';
+  /** تصنيفُ مبدِّل القوالب — أُضيف ٢٢ أكتوبر ٢٠٢٦ مع إعادة تصميم شاشة البداية. */
+  category: TemplateCategory;
   paletteIdx: number;
   sizeIdx: number;
   anim: AnimPreset;
@@ -530,28 +756,33 @@ export interface StarterTemplate {
   slots: TemplateSlot[];
 }
 
-/** القوالب المدمجة المعروضة على شاشة البداية. الستّةُ الأولى (`demo-poster` حتى
- * `tweet`) بنيةُ البوستر التجريبي نفسها بلوحة ألوانٍ ومقاسٍ مختلفين — هذا مذكورٌ
- * صراحةً لا مُخبَّأ، وباقٍ كما هو بالحرف لأن `qa/start-screen.spec.mjs` يَقرأ
- * الستّة بأسمائها، و`qa/helpers/boot.mjs` يَعتمد على `demo-poster` بعينه في نحو
- * ثلاثين مواصفة. العشرةُ بعدها (`offer-split` حتى `event-ad`، ٢٢ أكتوبر ٢٠٢٦) هي
- * التنويع الحقيقي الذي كان مفقودًا: كلُّ واحدةٍ دالّةُ بناءٍ مستقلّة ببنية تخطيطٍ
- * مختلفة — انظر التعليق فوق كلّ دالّةٍ منها أعلى هذا الملفّ. */
+/** القوالب المدمجة المعروضة على شاشة البداية. `demo-poster` وحده من القوالب
+ * الأصليّة باقٍ كما هو بالحرف — لا تُمسّ هويّتُه (`id`/`elements`/`slots`/
+ * `nameKey: 't1'`) لأن `qa/helpers/boot.mjs` يَعتمد عليه بعينه في نحو ثلاثين
+ * مواصفة. الخمسةُ التي كانت تشاركه معرّفاتٍ أخرى (`quote`/`hiring`/`product`/
+ * `reel`/`tweet`) **حُذفت** ٢٢ أكتوبر ٢٠٢٦: كلّها كانت تنادي
+ * `createDemoPosterElements` نفسَها بلوحةٍ مختلفة فقط، لا تنويعًا بنيويًّا
+ * حقيقيًّا — ولا مواصفةَ واحدةً كانت تستعمل معرّفاتها (تحقَّقٌ قبل الحذف). محلّها
+ * خمسةُ قوالبَ جديدة (`property-listing` حتى `app-ad`، باستعادة مفاتيح الاسم
+ * `t2`..`t6`). والعشرةُ الباقية (`offer-split` حتى `event-ad`، ٢٢ أكتوبر ٢٠٢٦)
+ * هي التنويع الحقيقي الذي كان مفقودًا أصلًا: كلُّ واحدةٍ من الخمسةَ عشرَ (غير
+ * `demo-poster`) دالّةُ بناءٍ مستقلّة ببنية تخطيطٍ مختلفة ومقاسها الخاصّ — انظر
+ * التعليق فوق كلّ دالّةٍ منها أعلى هذا الملفّ. */
 export const STARTER_TEMPLATES: StarterTemplate[] = [
-  { id: 'demo-poster', nameKey: 't1', paletteIdx: 0, sizeIdx: 0, anim: 'slide', decorAccent: true, selectOnOpen: 'head', elements: createDemoPosterElements, slots: DEMO_POSTER_SLOTS },
-  { id: 'quote', nameKey: 't2', paletteIdx: 1, sizeIdx: 1, anim: 'slide', decorAccent: true, selectOnOpen: 'head', elements: createDemoPosterElements, slots: DEMO_POSTER_SLOTS },
-  { id: 'hiring', nameKey: 't3', paletteIdx: 2, sizeIdx: 3, anim: 'slide', decorAccent: true, selectOnOpen: 'head', elements: createDemoPosterElements, slots: DEMO_POSTER_SLOTS },
-  { id: 'product', nameKey: 't4', paletteIdx: 3, sizeIdx: 0, anim: 'slide', decorAccent: true, selectOnOpen: 'head', elements: createDemoPosterElements, slots: DEMO_POSTER_SLOTS },
-  { id: 'reel', nameKey: 't5', paletteIdx: 4, sizeIdx: 2, anim: 'slide', decorAccent: true, selectOnOpen: 'head', elements: createDemoPosterElements, slots: DEMO_POSTER_SLOTS },
-  { id: 'tweet', nameKey: 't6', paletteIdx: 5, sizeIdx: 1, anim: 'slide', decorAccent: true, selectOnOpen: 'head', elements: createDemoPosterElements, slots: DEMO_POSTER_SLOTS },
-  { id: 'offer-split', nameKey: 't7', paletteIdx: 4, sizeIdx: 6, anim: 'slide', decorAccent: false, selectOnOpen: 'headline', elements: createOfferSplitElements, slots: OFFER_SPLIT_SLOTS },
-  { id: 'quote-spotlight', nameKey: 't8', paletteIdx: 1, sizeIdx: 0, anim: 'fade', decorAccent: false, selectOnOpen: 'quote', elements: createQuoteSpotlightElements, slots: QUOTE_SPOTLIGHT_SLOTS },
-  { id: 'hiring-grid', nameKey: 't9', paletteIdx: 3, sizeIdx: 3, anim: 'slide', decorAccent: false, selectOnOpen: 'title', elements: createHiringGridElements, slots: HIRING_GRID_SLOTS },
-  { id: 'event-ticket', nameKey: 't10', paletteIdx: 2, sizeIdx: 4, anim: 'pop', decorAccent: false, selectOnOpen: 'title', elements: createEventTicketElements, slots: EVENT_TICKET_SLOTS },
-  { id: 'occasion-card', nameKey: 't11', paletteIdx: 7, sizeIdx: 0, anim: 'fade', decorAccent: false, selectOnOpen: 'greeting', elements: createOccasionCardElements, slots: OCCASION_CARD_SLOTS },
-  { id: 'product-card', nameKey: 't12', paletteIdx: 6, sizeIdx: 1, anim: 'slide', decorAccent: false, selectOnOpen: 'name', elements: createProductCardElements, slots: PRODUCT_CARD_SLOTS },
-  { id: 'stat-infographic', nameKey: 't13', paletteIdx: 5, sizeIdx: 6, anim: 'pop', decorAccent: false, selectOnOpen: 'big-stat', elements: createStatInfographicElements, slots: STAT_INFOGRAPHIC_SLOTS },
-  { id: 'menu-list', nameKey: 't14', paletteIdx: 8, sizeIdx: 4, anim: 'fade', decorAccent: false, selectOnOpen: 'header', elements: createMenuListElements, slots: MENU_LIST_SLOTS },
-  { id: 'certificate', nameKey: 't15', paletteIdx: 0, sizeIdx: 1, anim: 'fade', decorAccent: false, selectOnOpen: 'name', elements: createCertificateElements, slots: CERTIFICATE_SLOTS },
-  { id: 'event-ad', nameKey: 't16', paletteIdx: 9, sizeIdx: 9, anim: 'pop', decorAccent: false, selectOnOpen: 'title', elements: createEventAdElements, slots: EVENT_AD_SLOTS },
+  { id: 'demo-poster', nameKey: 't1', category: 'offers', paletteIdx: 0, sizeIdx: 0, anim: 'slide', decorAccent: true, selectOnOpen: 'head', elements: createDemoPosterElements, slots: DEMO_POSTER_SLOTS },
+  { id: 'property-listing', nameKey: 't2', category: 'realestate', paletteIdx: 3, sizeIdx: 8, anim: 'fade', decorAccent: false, selectOnOpen: 'price', elements: createPropertyListingElements, slots: PROPERTY_LISTING_SLOTS },
+  { id: 'corporate-notice', nameKey: 't3', category: 'corporate', paletteIdx: 9, sizeIdx: 12, anim: 'fade', decorAccent: false, selectOnOpen: 'title', elements: createCorporateNoticeElements, slots: CORPORATE_NOTICE_SLOTS },
+  { id: 'howto-steps', nameKey: 't4', category: 'howto', paletteIdx: 5, sizeIdx: 6, anim: 'pop', decorAccent: false, selectOnOpen: 'title', elements: createHowtoStepsElements, slots: HOWTO_STEPS_SLOTS },
+  { id: 'before-after', nameKey: 't5', category: 'beforeafter', paletteIdx: 1, sizeIdx: 0, anim: 'slide', decorAccent: false, selectOnOpen: 'badge-value', elements: createBeforeAfterElements, slots: BEFORE_AFTER_SLOTS },
+  { id: 'app-ad', nameKey: 't6', category: 'appad', paletteIdx: 4, sizeIdx: 4, anim: 'pop', decorAccent: false, selectOnOpen: 'app-name', elements: createAppAdElements, slots: APP_AD_SLOTS },
+  { id: 'offer-split', nameKey: 't7', category: 'offers', paletteIdx: 4, sizeIdx: 6, anim: 'slide', decorAccent: false, selectOnOpen: 'headline', elements: createOfferSplitElements, slots: OFFER_SPLIT_SLOTS },
+  { id: 'quote-spotlight', nameKey: 't8', category: 'quotes', paletteIdx: 1, sizeIdx: 0, anim: 'fade', decorAccent: false, selectOnOpen: 'quote', elements: createQuoteSpotlightElements, slots: QUOTE_SPOTLIGHT_SLOTS },
+  { id: 'hiring-grid', nameKey: 't9', category: 'hiring', paletteIdx: 3, sizeIdx: 3, anim: 'slide', decorAccent: false, selectOnOpen: 'title', elements: createHiringGridElements, slots: HIRING_GRID_SLOTS },
+  { id: 'event-ticket', nameKey: 't10', category: 'events', paletteIdx: 2, sizeIdx: 4, anim: 'pop', decorAccent: false, selectOnOpen: 'title', elements: createEventTicketElements, slots: EVENT_TICKET_SLOTS },
+  { id: 'occasion-card', nameKey: 't11', category: 'greetings', paletteIdx: 7, sizeIdx: 0, anim: 'fade', decorAccent: false, selectOnOpen: 'greeting', elements: createOccasionCardElements, slots: OCCASION_CARD_SLOTS },
+  { id: 'product-card', nameKey: 't12', category: 'products', paletteIdx: 6, sizeIdx: 1, anim: 'slide', decorAccent: false, selectOnOpen: 'name', elements: createProductCardElements, slots: PRODUCT_CARD_SLOTS },
+  { id: 'stat-infographic', nameKey: 't13', category: 'stats', paletteIdx: 5, sizeIdx: 6, anim: 'pop', decorAccent: false, selectOnOpen: 'big-stat', elements: createStatInfographicElements, slots: STAT_INFOGRAPHIC_SLOTS },
+  { id: 'menu-list', nameKey: 't14', category: 'menus', paletteIdx: 8, sizeIdx: 4, anim: 'fade', decorAccent: false, selectOnOpen: 'header', elements: createMenuListElements, slots: MENU_LIST_SLOTS },
+  { id: 'certificate', nameKey: 't15', category: 'certificates', paletteIdx: 0, sizeIdx: 1, anim: 'fade', decorAccent: false, selectOnOpen: 'name', elements: createCertificateElements, slots: CERTIFICATE_SLOTS },
+  { id: 'event-ad', nameKey: 't16', category: 'courses', paletteIdx: 9, sizeIdx: 9, anim: 'pop', decorAccent: false, selectOnOpen: 'title', elements: createEventAdElements, slots: EVENT_AD_SLOTS },
 ];
