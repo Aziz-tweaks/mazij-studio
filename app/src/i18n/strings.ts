@@ -45,6 +45,8 @@ export interface Dictionary {
   h_greet: string; h_prompt_ph: string; start: string; new_project: string; custom_size: string;
   templates: string; recent: string;
   t1: string; t2: string; t3: string; t4: string; t5: string; t6: string;
+  // العشرة المضافة في ٢٢ أكتوبر ٢٠٢٦ — انظر `STARTER_TEMPLATES` في `src/lib/starterTemplates.ts`.
+  t7: string; t8: string; t9: string; t10: string; t11: string; t12: string; t13: string; t14: string; t15: string; t16: string;
   rec1: string; rec2: string; rec3: string; time1: string; time2: string; time3: string;
   // شاشة البداية — ١٨ أكتوبر ٢٠٢٦
   h_search_ph: string; h_suggested: string; h_blank: string; h_blank_hint: string;
@@ -220,6 +222,7 @@ export const AR: Dictionary = {
   h_greet: 'وش نصمم اليوم؟', h_prompt_ph: 'اوصف البوست وخلّ مِزو يبدأ لك…', start: 'ابدأ',
   new_project: 'مشروع جديد', custom_size: 'مقاس مخصص', templates: 'قوالب جاهزة', recent: 'الأخيرة',
   t1: 'عرض', t2: 'اقتباس', t3: 'وظيفة', t4: 'منتج', t5: 'ريلز', t6: 'تغريدة',
+  t7: 'عرض موسمي', t8: 'اقتباس مركزي', t9: 'وظيفة شاغرة', t10: 'تذكرة فعالية', t11: 'تهنئة', t12: 'بطاقة منتج', t13: 'إنفوجرافيك', t14: 'قائمة طعام', t15: 'شهادة تقدير', t16: 'إعلان فعاليّة',
   rec1: 'بوست العروض', rec2: 'إعلان وظيفة', rec3: 'اقتباس الأسبوع',
   time1: 'قبل ساعتين', time2: 'أمس', time3: 'قبل 3 أيام',
   h_search_ph: 'وش تبغى تصمّم؟', h_suggested: 'مقترح',
@@ -462,6 +465,7 @@ export const EN: Dictionary = {
   start: 'Start', new_project: 'New project', custom_size: 'Custom size', templates: 'Templates',
   recent: 'Recent',
   t1: 'Sale', t2: 'Quote', t3: 'Hiring', t4: 'Product', t5: 'Reel', t6: 'Tweet card',
+  t7: 'Seasonal Sale', t8: 'Centered Quote', t9: 'Job Opening', t10: 'Event Ticket', t11: 'Greeting Card', t12: 'Product Card', t13: 'Infographic', t14: 'Menu', t15: 'Certificate', t16: 'Course Ad',
   rec1: 'Weekend sale', rec2: 'Job opening', rec3: 'Quote of the week',
   time1: '2 hours ago', time2: 'Yesterday', time3: '3 days ago',
   h_search_ph: 'What do you want to make?', h_suggested: 'Suggested',

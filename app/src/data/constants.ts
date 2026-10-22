@@ -171,6 +171,13 @@ export const PALETTES: Palette[] = [
   // is stored in saved documents and asserted by specs, so entries are appended,
   // never reordered or removed.
   { bg: '#08402F', fg: '#F4F1E9', ac: '#D9B85F', ac2: '#0FA06B' },
+  // الثلاثة الآتية أُضيفت ٢٢ أكتوبر ٢٠٢٦ مع عشرة قوالب جديدة (`src/lib/starterTemplates.ts`):
+  // كانت اللوحاتُ السبعُ أعلاه موزَّعةً كلُّها على القوالب الستّة القديمة، ولا تكفي
+  // عشرةً تختلف فيما بينها لونًا كما تختلف بنيةً. مُذيَّلةٌ هنا لا مُدرجةٌ وسط
+  // المصفوف — نفس القاعدة التي تحكم `SIZES`: فهرسُ اللوحة محفوظٌ داخل كل مستند.
+  { bg: '#3D1220', fg: '#F7EFE5', ac: '#C9A44C' },
+  { bg: '#F5E6D3', fg: '#2B1B12', ac: '#B3542E' },
+  { bg: '#E9EFF5', fg: '#1B2A4A', ac: '#3867D6' },
 ];
 
 /** Roadmap #20: fixed local port the Rust-side MCP server listens on (see
