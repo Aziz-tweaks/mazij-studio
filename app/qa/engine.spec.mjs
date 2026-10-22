@@ -98,6 +98,35 @@ async function main() {
   await undoBtn.click(); // leave head back at its original spot for later assertions
   await page.waitForTimeout(80);
 
+  // --- MOVE's pointerdown no longer lets the browser's own drag/selection fire,
+  // and double-click-to-edit still works right after (Stage.onElementPointerDown
+  // now calls preventDefault at the move source; ElementView never attaches that
+  // handler while `editing`, so the two must never interfere with each other). ---
+  await page.evaluate(() => window.getSelection().removeAllRanges());
+  const beforeDragSelect = await elBox(page, 'head');
+  const dragCenterX = beforeDragSelect.x + beforeDragSelect.width / 2;
+  const dragCenterY = beforeDragSelect.y + beforeDragSelect.height / 2;
+  await page.mouse.move(dragCenterX, dragCenterY);
+  await page.mouse.down();
+  await page.mouse.move(dragCenterX + 40, dragCenterY + 25, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(80);
+  const strayNativeSelection = await page.evaluate(() => window.getSelection().toString());
+  assert(strayNativeSelection === '', `move: dragging from on top of the headline leaves no native text selection behind (preventDefault at the move source), got ${JSON.stringify(strayNativeSelection)}`);
+  await undoBtn.click(); // undo the drag from this block
+  await page.waitForTimeout(80);
+
+  await head.dblclick({ force: true });
+  await page.waitForTimeout(100);
+  assert((await page.locator('[contenteditable="true"][data-el-id="head"]').count()) === 1, 'move: double-click right after a preventDefault-guarded drag still enters text edit mode (the exception holds)');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.type('تحرير بعد السحب');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  assert((await head.innerText()).includes('تحرير بعد السحب'), 'move: text typed in that edit session commits normally, unaffected by the move source\'s preventDefault');
+  await undoBtn.click();
+  await page.waitForTimeout(80);
+
   // --- RESIZE (se handle) + undo ---
   await head.click({ force: true });
   await page.waitForTimeout(80);

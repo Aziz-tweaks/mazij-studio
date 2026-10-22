@@ -11,7 +11,7 @@ import {
   shapeGeometryFor,
   type ShapeRecipe,
 } from '../lib/shapeFactory';
-import type { AiProvider, ArtboardDoc, ArtboardMeta, DocSnapshot, ExportResult, HAlign, PanelId, ShapeDrawKind, StudioState, VAlign, Weight } from './types';
+import type { ArtboardDoc, ArtboardMeta, DocSnapshot, ExportResult, HAlign, PanelId, ShapeDrawKind, StudioState, VAlign, Weight } from './types';
 import { initialStudioState } from './types';
 // اتحادُ ثلاث رحلات مسّت هذا الملف: `newGroupId` من رحلة الحملة (التجميع)،
 // و`AnimPreset` من رحلة الفيديو (ربط الحركة بالعنصر المحدَّد)، و`withBaseLayerColor`
@@ -50,6 +50,8 @@ import { pickVideoFile, readVideoFile, type LoadedVideo } from '../lib/videoFile
 import { inTauri } from '../lib/tauriEnv';
 import { startMcpBridge, stopMcpBridge } from '../lib/mcpBridge';
 import { startMcpServer, stopMcpServer } from '../lib/mcpServerControl';
+import { interpretAndRun } from '../lib/commandInterpreter';
+import type { McpCtx } from '../lib/mcpTools';
 import { describeAiError, providerById } from '../lib/aiProviders';
 import { loadApiKey } from '../lib/aiKeyStore';
 
@@ -914,8 +916,6 @@ export interface StudioActions {
    * manual color (an intentional override of the normal "manual colors stay put when
    * switching palettes" precedence; see docs/CONTROLS.md "تطبيق اللوحة على كل عنصر"). */
   applyPaletteToAll: () => void;
-  pickAiProvider: (provider: AiProvider) => void;
-  changeAiProvider: () => void;
   setAiInput: (text: string) => void;
   sendAi: (text?: string) => void;
   openExport: () => void;
@@ -1104,7 +1104,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const aiRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Restore the last autosaved document once on mount — without this, a real reload
@@ -1198,7 +1197,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   useEffect(
     () => () => {
       if (tickRef.current) clearInterval(tickRef.current);
-      if (aiRef.current) clearTimeout(aiRef.current);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     },
     [],
@@ -1290,37 +1288,25 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // بند #24-ب حرفيًا هنا أيضًا، لا نسخةً مزيّفة منه خاصّة بهذا اللوح: نفس
+  // `interpretAndRun` الذي يستدعيه `CommandInterpreterDialog.tsx` حقيقةً، على
+  // نفس ctx المرجعيّ المُحدَّث كلَّ تصيير (`mcpStateRef`/`mcpLiveActionsRef` أدناه
+  // — موجودان أصلًا لجسر MCP لحاجةٍ مطابقة: "الحالة/الأفعال الحاليّة وقت وصول
+  // الأمر، لا لقطةٌ من لحظة الإنشاء"). لا تأخيرَ مصطنعًا (`setTimeout`) ولا ردًّا
+  // مُخمَّنًا بمطابقة كلمات: `aiTyping` ينعكس الآن على انتظارٍ حقيقيٍّ لوعدٍ حقيقي،
+  // والردُّ هو نصُّ `interpretAndRun` نفسه — بما فيه مسار "لم أفهم" الصادق.
   const sendAi = useCallback(
     (text?: string) => {
       const txt = (text ?? '').trim();
       if (!txt) return;
       patch((s) => ({ aiMsgs: [...s.aiMsgs, { role: 'u' as const, text: txt }], aiInput: '', aiTyping: true }));
-      if (aiRef.current) clearTimeout(aiRef.current);
-      aiRef.current = setTimeout(() => {
-        const tl = txt.toLowerCase();
-        let reply: StudioState['aiMsgs'][number];
-        let extra: Partial<Pick<StudioState, 'sizeIdx' | 'anim' | 'tlOpen'>> = {};
-        if (/لون|ألوان|color|palette/.test(tl)) reply = { role: 'a', key: 'r_palette', palettes: [1, 2, 3] };
-        else if (/عنوان|headline|title|أقصر|shorter/.test(tl)) reply = { role: 'a', key: 'r_headline', headline: true };
-        else if (/تيك|tiktok|مقاس|size|resize/.test(tl)) {
-          reply = { role: 'a', key: 'r_resize' };
-          extra = { sizeIdx: 2 };
-        } else if (/حرك|motion|anim/.test(tl)) {
-          reply = { role: 'a', key: 'r_motion' };
-          extra = { anim: 'fade', tlOpen: true };
-        } else reply = { role: 'a', key: 'r_generic' };
-        patch((s) => {
-          const { doc, rest } = splitDocPatch(extra as Record<string, unknown>);
-          const hasDoc = Object.keys(doc).length > 0;
-          return {
-            aiMsgs: [...s.aiMsgs, reply],
-            aiTyping: false,
-            ...rest,
-            ...doc,
-            ...(hasDoc ? pushHistory(s) : {}),
-          };
-        });
-      }, 900);
+      const ctx: McpCtx = { getState: () => mcpStateRef.current, actions: mcpLiveActionsRef.current };
+      interpretAndRun(txt, ctx).then((outcome) => {
+        patch((s) => ({
+          aiMsgs: [...s.aiMsgs, { role: 'a' as const, text: s.lang === 'ar' ? outcome.messageAr : outcome.messageEn }],
+          aiTyping: false,
+        }));
+      });
     },
     [patch],
   );
@@ -3190,8 +3176,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             return e;
           }),
         ),
-      pickAiProvider: (aiProvider) => patch({ aiProvider, aiMsgs: [{ role: 'a', key: 'ai_first' }] }),
-      changeAiProvider: () => patch({ aiProvider: null, aiMsgs: [] }),
       setAiInput: (aiInput) => patch({ aiInput }),
       sendAi,
       openExport: () => patch({ exportOpen: true, exportState: 'idle', exportProgress: 0, exportError: null, exportResults: [] }),
@@ -3256,20 +3240,28 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           persistTemplates(templates);
           return { ...s, templates };
         }),
+      // تعبئةُ قالبٍ ليست استبدالَ مستندٍ: المستخدمُ يعمل على مقاسٍ اختاره هو
+      // (بوستر إنستغرام قصّةً، مثلًا) وليس مطلوبًا منه أن يتبنّى مقاسَ القالب
+      // المحفوظ. فالمقاسُ الحاليُّ يبقى كما هو، والعناصرُ الممتلئة تمرّ بمسار
+      // التحجيم الذكيّ نفسه الذي يستعمله `applyMagicResize` حين يختلف مقاسُ
+      // القالب عن مقاس المستند — لا تمديدٌ أعمى بالنِّسَب الخام.
       applyTemplateFill: (templateId, fills) => {
         const tpl = state.templates.find((t) => t.id === templateId);
         if (!tpl) return;
-        setState((s) => ({
-          ...s,
-          elements: fillTemplate(tpl, fills),
-          sizeIdx: tpl.sizeIdx,
-          customW: tpl.customW,
-          customH: tpl.customH,
-          selectedIds: [],
-          sel: null,
-          templatesOpen: false,
-          ...pushHistory(s),
-        }));
+        setState((s) => {
+          const filled = fillTemplate(tpl, fills);
+          const from = sizeAt(tpl.sizeIdx, tpl.customW, tpl.customH);
+          const to = sizeAt(s.sizeIdx, s.customW, s.customH);
+          const elements = from.w === to.w && from.h === to.h ? filled : magicResizeElements(filled, from, to);
+          return {
+            ...s,
+            elements,
+            selectedIds: [],
+            sel: null,
+            templatesOpen: false,
+            ...pushHistory(s),
+          };
+        });
       },
       applyTemplateMotion: (templateId) => {
         const tpl = state.templates.find((t) => t.id === templateId);

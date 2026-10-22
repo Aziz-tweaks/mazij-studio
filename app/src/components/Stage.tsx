@@ -532,6 +532,12 @@ export function Stage() {
     const underPointer = state.elements.find((x) => x.id === id);
     if (underPointer?.locked) return;
     e.stopPropagation();
+    // مصدرُ الحركة نفسه — لا الخلفيّة ولا النصّ قيد التحرير. ElementView لا
+    // يَصِل بهذا المعالج أصلًا حين `editing` (انظر فرعَها قبل السطر الذي يُرفِق
+    // `onPointerDown`)، فالاستثناء بنيويٌّ لا شرطٌ هنا. ومنعُ السلوك الافتراضي
+    // يوقف تحديدَ النصّ المجاور وشبحَ سحب الصورة الأصليّ اللذين كانا يظهران حين
+    // يبدأ السحبُ من فوق عنصر نصٍّ أو صورةٍ غير مُحرَّر.
+    e.preventDefault();
     if (spaceDown) return; // let background pan handler take it
     const rect = artboardRef.current!.getBoundingClientRect();
     const start = docPointFromClient(e.clientX, e.clientY, rect, scale);
