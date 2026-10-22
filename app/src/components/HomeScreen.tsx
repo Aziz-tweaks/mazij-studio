@@ -76,8 +76,11 @@ const TEMPLATE_CARD_W = 180;
 const TEMPLATE_THUMB_H = 144;
 
 /** أقصى بُعدٍ لمربّع نسبة المقاس أسفل الشاشة — كبيرٌ بما يكفي ليُقرأ شكله
- * فعلًا (البند ٣ في طلب المالك)، لا أيقونةً ١٥px كما كانت. */
-const SIZE_GLYPH_M = 56;
+ * فعلًا (البند ٣ في طلب المالك)، لا أيقونةً ١٥px كما كانت.
+ *
+ * رُفع من ٥٦ إلى ٧٢ في ٢٣ أكتوبر: بعد تجميعِ المقاسات بالبُعد صارت البطاقاتُ ثمانيًا
+ * لا ثلاثةَ عشرَ، فاتّسع عرضُ كلِّ واحدةٍ وصار المربّعُ الصغيرُ يَسبح في فراغها. */
+const SIZE_GLYPH_M = 72;
 
 /** هل يطابق المقاس نصّ البحث؟ يطابق الاسم العربي والإنجليزي والمعرّف والأبعاد،
  * لأن المصمّم قد يكتب «ستوري» أو «reel» أو «1920» وكلّها نوايا صحيحة. */
@@ -198,6 +201,38 @@ export function HomeScreen() {
         .filter((r) => matches(r.z, query)),
     [query, mediumFilter],
   );
+
+  /** **المقاساتُ مجموعةً بالبُعد، لا صفًّا لكلِّ منصّة.**
+   *
+   * شكوى المالك الحرفيّة: «المقاسات فيه أشياء كثير نفس المقاس… تجمعها، تخلّي
+   * المقاس واضح، وتحته توضّح إنه للمنصّات الفلانيّة». وهو محقّ عدديًّا: **ستٌّ من
+   * الثلاثةَ عشرَ** مواصفةً أبعادُها `1080×1920` بالحرف (تيك توك · ستوري إنستقرام ·
+   * ريل · شورت يوتيوب · سناب شات · حالة واتساب)، فكانت الشبكةُ تعرض **ستَّ بطاقاتٍ
+   * متطابقةَ الشكل** يختلف فيها الاسمُ وحدَه — وهو تكرارٌ يُثقل القراءةَ ولا يُضيف
+   * خيارًا، لأنّ اللوحَ الناتجَ واحدٌ في الحالات الستّ.
+   *
+   * فالعنوانُ صار **البُعدَ** (`١٠٨٠ × ١٩٢٠`)، والمنصّاتُ صارت رقائقَ تحته.
+   *
+   * **ولم تُدمَج الرقائقُ في زرٍّ واحد، وهذا هو القرارُ المهمّ هنا.** فالمواصفاتُ
+   * المتشاركةُ في البُعد **لا تتشارك `kind`**: `ig-story` صورةٌ و`ig-reel` فيديو
+   * وبُعدُهما واحد، و`kind` يحدّد وجودَ الخطّ الزمنيّ في المشروع. فدمجُها في زرٍّ
+   * واحدٍ كان سيُجبرني على اختيارٍ نيابةً عن المصمّم بين لوحٍ ثابتٍ ولوحٍ مُوقَّت —
+   * اختيارٌ لا يملكه الكود. فكلُّ رقاقةٍ تبقى زرَّها الخاصّ بشارة طبيعتها، وهذا نفسُه
+   * جوابُ شقِّ طلبه الآخر: «وخيار جنبها فيديو أو صورة».
+   *
+   * والترتيبُ ترتيبُ أوّلِ ظهورٍ في `rows` — أي ترتيبُ `START_FORMATS` — فلا يُعيد
+   * التجميعُ ترتيبَ شيء.
+   */
+  const dimGroups = useMemo(() => {
+    const byDim = new Map<string, { key: string; w: number; h: number; members: typeof rows }>();
+    for (const r of rows) {
+      const key = `${r.z.w}x${r.z.h}`;
+      const g = byDim.get(key);
+      if (g) g.members.push(r);
+      else byDim.set(key, { key, w: r.z.w, h: r.z.h, members: [r] });
+    }
+    return [...byDim.values()];
+  }, [rows]);
 
   /** القوالب المُصفّاة بالتصنيف المختار — «الكل» الافتراضي، فلا يُحجَب
    * `starter-demo-poster` ولا أيّ قالبٍ آخر عن أيّ مواصفةٍ تنقره مباشرةً من دون
@@ -519,32 +554,73 @@ export function HomeScreen() {
                 <div data-testid="format-no-results" style={{ padding: '14px 12px', fontSize: 13, color: 'var(--muted)' }}>{L.h_no_results(query)}</div>
               ) : (
                 // شبكةُ أمثلةٍ كبيرة، لا عمودًا بارتفاعٍ ثابت ٤٠px (نقضُ ١٨
-                // أكتوبر، انظر رأس الملف): كلُّ مقاسٍ مستطيلٌ يحمل نسبته
-                // الحقيقية (`glyphStyle`، أكبر بأكثر من ٣ أمثال من الأيقونة
-                // ١٥px القديمة) فوق اسمه وبُعديه.
-                <div data-testid="format-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(132px,1fr))', gap: 10 }}>
-                  {rows.map((r) => (
-                    <button
-                      key={r.z.id}
-                      data-testid={`format-row-${r.z.id}`}
-                      data-medium={r.z.kind}
-                      data-w={r.z.w}
-                      data-h={r.z.h}
-                      onClick={() => actions.startBlank(r.idx)}
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '16px 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', textAlign: 'center', color: 'var(--text)' }}
+                // أكتوبر، انظر رأس الملف): كلُّ **بُعدٍ** مستطيلٌ يحمل نسبته
+                // الحقيقية (`glyphStyle`، أكبر بأكثر من ٤ أمثال من الأيقونة
+                // ١٥px القديمة) ومعه بُعدُه عنوانًا ومنصّاتُه رقائقَ تحته.
+                //
+                // و`alignItems: 'start'` مقصودة: بدونها تمطّ الشبكةُ كلَّ بطاقةٍ إلى
+                // ارتفاع أطولِ بطاقةٍ في صفّها، فتصير بطاقةُ «١٠٨٠×١٠٨٠» ذاتُ
+                // الرقاقةِ الواحدة فراغًا أبيضَ بارتفاع بطاقةِ «١٠٨٠×١٩٢٠» ذاتِ
+                // الستِّ رقائق. و`minHeight` على البطاقة نفسِها تحفظ الأرضيّة.
+                <div data-testid="format-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(236px,1fr))', alignItems: 'start', gap: 12 }}>
+                  {dimGroups.map((g) => (
+                    <div
+                      key={g.key}
+                      data-testid={`dim-card-${g.key}`}
+                      data-w={g.w}
+                      data-h={g.h}
+                      data-members={g.members.length}
+                      // `minHeight` ١٢٠ أرضيّةٌ مقصودة: البطاقةُ ذاتُ الرقاقةِ الواحدة
+                      // (A4 مثلًا) محتواها ٥٥px فكانت ستُرسَم ثُلثَ جارتِها ذاتِ الستّ
+                      // رقائق، فتبدو الشبكةُ مهترئة. والرقمُ هو نفسُه حدُّ التأكيد في
+                      // `qa/start-screen.spec.mjs` — ثلاثةُ أمثالِ صفِّ ١٨ أكتوبر.
+                      style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 14, minHeight: 120, boxSizing: 'border-box', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)' }}
                     >
-                      <span style={{ height: SIZE_GLYPH_M, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {/* بلا `data-testid` هنا عمدًا: أيّ اسمٍ يبدأ بـ«format-row-»
-                            كان سيدخل في عدّادات `[data-testid^="format-row-"]`
-                            التي يعتمد عليها `qa/start-screen.spec.mjs` لعدّ
-                            المقاسات ذاتها — وهذا بالضبط ما وقع فعليًا حين جُرِّب
-                            `data-testid="format-row-glyph"` هنا. */}
-                        <span style={{ ...glyphStyle(r.z, SIZE_GLYPH_M), background: 'var(--surface2)' }} />
+                      {/* مربّعُ النسبة — مُعرَّفٌ بـ`data-ratio-glyph` لا بـ`data-testid`
+                          عمدًا: أيّ اسمٍ يبدأ بـ«dim-card-» أو «format-row-» كان
+                          سيدخل في عدّادات `qa/start-screen.spec.mjs` التي تعدّ
+                          البطاقاتَ والمواصفاتِ ذاتها — وقد وقع هذا فعليًا حين جُرِّب
+                          `data-testid="format-row-glyph"` في نسخةٍ سابقة. وسِمةٌ
+                          مستقلّةٌ أمتنُ من `querySelector('span > span')` الذي كان
+                          يصطاد أوّلَ تعشيشٍ في البطاقة أيًّا كان. */}
+                      <span style={{ flex: 'none', width: SIZE_GLYPH_M, height: SIZE_GLYPH_M, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span data-ratio-glyph="1" style={{ ...glyphStyle(g.members[0].z, SIZE_GLYPH_M), background: 'var(--surface2)' }} />
                       </span>
-                      <span style={{ fontWeight: 600, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{nameOf(r.z, state.lang)}</span>
-                      <MediumBadge kind={r.z.kind} label={r.z.kind === 'timed' ? L.h_timed : L.h_still} />
-                      <span dir="ltr" style={{ fontSize: 10.5, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(r.z)}</span>
-                    </button>
+
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {/* البُعدُ هو العنوان الآن — بارزًا ومقروءًا، لا سطرًا
+                            رماديًّا ١٠٫٥px أسفل اسمِ منصّةٍ واحدةٍ من ستّ. */}
+                        <span dir="ltr" style={{ fontSize: 16, fontWeight: 700, letterSpacing: 0.2, fontVariantNumeric: 'tabular-nums', alignSelf: 'flex-start' }}>
+                          {dimsOf(g.members[0].z)}
+                        </span>
+
+                        {/* المنصّاتُ تحته — رقائقُ قابلةٌ للنقر، كلٌّ بشارةِ طبيعتها،
+                            فيبقى اختيارُ «صورة أم فيديو» بيد المصمّم لا بيد الكود. */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {g.members.map((r) => (
+                            <button
+                              key={r.z.id}
+                              data-testid={`format-row-${r.z.id}`}
+                              data-medium={r.z.kind}
+                              data-w={r.z.w}
+                              data-h={r.z.h}
+                              title={`${nameOf(r.z, state.lang)} — ${dimsOf(r.z)}`}
+                              onClick={() => actions.startBlank(r.idx)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', height: 28, padding: '0 9px', border: '1px solid var(--line)', borderRadius: 999, background: 'var(--surface2)', color: 'var(--text)', fontSize: 11.5, fontWeight: 600 }}
+                            >
+                              {/* أيقونةُ الطبيعة **هي** شارةُ الطبيعة على الرقاقة،
+                                  وتحمل `data-medium` لذلك: الشرطُ القديم «كلُّ صفٍّ
+                                  يحمل شارتَه الخاصّة ولا يحتاج المُرشِّحَ ليُفهَم»
+                                  باقٍ كما هو، وقد صغُر حجمُ حامله فقط. */}
+                              <span data-medium={r.z.kind} style={{ display: 'inline-flex', flex: 'none' }}>
+                                <Icon size={11} path={r.z.kind === 'timed' ? ICONS.video : ICONS.image} />
+                              </span>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(r.z, state.lang)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
