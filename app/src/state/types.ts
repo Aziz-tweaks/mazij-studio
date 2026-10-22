@@ -22,7 +22,6 @@ export type AnimId = 'none' | 'fade' | 'slide' | 'pop';
 export type Weight = 'regular' | 'medium' | 'bold';
 export type ExportFormat = 'png' | 'jpg' | 'svg' | 'mp4' | 'gif' | 'livephoto';
 export type ExportState = 'idle' | 'busy' | 'done' | 'error' | 'unavailable';
-export type AiProvider = 'claude' | 'codex' | 'grok';
 export type HAlign = 'start' | 'center' | 'end';
 export type VAlign = 'top' | 'middle' | 'bottom';
 /** الأنواع التي ترسمها أداة الأشكال.
@@ -163,10 +162,7 @@ export interface DocSnapshot {
 
 export interface AiMessage {
   role: 'u' | 'a';
-  text?: string;
-  key?: string;
-  palettes?: number[];
-  headline?: boolean;
+  text: string;
 }
 
 export interface Viewport {
@@ -216,7 +212,8 @@ export interface StudioState {
   cmdOpen: boolean;
   cmdQuery: string;
   cmdSel: number;
-  aiProvider: AiProvider | null;
+  /** زوج الدردشة الحقيقي مع `commandInterpreter.ts` (بند #24-ب) — لا مزوّدَ ولا
+   * تسجيلَ دخول، كلُّ رسالة تُنفَّذ محليًا فورًا على المستند الحقيقي. */
   aiMsgs: AiMessage[];
   aiInput: string;
   aiTyping: boolean;
@@ -433,7 +430,6 @@ export const initialStudioState: StudioState = {
   cmdOpen: false,
   cmdQuery: '',
   cmdSel: 0,
-  aiProvider: null,
   aiMsgs: [],
   aiInput: '',
   aiTyping: false,

@@ -192,6 +192,12 @@ const ADD_WORDS = ['اضف', 'add'];
 const CHANGE_WORDS = ['غير', 'change', 'set', 'rename'];
 const PALETTE_WORDS = ['لوحه', 'palette'];
 const NEW_DOC_WORDS = ['مستند', 'document', 'project'];
+const HELP_WORDS = ['مساعده', 'ساعدني', 'ساعد', 'اوامر', 'help', 'commands'];
+
+const HELP_MESSAGE_AR =
+  'الأوامر المدعومة: تراجع/إعادة، حذف، تحديد، تغيير اللون (نص أو شكل)، تكبير/تصغير الخط أو العنصر، تحريك لأربع جهات، ضبط الشفافية، إضافة نص أو شكل، تغيير نص موجود، تطبيق لوحة ألوان برقمها، ومستند جديد. مثال: «كبّر العنوان» أو «غيّر لون الشكل للأحمر».';
+const HELP_MESSAGE_EN =
+  'Supported commands: undo/redo, delete, select, change color (text or shape), grow/shrink the font or the element, move in four directions, set opacity, add text or a shape, change existing text, apply a numbered palette, and a new document. Example: "make the title bigger" or "change the shape color to red".';
 
 function ruleNewDocument(tokens: string[]): Plan | null {
   if (!hasAny(tokens, NEW_DOC_WORDS) || !hasAny(tokens, ['جديد', 'new'])) return null;
@@ -352,6 +358,11 @@ export async function interpretAndRun(text: string, ctx: McpCtx): Promise<Interp
 
   const norm = normalize(raw);
   const tokens = tokenize(norm);
+  // صريحٌ قبل أي قاعدة فعل: «مساعدة» ليست أمرًا على المستند، فلا تمرّ بأي أداة
+  // MCP ولا تحتاج حالةً أصلًا — تشرح هذه القواعد الثابتة نفسها، لا أكثر.
+  if (hasAny(tokens, HELP_WORDS)) {
+    return { understood: true, messageAr: HELP_MESSAGE_AR, messageEn: HELP_MESSAGE_EN };
+  }
   const state = ctx.getState();
   const ruleState = { elements: state.elements, selectedIds: state.selectedIds, sizeIdx: state.sizeIdx, customW: state.customW, customH: state.customH };
 

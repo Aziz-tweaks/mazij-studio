@@ -77,6 +77,30 @@ export const START_FORMATS: string[] = [
  * sites that need to resolve the *current* size (including custom) use `sizeAt`. */
 export const CUSTOM_SIZE_IDX = -1;
 
+/** تجميعٌ عرضيٌّ بالمنصّة، بالمعرّفات — نفسُ عقد `START_FORMATS` أعلاه بالحرف:
+ * بنيةٌ مستقلّةٌ تمامًا عن ترتيب/فهرسة `SIZES` (لا تُعيد ترتيبها ولا تُرقّمها)،
+ * فلا تَمسّ ثباتَ الفهرس الذي يعتمد عليه `state.sizeIdx` المحفوظ. كلُّ معرّفٍ من
+ * `SIZES` يظهر في مجموعةٍ واحدة بالضبط؛ القارئ الذي يحتاج طبيعة الحجم (صورة/فيديو)
+ * لكلّ عضوٍ يقرؤها من `SIZES` نفسها (`kind`) عبر `MEDIUM_CHIP` — هذا الجدول لا
+ * يحمل طبيعةً موازية، فلا يمكن أن يختلف عنها. */
+export interface PlatformGroup {
+  id: string;
+  ar: string;
+  en: string;
+  sizeIds: string[];
+}
+
+export const PLATFORM_GROUPS: PlatformGroup[] = [
+  { id: 'instagram', ar: 'إنستقرام', en: 'Instagram', sizeIds: ['ig', 'ig-story', 'ig-reel', 'ig-portrait'] },
+  { id: 'tiktok', ar: 'تيك توك', en: 'TikTok', sizeIds: ['tt'] },
+  { id: 'x', ar: 'X', en: 'X', sizeIds: ['x'] },
+  { id: 'linkedin', ar: 'لينكدإن', en: 'LinkedIn', sizeIds: ['li'] },
+  { id: 'youtube', ar: 'يوتيوب', en: 'YouTube', sizeIds: ['yt-short', 'yt-video', 'yt-thumb'] },
+  { id: 'snapchat', ar: 'سناب شات', en: 'Snapchat', sizeIds: ['snap'] },
+  { id: 'whatsapp', ar: 'واتساب', en: 'WhatsApp', sizeIds: ['wa-status'] },
+  { id: 'print', ar: 'الطباعة', en: 'Print', sizeIds: ['a4'] },
+];
+
 /** شارةُ الطبيعة: أيقونتُها ومفتاحُ لافتتها وهل تَحمل مدّة.
  *
  * **جدولٌ لا شرط، وهذا مقصود.** عرضُ الطبيعة ليس تفرّعًا في السلوك: الأسطحُ الثلاثة

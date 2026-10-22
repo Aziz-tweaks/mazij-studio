@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Icon } from './Icon';
-import { PALETTES, SIZES, FPS_OPTIONS, CUSTOM_SIZE_IDX, sizeAt, dimsOf, glyphStyle, nameOf, seg } from '../data/constants';
+import { PALETTES, SIZES, PLATFORM_GROUPS, MEDIUM_CHIP, ICONS, FPS_OPTIONS, CUSTOM_SIZE_IDX, sizeAt, dimsOf, glyphStyle, nameOf, seg } from '../data/constants';
 import { useStudio } from '../state/StudioContext';
 import type { ExportResult } from '../state/types';
 import { effectiveExportScale, estimateVideoExport } from '../lib/exportEstimate';
@@ -350,33 +350,56 @@ export function ExportDialog() {
                 {L.ex_own_size_note(state.artboards.length)}
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {SIZES.map((z) => {
-                const on = !!state.targets[z.id];
-                return (
-                  <button
-                    key={z.id}
-                    // مثل `export-target-custom` المجاور: يُعرَّف كلُّ هدفٍ بمعرّفه
-                    // لا بنصّه المترجَم، فلا يبقى اختيارُ هدفٍ معتمدًا على مطابقة
-                    // اسمٍ عربيٍّ قد يكون جزءًا من اسمٍ آخر بعد توسيع فهرس المقاسات.
-                    data-testid={`export-target-${z.id}`}
-                    data-on={on}
-                    onClick={() => actions.toggleExportTarget(z.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, height: 54, padding: '0 10px', border: `1.5px solid ${on ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: on ? 'var(--accentSoft)' : 'var(--surface2)', textAlign: 'start', color: 'var(--text)' }}
-                  >
-                    <span style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
-                      <span style={glyphStyle(z, 26)} />
-                    </span>
-                    <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 600, fontSize: 12.5 }}>{nameOf(z, state.lang)}</span>
-                      <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'start' }}>{dimsOf(z)}</span>
-                    </span>
-                    <span style={{ width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${on ? 'var(--accent)' : 'var(--line)'}`, background: on ? 'var(--accent)' : 'transparent', display: 'grid', placeItems: 'center', color: 'var(--onAccent)' }}>
-                      {on && <Icon size={11} strokeWidth={2.4} path="M4 10l4 4 8-8" />}
-                    </span>
-                  </button>
-                );
-              })}
+            {/* `maxHeight`+`overflowY` هنا لا في الحوار كلّه: التجميعُ بالمنصّة
+                (`PLATFORM_GROUPS`) أضاف عناوينَ مجموعاتٍ فوق الشبكة نفسها، فطولُ
+                القائمة تجاوز ارتفاعَ النافذة بينما الحوارُ بلا تمرير — زرُّ الصيغة
+                فوقها كان يخرج عن إطار العرض عمليًّا (`qa/batch-export.spec.mjs`
+                أثبته: `locator.click` على PNG يسقط بمهلةٍ لأن العنصر "outside of
+                the viewport"). فيتمرّر الشبكةُ وحدها، ويبقى الشريطُ العلويّ
+                والتذييلُ (الصيغة/الجودة/أزرار التصدير) ثابتَين مرئيَّين دومًا. */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxHeight: 280, overflowY: 'auto', paddingInlineEnd: 4 }}>
+              {/* مجموعاتٌ بالمنصّة (`PLATFORM_GROUPS`، مستقلّةٌ عن فهرسة `SIZES` —
+                  نفسُ عقد `START_FORMATS`)، وبطاقةُ كلّ هدفٍ تحمل شارةَ طبيعته
+                  (صورة/فيديو) بجدول `MEDIUM_CHIP` نفسه الذي تقرؤه بطاقةُ المقاس
+                  في `ArtboardSizeMenu` — لا طبيعةً موازيةً، ولا تغييرَ في المعرّف
+                  أو حالة التفعيل: كلُّ ما تغيّر هو التجميعُ البصريّ والشارة. */}
+              {PLATFORM_GROUPS.map((group) => (
+                <div key={group.id} style={{ display: 'contents' }}>
+                  <div style={{ gridColumn: '1 / -1', fontSize: 10.5, fontWeight: 700, color: 'var(--muted)', marginTop: 4 }}>{state.lang === 'ar' ? group.ar : group.en}</div>
+                  {group.sizeIds.map((id) => {
+                    const z = SIZES.find((s) => s.id === id);
+                    if (!z) return null;
+                    const on = !!state.targets[z.id];
+                    const chip = MEDIUM_CHIP[z.kind];
+                    return (
+                      <button
+                        key={z.id}
+                        // مثل `export-target-custom` المجاور: يُعرَّف كلُّ هدفٍ بمعرّفه
+                        // لا بنصّه المترجَم، فلا يبقى اختيارُ هدفٍ معتمدًا على مطابقة
+                        // اسمٍ عربيٍّ قد يكون جزءًا من اسمٍ آخر بعد توسيع فهرس المقاسات.
+                        data-testid={`export-target-${z.id}`}
+                        data-on={on}
+                        onClick={() => actions.toggleExportTarget(z.id)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, height: 54, padding: '0 10px', border: `1.5px solid ${on ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: on ? 'var(--accentSoft)' : 'var(--surface2)', textAlign: 'start', color: 'var(--text)' }}
+                      >
+                        <span style={{ width: 34, height: 34, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
+                          <span style={glyphStyle(z, 26)} />
+                        </span>
+                        <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: 600, fontSize: 12.5 }}>{nameOf(z, state.lang)}</span>
+                          <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'start' }}>{dimsOf(z)}</span>
+                        </span>
+                        <span data-testid={`size-medium-chip-${z.id}`} data-medium={z.kind} style={{ width: 18, height: 18, display: 'grid', placeItems: 'center', color: 'var(--muted)', flex: 'none' }} title={L[chip.labelKey]}>
+                          <Icon size={12} path={ICONS[chip.icon]} />
+                        </span>
+                        <span style={{ width: 18, height: 18, borderRadius: '50%', border: `1.5px solid ${on ? 'var(--accent)' : 'var(--line)'}`, background: on ? 'var(--accent)' : 'transparent', display: 'grid', placeItems: 'center', color: 'var(--onAccent)' }}>
+                          {on && <Icon size={11} strokeWidth={2.4} path="M4 10l4 4 8-8" />}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
               <button
                 data-testid="export-target-custom"
                 data-on={customOn}

@@ -27,11 +27,9 @@ export interface Dictionary {
   drop: string; browse: string; add_font: string; font_url_ph: string; load: string; font_note: string;
   loading: string; ready: string; installed: string; sample: string;
   project_colors: string; brand: string;
-  ai_name: string; ai_welcome: string; sign_in: string; connected: string; change: string; ai_ph: string;
-  ai_note: string; ai_first: string;
+  ai_name: string; ai_welcome: string; ai_ph: string; ai_note: string;
   sug1: string; sug2: string; sug3: string; sug4: string;
-  r_palette: string; r_headline: string; r_headline_text: string; r_resize: string; r_motion: string;
-  r_generic: string; apply: string;
+  apply: string;
   cmd_ph: string; cmd_hint: string; no_results: string;
   ex_title: string; ex_format: string; ex_image: string; ex_video: string; ex_sizes: string;
   /** بديلُ صورةِ المعاينة في حوار التصدير — وهي الآن تصييرُ المستند نفسِه. */
@@ -193,17 +191,13 @@ export const AR: Dictionary = {
   font_note: 'تراخيص الخطوط مسؤولية المستخدم. تأكد أن الرابط يسمح لك بالاستخدام.',
   loading: 'جاري التحميل…', ready: 'جاهز', installed: 'الخطوط المتوفرة', sample: 'أبجد هوز حطي',
   project_colors: 'ألوان المشروع', brand: 'ألوان الهوية',
-  ai_name: 'مِزو', ai_welcome: 'مرحباً! أنا مِزو، أساعدك تصمم أسرع. اختر الحساب اللي تبي تربطه:',
-  sign_in: 'تسجيل الدخول', connected: 'متصل عبر', change: 'تغيير', ai_ph: 'اكتب طلبك…',
-  ai_note: 'يعمل البرنامج محلياً، ولا يُرسل للمزوّد إلا ما تطلبه أنت.',
-  ai_first: 'أهلاً! أشوف إنك تشتغل على بوست عروض. وش تبي نسوي اليوم؟',
-  sug1: 'اقترح ألواناً للبوست', sug2: 'اكتب عنواناً أقصر', sug3: 'حوّله لمقاس تيك توك',
-  sug4: 'أضف حركة بسيطة',
-  r_palette: 'هذي ثلاث لوحات ألوان تناسب بوست العروض. اضغط على أي وحدة لتطبيقها:',
-  r_headline: 'جرّب هذا العنوان، أقصر وأوضح:', r_headline_text: 'خصم ٥٠٪ لنهاية الأسبوع فقط',
-  r_resize: 'حوّلت المشروع لمقاس تيك توك 1080×1920 وأعدت ترتيب العناصر.',
-  r_motion: 'أضفت ظهوراً تدريجياً للعنوان وتكبيراً للشارة. شغّل المعاينة لتشوف النتيجة.',
-  r_generic: 'تمام، نفّذته. تقدر تتراجع بـ ⌘Z في أي وقت.', apply: 'تطبيق',
+  ai_name: 'مِزو',
+  ai_welcome: 'أهلاً! أنا مِزو. اكتب أمرًا صريحًا بالعربي أو الإنجليزي وأنفّذه فورًا على مستندك الحقيقي — بلا إنترنت وبلا حساب. اكتب «مساعدة» لرؤية كل الأوامر المدعومة.',
+  ai_ph: 'اكتب أمرك…',
+  ai_note: 'يعمل محليًا بقواعد ثابتة — بلا إنترنت وبلا حساب.',
+  sug1: 'كبّر العنوان', sug2: 'غيّر لون الشارة للأحمر', sug3: 'اجعل الشعار نصف شفاف',
+  sug4: 'مساعدة',
+  apply: 'تطبيق',
   cmd_ph: 'اكتب أمراً أو اسم أداة…', cmd_hint: '↑↓ للتنقل · Enter للتنفيذ · Esc للإغلاق',
   no_results: 'لا توجد نتائج',
   ex_title: 'تصدير', ex_format: 'الصيغة', ex_image: 'صورة', ex_video: 'فيديو', ex_sizes: 'المقاسات',
@@ -434,17 +428,13 @@ export const EN: Dictionary = {
   font_note: 'Font licenses are your responsibility. Make sure the link permits your use.',
   loading: 'Downloading…', ready: 'Ready', installed: 'Available fonts', sample: 'Aa Bb Cc',
   project_colors: 'Project colors', brand: 'Brand colors',
-  ai_name: 'Mizo', ai_welcome: "Hi! I'm Mizo, I help you design faster. Pick an account to connect:",
-  sign_in: 'Sign in', connected: 'Connected via', change: 'Change', ai_ph: 'Ask anything…',
-  ai_note: 'The app runs locally and only sends the provider what you ask for.',
-  ai_first: "Hey! Looks like you're working on a sale post. What should we do today?",
-  sug1: 'Suggest colors for this post', sug2: 'Write a shorter headline', sug3: 'Resize to TikTok',
-  sug4: 'Add simple motion',
-  r_palette: 'Here are three palettes that suit a sale post. Tap one to apply:',
-  r_headline: 'Try this headline, shorter and clearer:', r_headline_text: 'خصم ٥٠٪ لنهاية الأسبوع فقط',
-  r_resize: 'Resized the project to TikTok 1080×1920 and rearranged the layers.',
-  r_motion: 'Added a fade-in to the headline and a pop to the badge. Press play to preview.',
-  r_generic: 'Done. You can undo with ⌘Z anytime.', apply: 'Apply',
+  ai_name: 'Mizo',
+  ai_welcome: 'Hi! I\'m Mizo. Type a plain command in Arabic or English and I\'ll run it on your real document right away — no internet, no account. Type "help" to see every supported command.',
+  ai_ph: 'Type a command…',
+  ai_note: 'Runs locally with fixed rules — no internet, no account.',
+  sug1: 'Make the title bigger', sug2: 'Change the badge color to red', sug3: 'Make the logo half transparent',
+  sug4: 'help',
+  apply: 'Apply',
   cmd_ph: 'Type a command or tool name…', cmd_hint: '↑↓ navigate · Enter run · Esc close',
   no_results: 'No results',
   ex_title: 'Export', ex_format: 'Format', ex_image: 'Image', ex_video: 'Video', ex_sizes: 'Sizes',

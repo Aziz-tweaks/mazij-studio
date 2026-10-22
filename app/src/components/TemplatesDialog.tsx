@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Icon } from './Icon';
+import { ArtboardThumb } from './HomeScreen';
+import { PALETTES, sizeAt } from '../data/constants';
 import { useStudio } from '../state/StudioContext';
 import type { Dictionary } from '../i18n/strings';
 import type { SlotFill, SlotKind, TemplateSlot } from '../lib/templates';
@@ -166,6 +168,11 @@ export function TemplatesDialog() {
           <div data-testid="template-library-list" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {state.templates.map((t) => (
               <div key={t.id} data-testid={`template-row-${t.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)' }}>
+                {/* مصغّرةٌ حقيقيّة بمسار التصيير نفسه (`ArtboardThumb` من
+                    `HomeScreen.tsx`) — لا سطحٌ ثانٍ يرسم بطريقته. واللوحةُ
+                    الحاليّة هي المرجع لأن القالب لا يحفظ لوحته، تمامًا كسلوك
+                    `applyTemplateFill` نفسِه الذي تبنيه الآن. */}
+                <ArtboardThumb size={sizeAt(t.sizeIdx, t.customW, t.customH)} palette={PALETTES[state.postPalette] ?? PALETTES[0]} elements={t.elements} decorAccent={state.decorAccent} lang={state.lang} w={44} h={34} radius={6} />
                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
                 <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)' }}>
                   {t.slots.length} {L.tpl_slots_label}

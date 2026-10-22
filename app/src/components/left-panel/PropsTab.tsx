@@ -713,6 +713,12 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
   // كومة، وإلّا الحقلُ القديم. انظر التعليقَ عند الصفّ نفسِه أدناه.
   const baseFill = baseLayerColorOf(el);
   const fillHex = baseFill ? resolveLayerColor(baseFill.color, baseFill.colorToken, pal) : (el.fill ?? pal[el.fillToken]);
+  // طبقةُ التعبئة القاعديّة الكاملة (لا لونها وحده كما في `baseLayerColorOf`
+  // أعلاه) — نفسُ `stack.fills[0]` التي يحرّرها `AppearanceSection` في الوضع
+  // الاحترافيّ، فتدرّجها هنا هو تدرّجها هناك بعينه: لا منطقَ تدرّجٍ ثانٍ، فقط
+  // نافذةٌ أخرى على الكومة نفسها عبر `updateFillLayer` نفسِها. `null` لشكلٍ
+  // مفتوح (خطّ/سهم) بلا طبقة تعبئة أصلًا — فلا مُنتقِي تدرّجٍ له.
+  const baseFillLayer = currentAppearance(el).fills[0] ?? null;
   // الطبقةُ القاعديّة هي ما يُرسَم (انظر التعليق عند صفّ الحدّ أدناه).
   const baseStroke = currentAppearance(el).strokes[0] ?? null;
   const strokeOn = !!baseStroke && baseStroke.visible && baseStroke.width > 0;
@@ -764,6 +770,48 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
           style={{ width: 24, height: 24, border: 0, borderRadius: 4, padding: 0, background: 'transparent' }}
         />
         <HexField testId={`shape-fill-hex-${el.id}`} value={fillHex} onCommit={(hex) => actions.setShapeFill(el.id, hex)} />
+        {/* نفسُ مفتاح `kind` ونفس حقول التدرّج في `AppearanceSection` أدناه،
+            مُعاد استدعاؤهما هنا عبر `updateFillLayer` بعينها — لا مُنتقِي تدرّجٍ
+            ثانٍ ولا رياضيّات جديدة، فقط طريقٌ أقصر من الصفّ البسيط إلى كومة
+            المظهر الموجودة فعلًا، بلا حاجةٍ للوضع الاحترافيّ. */}
+        {baseFillLayer && (
+          <select
+            data-testid={`shape-fill-kind-${el.id}`}
+            value={baseFillLayer.kind}
+            onChange={(e) => actions.updateFillLayer(el.id, baseFillLayer.id, { kind: e.target.value as AppearanceFillLayer['kind'] })}
+            style={{ height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11 }}
+          >
+            <option value="solid">{L.appearance_solid}</option>
+            <option value="gradient">{L.appearance_gradient}</option>
+          </select>
+        )}
+        {baseFillLayer && baseFillLayer.kind === 'gradient' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+            <input
+              data-testid={`shape-fill-gradient-from-${el.id}`}
+              type="color"
+              value={normalizeHex(baseFillLayer.gradientFrom) ?? '#000000'}
+              onChange={(e) => actions.updateFillLayer(el.id, baseFillLayer.id, { gradientFrom: e.target.value })}
+              style={{ width: 22, height: 22, border: 0, padding: 0 }}
+            />
+            <input
+              data-testid={`shape-fill-gradient-to-${el.id}`}
+              type="color"
+              value={normalizeHex(baseFillLayer.gradientTo) ?? '#000000'}
+              onChange={(e) => actions.updateFillLayer(el.id, baseFillLayer.id, { gradientTo: e.target.value })}
+              style={{ width: 22, height: 22, border: 0, padding: 0 }}
+            />
+            <input
+              data-testid={`shape-fill-gradient-angle-${el.id}`}
+              type="number"
+              dir="ltr"
+              value={baseFillLayer.gradientAngle}
+              onChange={(e) => actions.updateFillLayer(el.id, baseFillLayer.id, { gradientAngle: Number(e.target.value) || 0 })}
+              style={{ width: 52, height: 22, border: '1px solid var(--line)', borderRadius: 4, fontSize: 11, textAlign: 'center' }}
+            />
+            <span style={{ fontSize: 10, color: 'var(--muted)' }}>°</span>
+          </div>
+        )}
       </div>
       {el.shape !== 'path' && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>

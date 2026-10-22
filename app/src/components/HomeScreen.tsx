@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { ICONS, PALETTES, SIZES, START_FORMATS, dimsOf, glyphStyle, nameOf, sizeAt, sizeIdxOf, type SizePreset } from '../data/constants';
+import { ICONS, PALETTES, PLATFORM_GROUPS, SIZES, START_FORMATS, dimsOf, glyphStyle, nameOf, sizeAt, sizeIdxOf, type Palette, type SizePreset } from '../data/constants';
 import { STARTER_TEMPLATES } from '../lib/starterTemplates';
+import { renderArtboardPng } from '../lib/exportArtboard';
 import { useStudio } from '../state/StudioContext';
+import type { DocElement } from '../state/elements';
+import type { Lang } from '../i18n/strings';
 
 /* ============================================================================
  * شاشة البداية — «يفتح على سؤال، لا على مستند»
@@ -92,6 +95,49 @@ function MediumBadge({ kind, label }: { kind: 'still' | 'timed'; label: string }
   );
 }
 
+/** مصغّرةٌ حقيقية — نفسُ مسار `renderArtboardPng` الذي يكتب الملفّ النهائي
+ * ويُغذّي معاينةَ `ExportDialog.tsx` الحيّة بعينه، لا رسمًا موازيًا. البطاقتان
+ * اللتان تستهلكانها (صفُّ القوالب، وبطاقةُ المتابعة) كانت كلٌّ منهما تُظهر صندوقَ
+ * لونٍ زخرفيًّا ثابتًا — دائرةٌ في الزاوية لا تمثّل محتوى العنصر الحقيقي. والآن
+ * كلُّ بطاقةٍ تعرض ما سيُفتَح/يُستأنَف فعلًا، بأبعادها الصغيرة نفسها (لا تُغيَّر
+ * المقاساتُ ولا الهيمنةُ البصريّة المقصودة في §القوالب أدناه).
+ *
+ * **وعند التعذّر لا يُخترَع شيء** (نفسُ عقد `ExportDialog`): يبقى لون اللوحة
+ * وحده — لا تصميمٌ كاذب — وهو ما تَراه أثناء التصيير أيضًا، لا حالةَ فشلٍ
+ * مختلفة. */
+export function ArtboardThumb({ size, palette, elements, decorAccent, lang, w, h, radius = 5 }: { size: SizePreset; palette: Palette; elements: DocElement[]; decorAccent: boolean; lang: Lang; w: number; h: number; radius?: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const key = JSON.stringify([size.id, size.w, size.h, palette.bg, palette.ac, elements, decorAccent, lang]);
+
+  useEffect(() => {
+    let dead = false;
+    let objUrl: string | null = null;
+    // مقياسٌ يكفي صندوقَ المصغّرة على شاشةٍ مضاعفةِ الكثافة فقط، بنفس حساب
+    // `ExportDialog.tsx` حرفيًّا — لا دقّةُ تصديرٍ كاملة لسطحٍ بهذا الصغر.
+    const scale = Math.min(1, (Math.max(w, h) * 2) / Math.max(size.w, size.h));
+    renderArtboardPng({ size, palette, elements, transparent: false, scale, lang, decorAccent })
+      .then((blob) => {
+        if (dead) return;
+        objUrl = URL.createObjectURL(blob);
+        setUrl(objUrl);
+      })
+      .catch(() => {
+        if (!dead) setUrl(null);
+      });
+    return () => {
+      dead = true;
+      if (objUrl) URL.revokeObjectURL(objUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return (
+    <span style={{ width: w, height: h, flex: 'none', borderRadius: radius, background: palette.bg, position: 'relative', overflow: 'hidden', display: 'block' }}>
+      {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+    </span>
+  );
+}
+
 export function HomeScreen() {
   const { state, actions, dict: L } = useStudio();
   const [query, setQuery] = useState('');
@@ -121,6 +167,41 @@ export function HomeScreen() {
         .filter((r) => matches(r.z, query)),
     [query, mediumFilter],
   );
+
+  /** اسمُ المنصّة لمعرّف مقاس — من `PLATFORM_GROUPS` نفسِها التي تجمّع أهدافَ
+   * التصدير في `ExportDialog.tsx`، لا جدولٌ ثانٍ. */
+  const platformNameOf = (id: string): string | null => {
+    const g = PLATFORM_GROUPS.find((g) => g.sizeIds.includes(id));
+    return g ? (state.lang === 'ar' ? g.ar : g.en) : null;
+  };
+
+  /** عنوانُ مجموعةٍ فوق أوّل صفٍّ من كلّ بُعدٍ **يتكرّر** في `rows` الحاليّة —
+   * القائمةُ نفسُها والعددُ نفسُه لم يتغيّرا (كلُّ صفٍّ يبقى عنصره وزرّه
+   * و`data-testid`ه بالحرف، فلا ينكسر ما ينقر `format-row-ig-reel` أو
+   * `format-row-snap` أو `format-row-tt` بعينه، ولا ما يَعُدّ عناصر
+   * `format-row-*` ليُثبت أن التصفية مُرشِّحٌ لا بوّابة §1.4). العنوانُ طبقةُ
+   * عرضٍ فوق الصفوف القائمة، لا بديلٌ عنها: «١٠٨٠×١٩٢٠» مرّةً واحدة، وأسماءُ
+   * المنصّات التي تتشارك البُعد قريبةً منها — وهو طلبُ المالك حرفًا، محقَّقًا
+   * بلا حذف صفّ. */
+  const dimGroupHeaderAt = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const k = `${r.z.w}x${r.z.h}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    const seen = new Set<string>();
+    const headers = new Map<number, { dims: string; platforms: string }>();
+    rows.forEach((r, i) => {
+      const k = `${r.z.w}x${r.z.h}`;
+      if ((counts.get(k) ?? 0) <= 1 || seen.has(k)) return;
+      seen.add(k);
+      const members = rows.filter((x) => `${x.z.w}x${x.z.h}` === k);
+      const platforms = Array.from(new Set(members.map((m) => platformNameOf(m.z.id)).filter((p): p is string => !!p)));
+      headers.set(i, { dims: dimsOf(r.z), platforms: platforms.join(' · ') });
+    });
+    return headers;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, state.lang]);
 
   // تفاصيل بطاقة المتابعة من **الحالة الحيّة**، لا من لقطةٍ تُؤخَذ عند الإقلاع:
   // البطاقة تصف المشروع الذي سيفتحه النقر عليها فعلًا. ولقطةٌ مجمّدة كانت تكذب
@@ -165,12 +246,10 @@ export function HomeScreen() {
               boxShadow: 'var(--shadow)',
             }}
           >
-            {/* المصغّرة تتبع المستند: بلا زخرفة حين يكون فارغًا، تمامًا كما
-                تفعل اللوحة نفسها والتصدير. وإلا لقالت البطاقة «لوحة فاضية»
-                وأرَت مصغّرةً فيها شيء. */}
-            <span style={{ width: 52, height: 52, flex: 'none', borderRadius: 10, background: PALETTES[state.postPalette]?.bg ?? 'var(--surface2)', position: 'relative', overflow: 'hidden', display: 'block' }}>
-              {openElementCount > 0 && <span style={{ position: 'absolute', insetInlineStart: '-20%', top: '-30%', width: '60%', aspectRatio: '1', borderRadius: '50%', background: PALETTES[state.postPalette]?.ac ?? 'var(--accent)' }} />}
-            </span>
+            {/* المصغّرة تتبع المستند الحقيقيّ — رسمٌ حقيقيٌّ بـ`renderArtboardPng`
+                (`ArtboardThumb` أعلاه)، لا صندوقَ لونٍ ودائرة زخرفيّة ثابتة. وإلا
+                لقالت البطاقة «لوحة فاضية» وأرَت مصغّرةً فيها شيء. */}
+            <ArtboardThumb size={openSize} palette={PALETTES[state.postPalette] ?? PALETTES[0]} elements={state.elements} decorAccent={state.decorAccent} lang={state.lang} w={52} h={52} radius={10} />
             <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontWeight: 700, fontSize: 14 }}>{L.h_resume}</span>
               <span style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -348,9 +427,22 @@ export function HomeScreen() {
             <div data-testid="format-no-results" style={{ padding: '14px 12px', fontSize: 13, color: 'var(--muted)' }}>{L.h_no_results(query)}</div>
           ) : (
             <div data-testid="format-list" style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', overflow: 'hidden' }}>
-              {rows.map((r, i) => (
+              {rows.map((r, i) => {
+                const header = dimGroupHeaderAt.get(i);
+                return (
+                <div key={r.z.id} style={{ display: 'contents' }}>
+                {header && (
+                  // عنوانُ عرضٍ فوق الصفّ، لا صفٌّ جديد: لا `data-testid="format-row-…"`
+                  // فلا يُحتسَب في عدّادات `format-row-*` ولا يُنقَر كهدف.
+                  <div
+                    data-testid={`format-group-${header.dims.replace(/\s|×/g, 'x')}`}
+                    style={{ padding: '10px 12px 2px', borderTop: i === 0 ? 0 : '1px solid var(--line)', fontSize: 11, color: 'var(--muted)', display: 'flex', alignItems: 'baseline', gap: 8 }}
+                  >
+                    <span dir="ltr" style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{header.dims}</span>
+                    {header.platforms && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{header.platforms}</span>}
+                  </div>
+                )}
                 <button
-                  key={r.z.id}
                   data-testid={`format-row-${r.z.id}`}
                   data-medium={r.z.kind}
                   data-w={r.z.w}
@@ -364,7 +456,7 @@ export function HomeScreen() {
                     flex: 'none',
                     padding: '0 12px',
                     border: 0,
-                    borderTop: i === 0 ? 0 : '1px solid var(--line)',
+                    borderTop: i === 0 || header ? 0 : '1px solid var(--line)',
                     background: 'transparent',
                     color: 'var(--text)',
                     textAlign: 'start',
@@ -377,9 +469,13 @@ export function HomeScreen() {
                   </span>
                   <span style={{ flex: 1, minWidth: 0, fontWeight: 500, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(r.z, state.lang)}</span>
                   <MediumBadge kind={r.z.kind} label={r.z.kind === 'timed' ? L.h_timed : L.h_still} />
-                  <span dir="ltr" style={{ flex: 'none', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', minWidth: 76, textAlign: 'end' }}>{dimsOf(r.z)}</span>
+                  {/* الأبعادُ تُحذَف من الصفّ حين تظهر فوقه في عنوان المجموعة —
+                      لا تتكرّر مرّتين على ارتفاع ٤٠px. */}
+                  {!header && <span dir="ltr" style={{ flex: 'none', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', minWidth: 76, textAlign: 'end' }}>{dimsOf(r.z)}</span>}
                 </button>
-              ))}
+                </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -409,9 +505,7 @@ export function HomeScreen() {
                   onClick={() => actions.startFromStarter(tp.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, height: ROW_H, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', textAlign: 'start', color: 'var(--text)' }}
                 >
-                  <span style={{ width: 34, height: 26, flex: 'none', borderRadius: 5, background: pal.bg, position: 'relative', overflow: 'hidden', display: 'block' }}>
-                    <span style={{ position: 'absolute', insetInlineStart: '-16%', top: '-26%', width: '56%', aspectRatio: '1', borderRadius: '50%', background: pal.ac }} />
-                  </span>
+                  <ArtboardThumb size={size} palette={pal} elements={tp.elements()} decorAccent={tp.decorAccent} lang={state.lang} w={34} h={26} />
                   <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L[tp.nameKey]}</span>
                   <MediumBadge kind={size.kind} label={size.kind === 'timed' ? L.h_timed : L.h_still} />
                   <span dir="ltr" style={{ flex: 'none', fontSize: 10.5, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(size)}</span>
