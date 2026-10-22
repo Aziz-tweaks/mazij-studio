@@ -251,10 +251,18 @@ async function main() {
   // 22 October 2026, for "each size with a big example below it, in its real
   // ratio" — so what gets measured now is exactly that: card size, and the
   // glyph's aspect ratio against the format's own real w/h.
-  const sizeCardBoxes = await page.locator('[data-testid^="format-row-"]').evaluateAll((els) =>
+  // RE-ANCHORED, 23 October 2026, and the thresholds are UNCHANGED (120px, 2%).
+  // What moved is only which element carries the big proportioned preview: the
+  // owner asked that each DIMENSION appear once, headlined, with the platforms
+  // it serves listed beneath it — so the card is now per-dimension and the
+  // formats are chips inside it. Measuring `format-row-*` for "at least
+  // 120×120" would now measure a 28px-tall chip and fail on a change that
+  // made the previews BIGGER, not smaller. The requirement is the same one;
+  // only its address in the DOM changed.
+  const sizeCardBoxes = await page.locator('[data-testid^="dim-card-"]').evaluateAll((els) =>
     els.map((el) => {
       const r = el.getBoundingClientRect();
-      const glyph = el.querySelector('span > span'); // the glyphStyle() box, un-named on purpose — see HomeScreen.tsx
+      const glyph = el.querySelector('[data-ratio-glyph]'); // the glyphStyle() box — named by its own attribute, not by position
       const g = glyph.getBoundingClientRect();
       return { id: el.getAttribute('data-testid'), w: r.width, h: r.height, glyphW: g.width, glyphH: g.height, dataW: Number(el.getAttribute('data-w')), dataH: Number(el.getAttribute('data-h')) };
     }),
@@ -262,12 +270,55 @@ async function main() {
   // "Big" threshold: at least 3x the old 40px row's height in BOTH dimensions —
   // enough that the proportion glyph inside reads as a shape, not an icon.
   const smallestCardSide = Math.min(...sizeCardBoxes.map((b) => Math.min(b.w, b.h)));
-  assert(smallestCardSide >= 120, `geometry: every format card is at least 120×120px — 3x the old 40px row (smallest side seen: ${smallestCardSide.toFixed(1)}px)`);
+  assert(smallestCardSide >= 120, `geometry: every dimension card is at least 120×120px — 3x the old 40px row (smallest side seen: ${smallestCardSide.toFixed(1)}px)`);
   // The glyph has to carry the format's REAL aspect ratio, not a fixed icon
   // box: measured against the format's own w/h, with a 2% tolerance for
   // sub-pixel rounding in glyphStyle()'s own width/height calc.
   const worstRatioErr = Math.max(...sizeCardBoxes.map((b) => Math.abs(b.glyphW / b.glyphH - b.dataW / b.dataH) / (b.dataW / b.dataH)));
-  assert(worstRatioErr < 0.02, `geometry: every format's proportion glyph matches its real w/h ratio within 2% (worst error ${(worstRatioErr * 100).toFixed(2)}%)`);
+  assert(worstRatioErr < 0.02, `geometry: every dimension's proportion glyph matches its real w/h ratio within 2% (worst error ${(worstRatioErr * 100).toFixed(2)}%)`);
+
+  // ---- 3b. One card per DIMENSION, platforms listed beneath it ------------
+  // The owner's complaint, 22 October 2026, verbatim: «المقاسات فيه أشياء كثير
+  // نفس المقاس… تجمعها، تخلّي المقاس واضح، وتحته توضّح إنه للمنصّات الفلانيّة».
+  // Six of the thirteen formats are literally 1080×1920, so the old grid drew
+  // six identically-shaped cards that differed only by name. These assertions
+  // are what stop that from coming back.
+  const dimCards = await page.locator('[data-testid^="dim-card-"]').evaluateAll((els) =>
+    els.map((el) => ({
+      key: el.getAttribute('data-testid').replace('dim-card-', ''),
+      w: Number(el.getAttribute('data-w')),
+      h: Number(el.getAttribute('data-h')),
+      members: Number(el.getAttribute('data-members')),
+      chips: [...el.querySelectorAll('[data-testid^="format-row-"]')].map((c) => ({ id: c.getAttribute('data-testid').replace('format-row-', ''), medium: c.getAttribute('data-medium'), text: c.textContent.trim(), fontSize: Number.parseFloat(getComputedStyle(c).fontSize) })),
+      headline: Number.parseFloat(getComputedStyle([...el.querySelectorAll('span')].find((s) => /^\s*\d+\s*×\s*\d+\s*$/.test(s.textContent)) ?? el).fontSize),
+    })),
+  );
+
+  const dimKeys = dimCards.map((c) => c.key);
+  assert(new Set(dimKeys).size === dimKeys.length, `grouping: every dimension appears exactly once — no duplicate dimension cards (${dimKeys.join(', ')})`);
+  assert(dimCards.length < rows.length, `grouping: ${dimCards.length} dimension cards carry ${rows.length} formats — grouping actually collapsed something rather than renaming the old one-card-per-format grid`);
+  assert(
+    dimCards.reduce((n, c) => n + c.chips.length, 0) === rows.length,
+    'grouping: every one of the 13 formats is reachable as a chip inside exactly one dimension card — grouping hid no format and dropped no platform',
+  );
+
+  // The 1080×1920 pile is the whole point of the complaint, so it is asserted
+  // by name rather than left to the generic counts above.
+  const vertical = dimCards.find((c) => c.w === 1080 && c.h === 1920);
+  assert(!!vertical, 'grouping: the 1080×1920 dimension — the one the owner named — has its own single card');
+  assert(vertical.chips.length === 6, `grouping: all six 1080×1920 formats sit under that one card (${vertical.chips.map((c) => c.id).join(', ')})`);
+  assert(
+    vertical.chips.some((c) => c.medium === 'still') && vertical.chips.some((c) => c.medium === 'timed'),
+    'grouping: the shared-dimension card keeps BOTH media selectable (ig-story is a still, ig-reel is timed, same pixels) — the code never picks still-vs-timed on the designer\'s behalf',
+  );
+  assert(vertical.chips.every((c) => c.text.length > 0), 'grouping: each platform under a dimension is named in text, not left as a bare icon');
+
+  // "تخلّي المقاس واضح" is a legibility requirement, so it is measured: the
+  // dimension is the headline, strictly larger than the platform names under it.
+  const worstHeadline = Math.min(...dimCards.map((c) => c.headline));
+  const biggestChipText = Math.max(...dimCards.flatMap((c) => c.chips.map((p) => p.fontSize)));
+  assert(worstHeadline >= 15, `legibility: the dimension itself is the headline on every card, at >= 15px (smallest seen ${worstHeadline.toFixed(1)}px)`);
+  assert(worstHeadline > biggestChipText, `legibility: the dimension reads larger than the platform names beneath it (${worstHeadline.toFixed(1)}px vs ${biggestChipText.toFixed(1)}px) — the size is the heading and the platforms are its caption, not the reverse`);
 
   const searchBox = await page.locator('[data-testid="format-search"]').boundingBox();
   const customBox = await page.locator('[data-testid="custom-size-row"]').boundingBox();
