@@ -7,7 +7,7 @@ import { ContextBar } from './stage/ContextBar';
 import { StageMenu } from './stage/StageMenu';
 import { ElementView } from './stage/ElementView';
 import { Handles, GuideLines } from './stage/Handles';
-import { PALETTES, TOOL_BY_CODE, sizeAt, clamp } from '../data/constants';
+import { MEDIUM_SURFACES, PALETTES, TOOL_BY_CODE, sizeAt, clamp } from '../data/constants';
 import { geoToPx, pxToGeo, resizeBox, rotatePoint, computeSnap, boundsOfBoxes, centerOf, screenToLocal, type HandleId, type PxBox, type ResizeHandleId } from '../lib/geometry';
 import { computeImageCropLayout } from '../lib/imageCrop';
 import { commandsToSvgPath, pathElementCommands } from '../lib/pathGeometry';
@@ -74,11 +74,20 @@ interface DragSession {
   /** العنصر الواقع تحت بداية سحبة الرسم، إن وُجد — يحسم معنى **النقرة** (سحبةٌ
    * لم تتحرّك) وأداةُ الأشكال مسلَّحة: انظر `onUp`. */
   shapeHitId?: string | null;
+  /** زاويةُ نصٍّ بمسك الأداة الشائعة: الصندوق يكبر متناسبًا والخطّ معه بالنسبة نفسها. */
+  scaleText?: { startFontSize: number };
 }
+
+/** مقابض النصّ بمسك الأداة الشائعة: الجانبان (العرض) والزوايا (التكبير) — بلا فوق/تحت. منطقةُ
+ * إصابةِ الحافّة العليا كانت تغطّي حروف العنوان الصغير، فالسحبُ منها يغيّر الطول بدل
+ * أن يحرّك (جولة الاستخدام، ٢٤ أكتوبر ٢٠٢٦) — والأداة الشائعة نفسها لا تضع للنصّ هذين المقبضين. */
+const CANVA_TEXT_HANDLES: readonly ResizeHandleId[] = ['e', 'w', 'nw', 'ne', 'se', 'sw'];
 
 export function Stage() {
   const { state, actions, dict: L } = useStudio();
   const lang = state.lang;
+  /** المسك البسيط على الصورة: النصّ كما في الأداة الشائعة. والاحترافي: كما في أداة المتّجهات. */
+  const canvaTextGrip = !state.pro && MEDIUM_SURFACES[state.medium].canvaTextGrip;
   const size = sizeAt(state.sizeIdx, state.customW, state.customH);
   const pal = PALETTES[state.postPalette];
   const t = state.t;
@@ -406,8 +415,18 @@ export function Stage() {
         const dx = p.x - drag.startDocX;
         const dy = p.y - drag.startDocY;
         const local = rotatePoint({ x: dx, y: dy }, { x: 0, y: 0 }, -drag.startBox.rotation);
-        const newBox = resizeBox(drag.startBox, drag.handle, local, { proportional: e.shiftKey });
-        actionsRef.current.liveUpdateElements((els) => els.map((el) => (el.id === drag.elementId ? { ...el, geo: pxToGeo(newBox, curSize) } : el)));
+        const scaleText = drag.scaleText;
+        const newBox = resizeBox(drag.startBox, drag.handle, local, { proportional: !!scaleText || e.shiftKey });
+        const k = scaleText && drag.startBox.w > 0 ? newBox.w / drag.startBox.w : 1;
+        actionsRef.current.liveUpdateElements((els) =>
+          els.map((el) => {
+            if (el.id !== drag.elementId) return el;
+            const geo = pxToGeo(newBox, curSize);
+            // الأداة الشائعة: سحبُ زاوية النصّ يكبّره كلّه — الخطّ بنسبة الصندوق نفسها، مقرَّبًا لعُشرٍ
+            // كما تعرضه الأداة الشائعة (لا ٧١٫٢٩٦٨٧ في خانة المقاس).
+            return scaleText && el.type === 'text' ? { ...el, geo, fontSize: Math.max(4, Math.round(scaleText.startFontSize * k * 10) / 10) } : { ...el, geo };
+          }),
+        );
         return;
       }
 
@@ -637,7 +656,9 @@ export function Stage() {
       const startAngle = (Math.atan2(start.y - c.y, start.x - c.x) * 180) / Math.PI;
       startDrag({ kind: 'rotate', startDocX: start.x, startDocY: start.y, lastClientX: e.clientX, lastClientY: e.clientY, elementId: el.id, startBox: box, startAngle });
     } else {
-      startDrag({ kind: 'resize', startDocX: start.x, startDocY: start.y, lastClientX: e.clientX, lastClientY: e.clientY, elementId: el.id, handle, startBox: box });
+      const corner = handle === 'nw' || handle === 'ne' || handle === 'se' || handle === 'sw';
+      const scaleText = canvaTextGrip && corner && el.type === 'text' ? { startFontSize: el.fontSize } : undefined;
+      startDrag({ kind: 'resize', startDocX: start.x, startDocY: start.y, lastClientX: e.clientX, lastClientY: e.clientY, elementId: el.id, handle, startBox: box, scaleText });
     }
   };
 
@@ -969,6 +990,18 @@ export function Stage() {
   const hintKey = HINT_KEYS[state.tool];
   const selected = state.selectedIds;
   const soleSelected = selected.length === 1 ? state.elements.find((e) => e.id === selected[0]) : undefined;
+  /** العنصر الذي تُرسم مقابضُه — وخطُّ تحديده معها في طبقة المقابض (انظرها أدناه). */
+  const handlesFor = soleSelected && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id ? soleSelected : undefined;
+  const handlesLayerStyle: CSSProperties = {
+    position: 'absolute',
+    left: abStyle.left,
+    top: abStyle.top,
+    width: abStyle.width,
+    height: abStyle.height,
+    transform: abStyle.transform,
+    transformOrigin: abStyle.transformOrigin,
+    pointerEvents: 'none',
+  };
 
   const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id)) && !state.pendingEditSnapshot && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
 
@@ -1073,7 +1106,10 @@ export function Stage() {
             el={el}
             pal={pal}
             lang={lang}
-            selected={selected.includes(el.id)}
+            // خطّ تحديد العنصر ذي المقابض يُرسم في طبقة المقابض (فلا تقصّه حافّة الصفحة)،
+            // فلا يُرسم هنا مرّةً ثانية. وما سواه — التحديد المتعدّد، والنصّ قيد التحرير،
+            // والقصّ، والعقد — على خطّه كما كان.
+            selected={selected.includes(el.id) && el.id !== handlesFor?.id}
             editing={state.editingTextId === el.id}
             croppingActive={state.cropEditingId === el.id}
             size={size}
@@ -1098,13 +1134,6 @@ export function Stage() {
           />
         ))}
 
-        {/* مقابض الصندوق (تحجيم/تدوير) تختفي في وضع تحرير العقد: مقابضها تتقاطع
-            بصريًا مع نقاط الربط عند حوافّ المسار، فينقر المصمم على التحجيم وهو يقصد
-            النقطة. و`scale`/`size` يمرّان لأن المقابض تُرسم بحجم شاشة ثابت بدل أن
-            تتقلّص داخل تحويل الزوم (كانت ٣.٧٦ بكسل عند الزوم الافتراضي). */}
-        {soleSelected && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id && (
-          <Handles geo={soleSelected.geo} scale={scale} size={size} onHandleDown={onHandleDown} onDoubleClick={(e) => onDoubleClickElement(e, soleSelected.id)} />
-        )}
         <GuideLines guides={guides} size={size} />
 
         {shapeDraft && <ShapeDraftPreview draft={shapeDraft} kind={state.shapeDrawKind} n={state.shapeDrawN} size={size} />}
@@ -1131,6 +1160,30 @@ export function Stage() {
         )}
 
         {nodeEditEl && <NodeEditOverlay el={nodeEditEl} size={size} sel={state.nodeEditSel} onNodeDown={onNodeDown} onSegmentDoubleClick={onSegmentDoubleClick} />}
+      </div>
+
+      {/* **طبقةُ المقابض — شقيقةُ اللوحة لا ابنتُها.** اللوحة تقصّ ما يفيض عنها
+          (`overflow: clip`) كما تقصّ الأداة الشائعة ما يخرج من الصفحة، لكنّ المقابض وخطّ التحديد
+          أداةُ مسكٍ لا محتوى: نصٌّ كبّرته زاويته حتى تجاوز حافّة الصفحة كانت مقابضه البعيدة
+          تُقَصّ معه، فلا تُرى ولا تُمسَك (جولة المسك على البرنامج المثبّت، ٢٤ أكتوبر ٢٠٢٦).
+          والطبقة بتحويل اللوحة نفسه ومقاسها، فالمواضع بالنسب المئويّة كما كانت، ولا تلتقط
+          النقر إلا مقابضها.
+
+          ومقابض الصندوق (تحجيم/تدوير) تختفي في وضع تحرير العقد: مقابضها تتقاطع بصريًا مع
+          نقاط الربط عند حوافّ المسار، فينقر المصمم على التحجيم وهو يقصد النقطة. و`scale`/
+          `size` يمرّان لأن المقابض تُرسم بحجم شاشة ثابت بدل أن تتقلّص داخل تحويل الزوم
+          (كانت ٣.٧٦ بكسل عند الزوم الافتراضي). */}
+      <div data-testid="handles-layer" dir="ltr" style={handlesLayerStyle}>
+        {handlesFor && (
+          <Handles
+            geo={handlesFor.geo}
+            scale={scale}
+            size={size}
+            onHandleDown={onHandleDown}
+            onDoubleClick={(e) => onDoubleClickElement(e, handlesFor.id)}
+            handles={canvaTextGrip && handlesFor.type === 'text' ? CANVA_TEXT_HANDLES : undefined}
+          />
+        )}
       </div>
 
       {/* تلميح الأداة فوق حبّة الأدوات لا أعلى اللوحة: أعلاها صفّ المقاس واللوحات،

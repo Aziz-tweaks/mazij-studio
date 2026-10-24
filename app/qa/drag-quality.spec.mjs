@@ -279,6 +279,16 @@ async function main() {
     }
   }
 
+  // **المسكُ الحرّ يُقاس في الوضع الاحترافي.** منذ ٢٤ أكتوبر ٢٠٢٦ مساءً صار المسكُ
+  // الافتراضيّ على الصورة مسكَ الأداة الشائعة (قرار المالك: «نفس الأداة الشائعة للوضع البسيط في الصور،
+  // واذا اختار احترافي يتحول اكثر الى أداة المتّجهات»): زاويةُ النصّ تكبّر الصندوق متناسبًا
+  // والخطَّ معه، فلا تتبع المؤشّرَ على المحورين معًا. والزاوية الحرّة التي يقيسها هذا القسم
+  // — «الزاوية تحت المؤشّر ١:١ عرضًا وطولًا» — هي مسكُ أداة المتّجهات، فتُقاس حيث تعيش.
+  // ومسكُ الأداة الشائعة مقيسٌ في `tour-fixes.spec.mjs` §١٧.
+  await page.locator('[data-testid="more-tools-btn"]').click();
+  await page.locator('[data-testid="pro-toggle"]').click();
+  await page.waitForTimeout(120);
+
   // The resize gesture itself stops at 150%: past that the headline's se corner sits
   // outside the (overflow-hidden) stage viewport, so there is nothing there to press.
   // (It stopped at 200% until 24 October 2026. The approved layout gave the canvas the

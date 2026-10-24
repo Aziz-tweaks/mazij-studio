@@ -10,6 +10,7 @@ import { DEFAULT_DOC_FPS } from '../lib/animTimeline';
 import type { Template } from '../lib/templates';
 import type { AgentInfo, AiEngine } from '../lib/agentClient';
 import { loadAiPrefs } from '../lib/agentClient';
+import { loadUiPrefs } from '../lib/uiPrefs';
 
 export type Screen = 'editor' | 'home';
 /** `'library'` هو لوح محتوى الأداة المختارة — انظر `TOOL_LIBRARY` في
@@ -195,6 +196,16 @@ export interface StudioState {
   layersOpen: boolean;
   /** لوحة الاختصارات (`?`). */
   shortcutsOpen: boolean;
+  /** **الوضع الاحترافي — مسكُ أداة المتّجهات بدل مسك الأداة الشائعة.**
+   *
+   * ليس «بسيط/احترافي» القديم الذي ألغاه المالك في المرحلة ١: ذاك كان يُخفي الأدوات (القلم
+   * والصوت) عن البسيط. هذا لا يُخفي شيئًا — كلّ الأدوات حاضرة في الحالين — ويغيّر
+   * **طريقة المسك** وحدها. قرار المالك (٢٤ أكتوبر ٢٠٢٦ مساءً): «سو نفس الأداة الشائعة للوضع
+   * البسيط في الصور، واذا اختار احترافي يتحول اكثر الى أداة المتّجهات». فالبسيط (الافتراضي)
+   * على الصورة: النصّ بلا مقابض فوق/تحت، وزاويته تكبّر الخطّ مع الصندوق (الأداة الشائعة)؛
+   * والاحترافي: المقابض الثمانية، والزاوية تكبّر الصندوق وحده ويُعاد لفّ النصّ (أداة المتّجهات).
+   * تفضيلٌ لكلّ جهاز (`uiPrefs.ts`)، لا جزءٌ من المستند. */
+  pro: boolean;
   tlOpen: boolean;
   exportOpen: boolean;
   exportFormat: ExportFormat;
@@ -428,6 +439,7 @@ export const initialStudioState: StudioState = {
   inspectorOpen: true,
   layersOpen: true,
   shortcutsOpen: false,
+  pro: loadUiPrefs().pro ?? false,
   tlOpen: true,
   exportOpen: false,
   exportFormat: 'png',

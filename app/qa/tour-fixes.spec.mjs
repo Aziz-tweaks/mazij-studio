@@ -22,8 +22,10 @@
 //  ١٤. إطار صورة فاضٍ: «اختر صورة» لا «بدّل».
 //  ١٥. مِزو: اسمه مرّة واحدة في رأس اللوح.
 //  ١٦. اقتراحات مِزو باللهجة، ومِزو المحلّي يفهمها.
+//  ١٧. البسيط يمسك النصّ كما في الأداة الشائعة، والاحترافي كما في أداة المتّجهات.
+//  ١٨. نصٌّ تجاوز حافّة الصفحة تبقى مقابضه تُرى وتُمسَك.
 import { chromium } from 'playwright';
-import { bootBlank, bootDemo, AUTOSAVE_KEY } from './helpers/boot.mjs';
+import { bootBlank, bootDemo, switchToTimed, resumeAfterReload, AUTOSAVE_KEY } from './helpers/boot.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:1420';
 let pass = 0;
@@ -101,27 +103,42 @@ async function main() {
   }
 
   // ═════════════════════════ ٢. النقرة المزدوجة على نصٍّ صغير ═════════════════════════
-  console.log('\n٢. نقرةٌ مزدوجة على حروف نصٍّ صغير تدخل تحريره');
-  // العنوان بمقاس ٣٢ وحروفه عند أعلى صندوقه. نقرةٌ أولى تحدّده فتظهر المقابض؛ والنقطة
-  // نفسها تصير تحت مقبض الحافّة العليا.
+  console.log('\n٢. نقرةٌ مزدوجة على حروف نصٍّ صغير تدخل تحريره — في المسكين');
+  // العنوان بمقاس ٣٢ وحروفه عند أعلى صندوقه.
   const tb = await page.locator('[data-el-id="title"]').boundingBox();
   const pt = { x: tb.x + tb.width - 24, y: tb.y + 6 };
+  const handleAt = () => page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-handle]')?.getAttribute('data-handle') ?? null, [pt.x, pt.y]);
+  async function dblclickEdits(label) {
+    await page.mouse.dblclick(pt.x, pt.y);
+    await page.waitForTimeout(300);
+    assert((await editingId(page)) === 'title', `${label}: النقرة المزدوجة على الحروف تدخل تحرير العنوان`);
+    const caretInside = await page.evaluate(() => {
+      const ed = document.querySelector('[data-testid="artboard"] [contenteditable="true"]');
+      const sel = window.getSelection();
+      return !!ed && !!sel && sel.rangeCount > 0 && ed.contains(sel.getRangeAt(0).startContainer);
+    });
+    assert(caretInside, `${label}: والمؤشّر داخل النصّ المحرَّر — لا تحديدٌ خارج المحرّر تذهب إليه الحروف`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+  }
+  // المسك البسيط (الافتراضيّ على الصورة، الأداة الشائعة): لا مقبضَ فوق النصّ أصلًا.
   await page.mouse.click(pt.x, pt.y);
   await page.waitForTimeout(200);
-  const underPoint = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-handle]')?.getAttribute('data-handle') ?? null, [pt.x, pt.y]);
-  assert(underPoint === 'n', `الشرط الذي كشف العطب قائم: بعد التحديد تقع النقطة على حروف العنوان تحت مقبض الحافّة العليا (وُجد «${underPoint}»)`);
-  await page.mouse.dblclick(pt.x, pt.y);
-  await page.waitForTimeout(300);
-  assert((await editingId(page)) === 'title', 'والنقرة المزدوجة هناك تدخل تحرير العنوان');
-  const caretInside = await page.evaluate(() => {
-    const ed = document.querySelector('[data-testid="artboard"] [contenteditable="true"]');
-    const sel = window.getSelection();
-    return !!ed && !!sel && sel.rangeCount > 0 && ed.contains(sel.getRangeAt(0).startContainer);
-  });
-  assert(caretInside, 'والمؤشّر داخل النصّ المحرَّر — لا تحديدٌ خارج المحرّر تذهب إليه الحروف');
-  await page.keyboard.press('Escape');
+  assert((await handleAt()) === null, 'المسك البسيط: لا مقبضَ فوق حروف العنوان بعد تحديده — النقطة على النصّ نفسه');
+  await dblclickEdits('المسك البسيط');
+  // الاحترافي (أداة المتّجهات، المقابض الثمانية): النقطة تحت مقبض الحافّة العليا — وهو ما كشف
+  // العطب — والنقرة المزدوجة تمرّ من المقبض إلى النصّ.
+  await page.locator('[data-testid="more-tools-btn"]').click();
+  await page.locator('[data-testid="pro-toggle"]').click();
   await page.waitForTimeout(150);
-  await page.keyboard.press('Escape');
+  await page.mouse.click(pt.x, pt.y);
+  await page.waitForTimeout(200);
+  assert((await handleAt()) === 'n', `الاحترافي: النقطة تحت مقبض الحافّة العليا — الشرط الذي كشف العطب (وُجد «${await handleAt()}»)`);
+  await dblclickEdits('الاحترافي');
+  await page.locator('[data-testid="more-tools-btn"]').click();
+  await page.locator('[data-testid="pro-toggle"]').click();
   await page.waitForTimeout(150);
 
   // ═════════════════════════ ٨. حافّة اللوحة ═════════════════════════
@@ -387,6 +404,132 @@ async function main() {
     return n ? parseFloat(getComputedStyle(n).opacity) : null;
   });
   assert(logoOpacity !== null && near(logoOpacity, 0.5, 0.02), `ومِزو المحلّي ينفّذه: الشعار نصف شفاف (${logoOpacity})`);
+
+  // ═════════════════════════ ١٧. مسك الأداة الشائعة ومسك أداة المتّجهات ═════════════════════════
+  console.log('\n١٧. البسيط يمسك النصّ كما في الأداة الشائعة، والاحترافي كما في أداة المتّجهات');
+  // قرار المالك (٢٤ أكتوبر ٢٠٢٦ مساءً): «سو نفس الأداة الشائعة للوضع البسيط في الصور، واذا اختار
+  // احترافي يتحول اكثر الى أداة المتّجهات».
+  await bootDemo(page, BASE_URL);
+  const handleIds = () => page.evaluate(() => [...document.querySelectorAll('[data-handle]')].map((n) => n.getAttribute('data-handle')).filter((h) => h !== 'rotate').sort());
+  const textState = () =>
+    page.evaluate(() => {
+      const n = document.querySelector('[data-el-id="head"]');
+      const ab = document.querySelector('[data-testid="artboard"]');
+      const k = +ab.getAttribute('data-doc-w') / ab.getBoundingClientRect().width;
+      const r = n.getBoundingClientRect();
+      return { w: r.width * k, h: r.height * k, size: +document.querySelector('[data-testid="ctx-size"]')?.textContent };
+    });
+  async function dragSe(dx, dy) {
+    const se = await page.locator('[data-handle="se"]').boundingBox();
+    await page.mouse.move(se.x + se.width / 2, se.y + se.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(se.x + se.width / 2 + dx, se.y + se.height / 2 + dy, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+  }
+  await page.locator('[data-el-id="head"]').click({ force: true });
+  await page.waitForTimeout(200);
+  assert(JSON.stringify(await handleIds()) === JSON.stringify(['e', 'ne', 'nw', 'se', 'sw', 'w']), `البسيط: للنصّ جانبان وأربع زوايا — بلا فوق/تحت (${JSON.stringify(await handleIds())})`);
+  const s0 = await textState();
+  await dragSe(70, 20);
+  const s1 = await textState();
+  assert(s1.size > s0.size + 2, `البسيط: سحبُ الزاوية يكبّر الخطّ نفسه (${s0.size} ← ${s1.size})`);
+  assert(near(s1.w / s1.h, s0.w / s0.h, 0.02 * (s0.w / s0.h)), `والصندوق يكبر متناسبًا (النسبة ${(s0.w / s0.h).toFixed(3)} ← ${(s1.w / s1.h).toFixed(3)})`);
+  assert(near(s1.size / s0.size, s1.w / s0.w, 0.06), `والخطّ بنسبة الصندوق نفسها (${(s1.size / s0.size).toFixed(3)} مقابل ${(s1.w / s0.w).toFixed(3)})`);
+  await page.locator('[data-testid="undo-btn"]').click();
+  await page.waitForTimeout(200);
+  const s2 = await textState();
+  assert(s2.size === s0.size && near(s2.w, s0.w, 0.5) && near(s2.h, s0.h, 0.5), 'وتراجعٌ واحد يرجّع الخطّ والصندوق');
+  // الشكل لا يتغيّر مسكُه: ثمانية مقابض في الوضعين.
+  await page.locator('[data-el-id="img"]').click({ force: true });
+  await page.waitForTimeout(200);
+  assert((await handleIds()).length === 8, 'البسيط: الصورة بمقابضها الثمانية كما كانت');
+
+  // الاحترافي: مقابض أداة المتّجهات الثمانية، والزاوية تكبّر الصندوق وحده.
+  await page.locator('[data-testid="more-tools-btn"]').click();
+  const toggle = page.locator('[data-testid="pro-toggle"]');
+  assert((await toggle.getAttribute('aria-checked')) === 'false', 'المفتاح في «أدوات متقدّمة» ومطفأٌ افتراضيًّا');
+  await toggle.click();
+  await page.waitForTimeout(150);
+  for (const id of ['select', 'direct', 'pen', 'text', 'shape', 'hand']) {
+    assert((await page.locator(`[data-testid="tool-pill"] [data-tool="${id}"]`).count()) === 1, `الاحترافي لا يُخفي ولا يُظهر أدوات: «${id}» حاضرة`);
+  }
+  await page.locator('[data-el-id="head"]').click({ force: true });
+  await page.waitForTimeout(200);
+  assert((await handleIds()).length === 8, `الاحترافي: للنصّ مقابضه الثمانية (${JSON.stringify(await handleIds())})`);
+  const p0 = await textState();
+  await dragSe(70, 20);
+  const p1 = await textState();
+  assert(p1.size === p0.size, `الاحترافي: سحبُ الزاوية لا يمسّ الخطّ (${p0.size} ← ${p1.size})`);
+  assert(p1.w > p0.w + 30 && p1.h > p0.h + 5 && !near(p1.w / p1.h, p0.w / p0.h, 0.02 * (p0.w / p0.h)), 'والصندوق يتبع المؤشّر على المحورين حرًّا — مسك أداة المتّجهات');
+  await page.locator('[data-testid="undo-btn"]').click();
+  await page.waitForTimeout(200);
+
+  // تفضيلٌ للجهاز يبقى بعد إعادة الفتح.
+  assert((await page.evaluate(() => JSON.parse(localStorage.getItem('mazij.ui.v1') || '{}').pro)) === true, 'يُحفَظ تفضيلًا للجهاز');
+  await page.reload({ waitUntil: 'networkidle' });
+  await resumeAfterReload(page);
+  await page.locator('[data-testid="more-tools-btn"]').click();
+  assert((await page.locator('[data-testid="pro-toggle"]').getAttribute('aria-checked')) === 'true', 'ويبقى مشغّلًا بعد إعادة فتح البرنامج');
+  await page.locator('[data-testid="pro-toggle"]').click();
+  await page.waitForTimeout(150);
+  // ومن لوحة البحث أيضًا — بابٌ ثانٍ للمفتاح نفسه.
+  const proOn = () => page.evaluate(() => JSON.parse(localStorage.getItem('mazij.ui.v1') || '{}').pro === true);
+  assert((await proOn()) === false, 'أُطفئ من القائمة');
+  await page.keyboard.press(`${MOD}+k`);
+  await page.waitForTimeout(200);
+  await page.keyboard.type('الوضع الاحترافي');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(250);
+  assert((await proOn()) === true, 'لوحة البحث: «الوضع الاحترافي» يشغّله');
+  await page.keyboard.press(`${MOD}+k`);
+  await page.waitForTimeout(200);
+  await page.keyboard.type('الوضع الاحترافي');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(250);
+  assert((await proOn()) === false, 'ومرّةً ثانية يطفئه');
+
+  // «في الصور»: المستند المُوقَّت على مسكه كما كان.
+  await switchToTimed(page);
+  await page.locator('[data-el-id="head"]').click({ force: true });
+  await page.waitForTimeout(200);
+  assert((await handleIds()).length === 8, 'الفيديو على مسكه كما كان (قالها المالك «في الصور»)');
+
+  // ═════════════════════════ ١٨. مقابض نصٍّ تجاوز الصفحة ═════════════════════════
+  console.log('\n١٨. نصٌّ تجاوز حافّة الصفحة تبقى مقابضه تُرى وتُمسَك');
+  // كُشف في تجربة المسك على البرنامج المثبّت: زاويةٌ كبّرت العنوان حتى تجاوز الحافّة،
+  // فقُصّت مقابضه البعيدة وخطّ تحديده مع المحتوى (`overflow: clip` على اللوحة).
+  await bootDemo(page, BASE_URL);
+  await page.locator('[data-el-id="head"]').click({ force: true });
+  await page.waitForTimeout(200);
+  const ab18 = await page.locator('[data-testid="artboard"]').boundingBox();
+  const vp18 = await page.locator('.mz-stage').boundingBox();
+  const e0 = await page.locator('[data-handle="e"]').boundingBox();
+  const past = ab18.x + ab18.width + 60;
+  assert(past + 20 < vp18.x + vp18.width, 'المسرح يتّسع لـ٦٠ بكسل خارج الصفحة (شرط القياس)');
+  await page.mouse.move(e0.x + e0.width / 2, e0.y + e0.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(past, e0.y + e0.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const e1 = await page.locator('[data-handle="e"]').boundingBox();
+  const e1c = { x: e1.x + e1.width / 2, y: e1.y + e1.height / 2 };
+  assert(e1c.x > ab18.x + ab18.width + 40, `الحافّة خرجت فعلًا عن الصفحة (المقبض عند ${(e1c.x - ab18.x - ab18.width).toFixed(0)} بكسل خارجها)`);
+  const hitOutside = await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest('[data-handle]')?.getAttribute('data-handle') ?? null, [e1c.x, e1c.y]);
+  assert(hitOutside === 'e', `ومقبضها خارج الصفحة يُصاب — لم تقصّه حافّتها (وُجد «${hitOutside}»)`);
+  const outlines = await page.evaluate(() => ({
+    layer: getComputedStyle(document.querySelector('[data-testid="selection-handles"]')).outlineStyle,
+    own: getComputedStyle(document.querySelector('[data-el-id="head"]')).outlineStyle,
+  }));
+  assert(outlines.layer === 'solid' && outlines.own === 'none', `خطّ التحديد في طبقة المقابض مرّةً واحدة (الطبقة «${outlines.layer}»، والعنصر «${outlines.own}»)`);
+  // ويُمسَك من هناك: سحبُه عائدًا يُرجع الحافّة إلى الصفحة.
+  await page.mouse.move(e1c.x, e1c.y);
+  await page.mouse.down();
+  await page.mouse.move(ab18.x + ab18.width - 30, e1c.y, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const back = await page.locator('[data-el-id="head"]').boundingBox();
+  assert(back.x + back.width <= ab18.x + ab18.width, 'وسحبُه من خارج الصفحة يُرجعها داخلها — المقبض يُمسَك لا يُرى فقط');
 
   // ═════════════════════════ أخطاء صامتة ═════════════════════════
   const realErrors = pageErrors.filter((e) => !/favicon|ResizeObserver loop/i.test(e));

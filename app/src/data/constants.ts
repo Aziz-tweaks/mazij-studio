@@ -122,9 +122,11 @@ export const MEDIUM_CHIP: Record<SizeMedium, { icon: string; labelKey: 'h_still'
  * المُوقَّت الطبقاتُ مساراتُ الخطّ)، وأقسامُ الحركة في المفتش (حركة الدخول، التتابع،
  * مفاتيح الخصائص). وهي **قراءةٌ للجواب لا تفرّعٌ جديدٌ في السلوك**، فتُكتب جدولًا كـ
  * `MEDIUM_CHIP` أعلاه، لا شروطًا مبعثرة يحرسها A8: طبيعةٌ ثالثةٌ تصير خطأَ ترجمةٍ هنا. */
-export const MEDIUM_SURFACES: Record<SizeMedium, { layersDock: boolean; motionProps: boolean }> = {
-  still: { layersDock: true, motionProps: false },
-  timed: { layersDock: false, motionProps: true },
+export const MEDIUM_SURFACES: Record<SizeMedium, { layersDock: boolean; motionProps: boolean; canvaTextGrip: boolean }> = {
+  // `canvaTextGrip`: في الوضع البسيط يُمسَك النصّ كما في الأداة الشائعة (بلا مقابض فوق/تحت، والزاوية
+  // تكبّر الخطّ). قالها المالك «في الصور» — فهي للساكن؛ والمُوقَّت على مسكه كما كان.
+  still: { layersDock: true, motionProps: false, canvaTextGrip: true },
+  timed: { layersDock: false, motionProps: true, canvaTextGrip: false },
 };
 
 export function sizeAt(sizeIdx: number, customW: number, customH: number): SizePreset {
@@ -272,7 +274,9 @@ export interface ToolDef {
  * لها — وهي في شريط الإضافة.
  *
  * ولا «احترافي» بعد اليوم: كانت أداتا القلم والصوت تختفيان في «بسيط». المالك:
- * «العمق يُطلب ولا يُفرض» — الأداة حاضرة دائمًا، وسطحها يظهر حين تُستعمَل. */
+ * «العمق يُطلب ولا يُفرض» — الأداة حاضرة دائمًا، وسطحها يظهر حين تُستعمَل.
+ * (و«الوضع الاحترافي» الذي عاد بعدها بطلبه شيءٌ آخر: **مسكٌ** لا بوّابة — مقابض
+ * أداة المتّجهات بدل الأداة الشائعة، ولا يُخفي أداة. انظر `StudioState.pro`.) */
 export const TOOLS: ToolDef[] = [
   { id: 'select', key: 'V' },
   { id: 'direct', key: 'A' },
@@ -376,6 +380,7 @@ export const LAYERS: LayerDef[] = [
 export interface CmdActions {
   setSizeIdx: (idx: number) => void;
   animateSelectionOrAll: (preset: 'fade' | 'slide' | 'pop') => void;
+  togglePro: () => void;
 }
 
 export interface CommandDef {
@@ -393,6 +398,7 @@ export const CMDS: CommandDef[] = [
   { ar: 'إضافة نص', en: 'Add text', k: 'T', icon: 'text', run: () => ({ tool: 'text', panel: 'props' }) },
   { ar: 'تصدير…', en: 'Export…', k: '⌘E', icon: 'export', run: () => ({ exportOpen: true }) },
   { ar: 'الاختصارات', en: 'Keyboard shortcuts', k: '?', icon: 'keyboard', run: () => ({ shortcutsOpen: true }) },
+  { ar: 'الوضع الاحترافي (مسك أداة المتّجهات)', en: 'Pro mode (أداة متّجهات grip)', k: '', icon: 'direct', run: () => ({}), act: (a) => a.togglePro() },
   { ar: 'فتح المكتبة', en: 'Open library', k: '', icon: 'folder', run: () => ({ panel: 'assets' }) },
   { ar: 'استدعاء مِزو', en: 'Ask Mizo', k: '⌘J', icon: 'fx', run: () => ({ panel: 'ai' }) },
   // كانت رُقعةً خامًا `{ sizeIdx: 2 }` لا تشتقّ طبيعة المستند: بوستٌ ساكن يصير بمقاس تيك توك

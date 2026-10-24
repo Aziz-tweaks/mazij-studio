@@ -726,14 +726,18 @@ async function main() {
   // ───────────────────────────────────────────────────────────────────────────
   console.log('\n7. al-maqabid — hit area and painted size are separate concerns');
 
+  // يُقاس على الصورة لا على العنوان: منذ ٢٤ أكتوبر ٢٠٢٦ مساءً يُمسَك النصّ على الصورة كما
+  // في الأداة الشائعة — بلا مقبضَي فوق/تحت (قرار المالك: «نفس الأداة الشائعة للوضع البسيط في الصور»)،
+  // والأداة الشائعة نفسها لا تضعهما للنصّ. وقاعدة «الحافّة بكامل طولها، ٣٢ بكسل» قيست في الأداة الشائعة على
+  // تحديدٍ عاديّ، والصورة تُمسَك بها في الوضعين، فهي موضعُ قياسها.
   await page.locator('[data-tool="select"]').click();
   await page.waitForTimeout(100);
-  await page.locator('[data-el-id="head"]').click({ force: true });
+  await page.locator('[data-el-id="img"]').click({ force: true });
   await page.waitForTimeout(200);
 
   const paintBox = await page.locator('[data-handle-paint="se"]').boundingBox();
   const hitBox = await page.locator('[data-handle="se"]').boundingBox();
-  const selBox = await page.locator('[data-el-id="head"]').boundingBox();
+  const selBox = await page.locator('[data-el-id="img"]').boundingBox();
   // The hit size is capped by the selection so two opposing handles can never blanket
   // its interior (see Handles.tsx) — so the expectation is recomputed from the measured
   // selection rather than loosened, keeping the arithmetic pinned exactly.
@@ -753,7 +757,7 @@ async function main() {
   // The oversized hit area must not blanket the interior: a corner press still
   // resizes, but a press in the middle must still MOVE the element.
   const centreHandle = await page.evaluate(() => {
-    const r = document.querySelector('[data-el-id="head"]').getBoundingClientRect();
+    const r = document.querySelector('[data-el-id="img"]').getBoundingClientRect();
     const el = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
     return el?.closest('[data-handle]')?.getAttribute('data-handle') ?? null;
   });

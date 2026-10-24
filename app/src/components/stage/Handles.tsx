@@ -34,6 +34,9 @@ export interface HandlesProps {
    * والثانية تقع على المقبض لا على النصّ، فلا يدخل التحرير أبدًا. قيس في جولة استخدامٍ
    * حقيقيّة على عنوان قالب «إنفوجرافيك»: ينقر المصمّم مرّتين على الحروف ولا يحدث شيء. */
   onDoubleClick?: (e: ReactMouseEvent<HTMLDivElement>) => void;
+  /** المقابض المعروضة — كلّها إن لم تُسمَّ. نصٌّ في الوضع البسيط بلا فوق/تحت (الأداة الشائعة):
+   * انظر `StudioState.pro` و`MEDIUM_SURFACES.canvaTextGrip`. */
+  handles?: readonly ResizeHandleId[];
 }
 
 /** حجم المقبض **المرسوم** على الشاشة. لم يتغيّر — هو ما يراه المصمم. */
@@ -51,9 +54,12 @@ const PAINT_PX = 10;
  * **رسمًا وإصابةً معًا** لأنها كانت عنصرًا واحدًا. */
 const HIT_PX = 32;
 
-/** Resize + rotate handles for the current selection, positioned as children of
- * the artboard (percentage-based, same frame as the elements) so they inherit
- * the exact same zoom/pan transform — no separate screen-space math needed.
+/** Resize + rotate handles for the current selection, positioned in the stage's
+ * handles layer — a sibling of the artboard with the artboard's own size and zoom/pan
+ * transform (percentage-based, same frame as the elements), so they inherit the exact
+ * same transform with no separate screen-space math, but are **not clipped** by the
+ * artboard's `overflow: clip`: a text scaled past the page edge keeps its far handles
+ * visible and grabbable. The selection outline is drawn here too, for the same reason.
  *
  * Living inside that transform is right for *positions* but wrong for the handles'
  * own chrome: a literal `width: 10` is 10 artboard px, which the zoom transform then
@@ -69,7 +75,7 @@ const HIT_PX = 32;
  * واحدًا، فـ10 بكسل كانت مقاسه المرسوم ومنطقة إصابته معًا. أمّا الآن فالعنصر
  * الخارجي منطقةُ إصابة شفّافة تبلغ 32 بكسل (رقم الأداة الشائعة المقيس) وداخله الشكل
  * المرسوم بـ10 بكسل كما كان — فيكبر الهدف ولا يكبر ما يراه المصمم. */
-export function Handles({ geo, scale, size, onHandleDown, onDoubleClick }: HandlesProps) {
+export function Handles({ geo, scale, size, onHandleDown, onDoubleClick, handles }: HandlesProps) {
   // 1 artboard px * px = 1 screen px
   const px = 1 / scale;
 
@@ -120,6 +126,11 @@ export function Handles({ geo, scale, size, onHandleDown, onDoubleClick }: Handl
     height: `${geo.h * 100}%`,
     transform: `rotate(${geo.rotation}deg)`,
     pointerEvents: 'none',
+    // خطّ التحديد — بالسُّمك والإزاحة اللذين كان يرسمهما `ElementView` نفسه، مقسومَين على
+    // `scale` ليبقيا ثابتَين على الشاشة. هنا لا هناك: هناك تقصّه حافّة الصفحة، ويضبّبه
+    // فلترُ حركة الدخول، وتقصّه أقنعة القصّ.
+    outline: `${1.5 * px}px solid var(--accent)`,
+    outlineOffset: 3 * px,
   };
 
   return (
@@ -128,7 +139,7 @@ export function Handles({ geo, scale, size, onHandleDown, onDoubleClick }: Handl
           الحافّة فيتقاطع مع مقبضَي زاويتها، والمتأخّر في الترتيب يفوز بالإصابة —
           فتبقى الزاوية (تحجيم بمحورين) هي ما يُمسَك عند الزاوية. والأداة الشائعة تملك
           الاثنين متقاطعين كذلك: الحافّة بكامل الطول والزوايا فوقها (§3.2). */}
-      {ORDERED_HANDLES.map((h) => {
+      {ORDERED_HANDLES.filter((h) => !handles || handles.includes(h)).map((h) => {
         const pos = HANDLE_POS[h];
         // -1/0/+1 per axis: which way is "away from the box" for this handle.
         const awayX = (pos.x - 0.5) * 2;

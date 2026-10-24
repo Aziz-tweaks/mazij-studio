@@ -146,7 +146,7 @@ export interface Dictionary {
   // user has to paste into their MCP client.
   mcp_listening: string; mcp_not_listening: string; mcp_token_label: string; mcp_token_hint: string;
   mcp_copy: string; mcp_copied: string; mcp_error_label: string; mcp_token_waiting: string;
-  ai_gen_btn: string; more_tools: string;
+  ai_gen_btn: string; more_tools: string; pro_mode: string; pro_mode_hint: string;
   text_outline_title: string; text_outline_btn: string; text_outline_converting: string;
   text_outline_hint: string; text_outline_unsupported_font: string; text_outline_error: string;
   text_on_path_btn: string; sec_text_on_path: string; text_on_path_hint: string; text_on_path_release: string;
@@ -191,6 +191,8 @@ export const AR: Dictionary = {
   ease_out: 'تباطؤ في النهاية', tl_simple_hint: 'حدّد عنصر واختر حركته',
   tl_play: 'تشغيل', tl_pause: 'إيقاف مؤقّت',
   more_tools: 'أدوات متقدّمة',
+  pro_mode: 'الوضع الاحترافي',
+  pro_mode_hint: 'مسك أداة المتّجهات: كل المقابض، والزاوية ما تكبّر الخط',
   l_bg: 'الخلفية', l_img: 'الصورة', l_head: 'العنوان', l_badge: 'الشارة', l_logo: 'الشعار',
   anim_none: 'بدون', anim_fade: 'ظهور تدريجي', anim_slide: 'انزلاق لأعلى', anim_pop: 'تكبير',
   align_h: 'أفقيًا', align_v: 'عموديًا', al_start: 'بداية السطر (يمين)', al_center: 'وسط', al_end: 'نهاية السطر (يسار)', al_top: 'أعلى', al_middle: 'منتصف', al_bottom: 'أسفل',
@@ -455,6 +457,8 @@ export const EN: Dictionary = {
   ease_out: 'Ease out', tl_simple_hint: 'Select a layer to pick its entrance motion',
   tl_play: 'Play', tl_pause: 'Pause',
   more_tools: 'Advanced tools',
+  pro_mode: 'Pro mode',
+  pro_mode_hint: 'أداة متّجهات grip: all handles; corners keep the font size',
   l_bg: 'Background', l_img: 'Image', l_head: 'Headline', l_badge: 'Badge', l_logo: 'Logo',
   anim_none: 'None', anim_fade: 'Fade in', anim_slide: 'Slide up', anim_pop: 'Pop',
   align_h: 'Across', align_v: 'Down', al_start: 'Line start', al_center: 'Center', al_end: 'Line end', al_top: 'Top', al_middle: 'Middle', al_bottom: 'Bottom',

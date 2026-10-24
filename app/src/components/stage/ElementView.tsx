@@ -231,6 +231,8 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
     // ويَكذب على المصمّم عن حدود ما حدّده. والمَقابضُ (`Handles`) عقدةٌ شقيقةٌ على
     // مستوى اللوح لا ابنةٌ لهذا العنصر، فلا يَمسّها الفلتر وتبقى هي دليلَ التحديد
     // حادًّا. وهذا نقصٌ مُعلَنٌ لا صامت: عنصرٌ مُضبَّبٌ يُعرَف تحديدُه من مقابضه.
+    // (والعنصرُ المحدَّد وحده صار خطُّه يُرسم في طبقة المقابض نفسها — `Stage.tsx` يمرّر
+    // `selected` زائفًا له — فيبقى حادًّا؛ والنقصُ باقٍ للتحديد المتعدّد وحده.)
     outline: selected && !entranceFilter ? selOutline : 'none',
     outlineOffset: 3 * px,
     cursor: el.locked ? 'default' : 'move',

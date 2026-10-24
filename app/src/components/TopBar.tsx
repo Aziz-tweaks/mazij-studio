@@ -246,7 +246,7 @@ function MixMark() {
  * with the shortcuts sheet, which is the one entry here a designer *will* open.
  */
 function MoreToolsMenu() {
-  const { actions, dict: L } = useStudio();
+  const { state, actions, dict: L } = useStudio();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -302,13 +302,38 @@ function MoreToolsMenu() {
         <div
           role="menu"
           data-testid="more-tools-menu"
-          style={{ position: 'absolute', top: 38, insetInlineEnd: 0, zIndex: 40, minWidth: 210, display: 'flex', flexDirection: 'column', gap: 2, padding: 4, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', boxShadow: 'var(--shadow)' }}
+          style={{ position: 'absolute', top: 38, insetInlineEnd: 0, zIndex: 40, minWidth: 232, display: 'flex', flexDirection: 'column', gap: 2, padding: 4, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', boxShadow: 'var(--shadow)' }}
         >
           <button role="menuitem" data-testid="open-ai-gen-btn" style={item} onClick={() => { setOpen(false); actions.openAiGenerate(); }}>{L.ai_gen_btn}</button>
           <button role="menuitem" data-testid="open-shortcuts-btn" style={item} onClick={() => { setOpen(false); actions.toggleShortcuts(); }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ flex: 1 }}>{L.sc_open}</span>
               <kbd dir="ltr" style={{ fontFamily: 'inherit', fontSize: 11, padding: '0 6px', borderRadius: 5, background: 'var(--surface2)', color: 'var(--muted)' }}>?</kbd>
+            </span>
+          </button>
+          {/* **الوضع الاحترافي** — مسك أداة المتّجهات بدل مسك الأداة الشائعة (`StudioState.pro`). لا يُخفي
+              أداةً ولا يُظهرها: كلّ الأدوات حاضرة في الحالين، ويتغيّر المسك وحده. */}
+          <button
+            role="menuitemcheckbox"
+            aria-checked={state.pro}
+            data-testid="pro-toggle"
+            style={{ ...item, height: 'auto', minHeight: 32, padding: '6px 12px' }}
+            onClick={() => {
+              setOpen(false);
+              actions.togglePro();
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
+                <span>{L.pro_mode}</span>
+                <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--muted)', whiteSpace: 'normal', textWrap: 'balance' }}>{L.pro_mode_hint}</span>
+              </span>
+              <span
+                aria-hidden
+                style={{ width: 30, height: 18, borderRadius: 9, background: state.pro ? 'var(--accent)' : 'var(--seg)', position: 'relative', flex: 'none', transition: 'background .15s' }}
+              >
+                <span style={{ position: 'absolute', top: 2, insetInlineStart: state.pro ? 14 : 2, width: 14, height: 14, borderRadius: 7, background: '#fff', transition: 'inset-inline-start .15s' }} />
+              </span>
             </span>
           </button>
           <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />

@@ -54,6 +54,7 @@ import { startMcpBridge, stopMcpBridge } from '../lib/mcpBridge';
 import { startMcpServer, stopMcpServer } from '../lib/mcpServerControl';
 import { interpretAndRun } from '../lib/commandInterpreter';
 import { agentSystemPrompt, cancelAgent, detectAgents, loadAiPrefs, runAgent, saveAiPrefs, type AiEngine } from '../lib/agentClient';
+import { saveUiPrefs } from '../lib/uiPrefs';
 import { BACKGROUND_ID, backgroundLayer, decorLayer, type McpCtx } from '../lib/mcpTools';
 import { describeAiError, providerById } from '../lib/aiProviders';
 import { loadApiKey } from '../lib/aiKeyStore';
@@ -677,6 +678,8 @@ export interface StudioActions {
   toggleLayers: () => void;
   toggleShortcuts: () => void;
   closeShortcuts: () => void;
+  /** يقلب الوضع الاحترافي (مسك أداة المتّجهات) ويحفظه تفضيلًا للجهاز — انظر `StudioState.pro`. */
+  togglePro: () => void;
   /** ⌘D — نسخةٌ من المحدَّد فوقه مباشرةً بإزاحةٍ صغيرة، والنسخة هي المحدَّدة. */
   duplicateSelected: () => void;
   /** ⌘C / ⌘X / ⌘V — حافظةٌ داخليّة للعناصر (بقناعها ومسارها إن وُجدا). */
@@ -2213,6 +2216,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       toggleLayers: () => patch((s) => ({ layersOpen: !s.layersOpen })),
       toggleShortcuts: () => patch((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
       closeShortcuts: () => patch({ shortcutsOpen: false }),
+      togglePro: () => {
+        const next = !mcpStateRef.current.pro;
+        saveUiPrefs({ pro: next });
+        patch({ pro: next });
+      },
       duplicateSelected: () =>
         setState((s) => {
           const ids = new Set(s.selectedIds);
