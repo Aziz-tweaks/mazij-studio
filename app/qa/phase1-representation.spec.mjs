@@ -83,7 +83,11 @@ async function placeText(page, fracX, fracY, text) {
     const all = [...document.querySelectorAll('[data-el-id]')];
     return all[all.length - 1].dataset.elId;
   });
-  await page.mouse.dblclick(a.x + a.width * fracX, a.y + a.height * fracY);
+  // النقرة المزدوجة **داخل** النصّ الجديد لا عند نقطة إنشائه: منذ ٢٤ أكتوبر ٢٠٢٦ يبدأ النصّ
+  // حيث نقر المصمّم (حافّة بدايته — يمينه بالعربيّة — على النقطة نفسها)، فلم تعد النقطة
+  // وسطَ صندوقه كما كانت يوم كُتب هذا المساعد، بل حافّته. (`Stage.tsx`، أداة النصّ.)
+  const nb = await page.locator(`[data-el-id="${id}"]`).boundingBox();
+  await page.mouse.dblclick(nb.x + nb.width / 2, nb.y + nb.height / 2);
   await page.waitForTimeout(200);
   await page.keyboard.press('Meta+a');
   await page.keyboard.type(text);

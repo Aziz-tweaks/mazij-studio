@@ -17,7 +17,7 @@ export interface Dictionary {
   tracking: string;
   justify_kashida: string;
   effects: string; stroke: string; more: string;
-  w_regular: string; w_medium: string; w_bold: string; blend_normal: string; fx_shadow: string;
+  w_regular: string; w_medium: string; w_bold: string; blend_normal: string; blend_multiply: string; blend_screen: string; blend_overlay: string; blend_darken: string; blend_lighten: string; fx_shadow: string;
   fx_blur: string; add_fx: string;
   path: string; anchors: string; close_path: string; boolean: string; union: string; subtract: string;
   intersect: string; smooth: string; exclude: string; smooth_amount: string; corner_points: string;
@@ -198,7 +198,7 @@ export const AR: Dictionary = {
   tracking: 'تتبُّع الأحرف',
   justify_kashida: 'تبرير بالكشيدة',
   blend: 'المزج', effects: 'التأثيرات', stroke: 'الحدود', more: 'خيارات متقدمة',
-  w_regular: 'عادي', w_medium: 'متوسط', w_bold: 'عريض', blend_normal: 'عادي', fx_shadow: 'ظل',
+  w_regular: 'عادي', w_medium: 'متوسط', w_bold: 'عريض', blend_normal: 'عادي', blend_multiply: 'مضاعفة', blend_screen: 'شاشة', blend_overlay: 'تراكب', blend_darken: 'تغميق', blend_lighten: 'تفتيح', fx_shadow: 'ظل',
   fx_blur: 'ضبابية', add_fx: 'إضافة تأثير',
   path: 'المسار', anchors: 'نقاط الربط', close_path: 'إغلاق المسار', boolean: 'عمليات الأشكال البوليانية',
   union: 'دمج', subtract: 'طرح', intersect: 'تقاطع', smooth: 'تنعيم', exclude: 'استثناء',
@@ -226,7 +226,7 @@ export const AR: Dictionary = {
   ai_custom_ph: 'مثال: gemini -p {prompt} --yolo',
   ai_stop: 'إيقاف', ai_working: 'أشتغل على تصميمك…',
   ai_welcome_agent: 'هلا! أنا مِزو. قل وش تبي: «خلّ الخلفية زرقاء وكبّر العنوان»، «رتّب العناصر»، «غيّر النص لعرض رمضان». أعدّل قدامك، وتقدر تتراجع عن أي خطوة.',
-  sug1: 'كبّر العنوان', sug2: 'غيّر لون الشارة للأحمر', sug3: 'اجعل الشعار نصف شفاف',
+  sug1: 'كبّر العنوان', sug2: 'غيّر لون الشارة للأحمر', sug3: 'خلّ الشعار نصف شفاف',
   sug4: 'مساعدة',
   apply: 'تطبيق',
   cmd_ph: 'اكتب أمراً أو اسم أداة…', cmd_hint: '↑↓ تنقّل · Enter نفّذ · Esc سكّر',
@@ -430,7 +430,7 @@ export const AR: Dictionary = {
   sc_select: 'تحديد', sc_direct: 'تحديد مباشر (النقاط)', sc_pen: 'قلم', sc_text: 'نص', sc_rect: 'مستطيل', sc_ellipse: 'دائرة', sc_hand: 'يد', sc_image: 'صورة',
   sc_pan: 'تحريك اللوحة (اضغط واسحب)', sc_undo: 'تراجع', sc_redo: 'إعادة', sc_dup: 'كرّر', sc_copy: 'نسخ', sc_paste: 'لصق', sc_cut: 'قص', sc_all: 'حدّد الكل',
   sc_delete: 'احذف', sc_nudge: 'حرّك بكسل (مع شفت: ١٠)', sc_group: 'جمّع', sc_ungroup: 'فكّ التجميع', sc_front: 'للأمام / للخلف خطوة', sc_forward: 'للأمام / للخلف تمامًا', sc_lock: 'اقفل', sc_hide: 'أخفِ',
-  sc_zoom: 'كبّر / صغّر', sc_fit: 'ملء الشاشة', sc_actual: '١٠٠٪', sc_search: 'ابحث أو نفّذ أمر', sc_export: 'تصدير', sc_mizo: 'مِزو', sc_esc: 'ارجع خطوة (اخرج من التحرير)',
+  sc_zoom: 'كبّر / صغّر', sc_fit: 'ملاءمة الشاشة', sc_actual: '١٠٠٪', sc_search: 'ابحث أو نفّذ أمر', sc_export: 'تصدير', sc_mizo: 'مِزو', sc_esc: 'ارجع خطوة (اخرج من التحرير)',
   sc_play: 'شغّل / وقّف', sc_split: 'قص المقطع عند المؤشر', sc_frame: 'إطار للأمام / للخلف', sc_panels: 'أخفِ اللوحات / أظهرها', sc_edit_text: 'حرّر النص المحدد',
   ctx_font: 'الخط', ctx_size: 'المقاس', ctx_bigger: 'أكبر', ctx_smaller: 'أصغر', ctx_color: 'اللون', ctx_bold: 'عريض', ctx_align: 'المحاذاة',
   ctx_animate: 'حرّك', ctx_more: 'المزيد', ctx_fill: 'التعبئة', ctx_crop: 'قص', ctx_replace: 'بدّل', ctx_edit_points: 'حرّر النقاط',
@@ -462,7 +462,7 @@ export const EN: Dictionary = {
   tracking: 'Letter spacing',
   justify_kashida: 'Kashida justify',
   blend: 'Blend', effects: 'Effects', stroke: 'Stroke', more: 'Advanced options',
-  w_regular: 'Regular', w_medium: 'Medium', w_bold: 'Bold', blend_normal: 'Normal', fx_shadow: 'Drop shadow',
+  w_regular: 'Regular', w_medium: 'Medium', w_bold: 'Bold', blend_normal: 'Normal', blend_multiply: 'Multiply', blend_screen: 'Screen', blend_overlay: 'Overlay', blend_darken: 'Darken', blend_lighten: 'Lighten', fx_shadow: 'Drop shadow',
   fx_blur: 'Blur', add_fx: 'Add effect',
   path: 'Path', anchors: 'Anchor points', close_path: 'Close path', boolean: 'Boolean operations', union: 'Union',
   subtract: 'Subtract', intersect: 'Intersect', smooth: 'Smooth', exclude: 'Exclude',

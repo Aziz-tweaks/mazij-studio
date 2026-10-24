@@ -1887,8 +1887,10 @@ function AppearanceSection({ el }: { el: DocElement }) {
                 onChange={(e) => actions.updateFillLayer(el.id, f.id, { blend: e.target.value as AppearanceBlend })}
                 style={{ height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11 }}
               >
+                {/* الأسماء من القاموس لا المعرّفات: كانت الواجهة العربيّة تعرض «normal»
+                    و«multiply» بالإنجليزيّة (جولة الاستخدام). */}
                 {(['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten'] as AppearanceBlend[]).map((b) => (
-                  <option key={b} value={b}>{b}</option>
+                  <option key={b} value={b}>{L[`blend_${b}` as const]}</option>
                 ))}
               </select>
               <input

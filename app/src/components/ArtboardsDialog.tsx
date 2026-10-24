@@ -71,7 +71,11 @@ export function ArtboardsDialog() {
                     onChange={(e) => setRenameDraft(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') commitRename();
-                      if (e.key === 'Escape') setRenamingId(null);
+                      if (e.key === 'Escape') {
+                        // إلغاء التسمية وحده — لا يُسكِّر الحوار معه (انظر Escape العامّ في StudioContext).
+                        e.preventDefault();
+                        setRenamingId(null);
+                      }
                     }}
                     onBlur={commitRename}
                     placeholder={L.artboards_name_ph}

@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { HANDLE_POS, type HandleId, type ResizeHandleId } from '../../lib/geometry';
 import type { Geometry } from '../../state/elements';
 
@@ -26,6 +26,14 @@ export interface HandlesProps {
    * real on-screen size, which decides whether the handles have to move outward. */
   size: { w: number; h: number };
   onHandleDown: (e: ReactPointerEvent<HTMLDivElement>, handle: HandleId) => void;
+  /** **نقرةٌ مزدوجة على منطقة مقبض = نقرةٌ مزدوجة على العنصر نفسه.**
+   *
+   * منطقة إصابة الحافّة بعرض الحافّة كلّها وسُمكٍ يصل إلى ٣٢ بكسل نصفُه داخل الصندوق،
+   * والنصّ الصغير يجلس عند أعلى صندوقه — فعنوانٌ بمقاس ٣٢ على لوحةٍ مُصغَّرة تقع حروفه
+   * كلّها تقريبًا تحت مقبض الحافّة العليا. فكانت النقرةُ الأولى تحدّده وتُظهر المقابض،
+   * والثانية تقع على المقبض لا على النصّ، فلا يدخل التحرير أبدًا. قيس في جولة استخدامٍ
+   * حقيقيّة على عنوان قالب «إنفوجرافيك»: ينقر المصمّم مرّتين على الحروف ولا يحدث شيء. */
+  onDoubleClick?: (e: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
 /** حجم المقبض **المرسوم** على الشاشة. لم يتغيّر — هو ما يراه المصمم. */
@@ -61,7 +69,7 @@ const HIT_PX = 32;
  * واحدًا، فـ10 بكسل كانت مقاسه المرسوم ومنطقة إصابته معًا. أمّا الآن فالعنصر
  * الخارجي منطقةُ إصابة شفّافة تبلغ 32 بكسل (رقم الأداة الشائعة المقيس) وداخله الشكل
  * المرسوم بـ10 بكسل كما كان — فيكبر الهدف ولا يكبر ما يراه المصمم. */
-export function Handles({ geo, scale, size, onHandleDown }: HandlesProps) {
+export function Handles({ geo, scale, size, onHandleDown, onDoubleClick }: HandlesProps) {
   // 1 artboard px * px = 1 screen px
   const px = 1 / scale;
 
@@ -149,6 +157,7 @@ export function Handles({ geo, scale, size, onHandleDown }: HandlesProps) {
             // معناه — سيمرّ دائمًا بينما يرجع العطب الذي كُتب لأجله.
             data-handle={h}
             onPointerDown={(e) => onHandleDown(e, h)}
+            onDoubleClick={onDoubleClick}
             style={{
               position: 'absolute',
               ...geomStyle,

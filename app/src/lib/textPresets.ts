@@ -29,3 +29,16 @@ export const TEXT_PRESETS: Record<TextPreset, TextPresetDef> = {
 
 export const BASIC_TEXT_PRESETS: TextPreset[] = ['heading', 'subheading', 'body'];
 export const STYLED_TEXT_PRESETS: TextPreset[] = ['offer', 'soon', 'opening', 'new'];
+
+/** النصّ الذي تضعه أداة النصّ عند النقر — نائبٌ يُكتَب فوقه. */
+export const NEW_TEXT_PLACEHOLDER = 'نص جديد';
+
+/** **النصوص النائبة**: ما يضعه البرنامج ليُستبدَل لا ليُقرأ — نصّ أداة النصّ، وبطاقات
+ * «عنوان / عنوان فرعي / نص» الثلاث. الأنماط الجاهزة («عرض اليوم»، «قريبًا»…) عباراتٌ
+ * حقيقيّة قد يُبقيها المصمّم كما هي، فليست منها. وما دام النصّ على حاله، فدخولُ تحريره
+ * يحدّده كلّه (`Stage.tsx`)، فأوّل حرفٍ يكتبه المصمّم يستبدله ولا يلتصق به. */
+const PLACEHOLDER_TEXTS = new Set<string>([NEW_TEXT_PLACEHOLDER, ...BASIC_TEXT_PRESETS.map((p) => TEXT_PRESETS[p].text)]);
+
+export function isPlaceholderText(text: string): boolean {
+  return PLACEHOLDER_TEXTS.has(text.trim());
+}

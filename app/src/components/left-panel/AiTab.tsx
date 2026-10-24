@@ -29,10 +29,8 @@ export function AiTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--line)', flex: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <MizoAvatar size={26} />
-          <span style={{ fontWeight: 700, fontSize: 13 }}>{L.ai_name}</span>
-        </div>
+        {/* لا عنوانَ «مِزو» ثانٍ هنا: رأسُ لوح الإضافة يحمل الاسم ووجهه (`ContentPanel.tsx`) —
+            كان الاسم يُكتَب مرّتين فوق بعض (جولة الاستخدام). */}
         <div data-testid="ai-engines" role="radiogroup" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: 3, borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>
           {engines.map((e) => {
             const on = state.aiEngine === e.id;
@@ -156,7 +154,7 @@ function Dot({ delay }: { delay: number }) {
   return <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--muted)', animation: `mz-pulse 1s ease ${delay}s infinite` }} />;
 }
 
-function MizoAvatar({ size }: { size: number }) {
+export function MizoAvatar({ size }: { size: number }) {
   return (
     <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--accent)', position: 'relative', display: 'block' }}>
       <span style={{ position: 'absolute', left: size * 0.29, top: size * 0.38, width: size * 0.11, height: size * 0.11, borderRadius: '50%', background: 'var(--onAccent)' }} />

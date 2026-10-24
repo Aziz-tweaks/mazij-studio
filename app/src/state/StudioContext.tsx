@@ -691,6 +691,9 @@ export interface StudioActions {
    * يصير مُوقَّتًا في الخطوة نفسها فيطلع الخطّ الزمنيّ ويشتغل («أي تصميم يصير مشهد»).
    * خطوة تراجع واحدة تُرجع الاثنين. */
   animateElement: (id: ElementId, preset: AnimPreset) => void;
+  /** حركةُ دخولٍ واحدة للمحدَّد — أو للتصميم كلّه إن لم يُحدَّد شيء — بخطوة تراجعٍ واحدة،
+   * والساكنُ يصير مشهدًا ويشتغل من البداية كما في «حرّك». بابُ أمر «حركة: ظهور تدريجي». */
+  animateSelectionOrAll: (preset: 'fade' | 'slide' | 'pop') => void;
   setAssetsTab: (tab: StudioState['assetsTab']) => void;
   toggleTimeline: () => void;
   togglePlay: () => void;
@@ -1318,21 +1321,37 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /** **بابٌ واحد لكلّ أوامر اللوحة — نقرًا أو بـEnter.** كان للنقر مسارٌ لا يمرّ بالمُوَدِّع
+   * (`armTool`) وللـEnter مسارٌ يمرّ به، فـ«إضافة نص» بالنقر تُبقي التحديد ومسودّةَ القلم
+   * وبالـEnter لا. والأمرُ الذي لا تكفيه رُقعةُ حالة (`act`) يمرّ بإجراءات البرنامج نفسها
+   * بعد إغلاق اللوحة — فـ«تغيير المقاس» يشتقّ طبيعة المستند كما يفعل منتقي المقاس. */
   const runCmd = useCallback((c: (typeof CMDS)[number]) => {
     setState((s) => {
       const result = c.run(s);
       const { doc, rest } = splitDocPatch(result);
       const hasDoc = Object.keys(doc).length > 0;
+      // **لوحةُ الأوامر بابٌ ثالثٌ يُسلِّح أداة.** «إضافة نص» تُرجِع
+      // `{ tool: 'text', panel: 'props' }` (`data/constants.ts`)، فتصل
+      // الأداةُ إلى الحالة **بدمجِ رُقعةٍ** لا بنداء `setTool` — فكانت تَعبُر
+      // المُوَدِّعَ من تحته: تُسلَّح الأداةُ ويبقى التحديدُ، وتبقى مسودّةُ
+      // القلم. والقاعدةُ واحدةٌ لفعلٍ واحد: ما سلَّح أداةً يَعبُر `armTool`،
+      // من أيّ بابٍ جاء — وإلّا صار للبرنامج سلوكان لأمرٍ واحد.
+      const armed = typeof rest.tool === 'string' && rest.tool !== s.tool ? armTool(s, rest.tool as StudioState['tool']) : s;
       return {
-        ...s,
+        ...armed,
         ...rest,
         ...doc,
         cmdOpen: false,
         cmdQuery: '',
         cmdSel: 0,
-        ...(hasDoc ? pushHistory(s) : {}),
+        // اللقطةُ من `armed` لا من `s`: لو كان المُوَدِّعُ قد أثبت مسودّةَ
+        // قلمٍ فقد دفع خطوتَه بنفسه، فلقطةٌ محسوبةٌ على الحالة الأصليّة
+        // كانت ستَكتب فوق تلك الخطوة وتُفقِد المسارَ المُثبَّت من السجلّ.
+        // و«قبلَ التغيير» الصحيحةُ لأمرِ المستند هي الحالةُ بعد الإثبات.
+        ...(hasDoc ? pushHistory(armed) : {}),
       };
     });
+    c.act?.(mcpActionsRef.current);
   }, []);
 
   // بند #24-ب حرفيًا هنا أيضًا، لا نسخةً مزيّفة منه خاصّة بهذا اللوح: نفس
@@ -1679,12 +1698,28 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         if (editable) return;
         e.preventDefault();
         splitAtPlayhead();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      } else if ((e.metaKey || e.ctrlKey) && !e.altKey && e.code === 'KeyZ') {
+        // **`e.code` لا `e.key`** — القاعدة نفسها المكتوبة على كلّ اختصارٍ آخر في البرنامج،
+        // وكان ⌘Z وحده خارجها: تحت لوحة مفاتيح عربيّة يصير `e.key` حرفًا عربيًّا («ئ» في
+        // Arabic PC)، فلا تراجعَ ولا إعادةَ بالكيبورد لمن يكتب عربيًّا — وهو جمهور البرنامج.
+        //
+        // **والنصّ قيد التحرير يملك ⌘Z نفسه:** تراجعُ المتصفّح الأصليّ يمحو ما كُتب للتوّ.
+        // كان يُنفَّذ تراجعُ المستند بدلًا منه — فمن وضع نصًّا بأداة النصّ وكتب ثم ضغط ⌘Z
+        // ليصلح حرفًا، تراجع عن **إنشاء** النصّ نفسه فاختفى الصندوق وهو يكتب فيه.
+        if (e.target instanceof HTMLElement && e.target.isContentEditable) return;
         e.preventDefault();
         if (e.shiftKey) redoRef.current();
         else undoRef.current();
       } else if (e.key === 'Escape') {
-        patch({ cmdOpen: false, exportOpen: false, exportState: 'idle', cropEditingId: null });
+        // **Esc يسكّر أيّ حوارٍ مفتوح** — لا التصدير ولوحة الأوامر وحدهما. كانت القوالب
+        // واللوحات ومِزو-التوليد والنماذج المحلّيّة وMCP وغيرها لا تُغلَق إلا بزرّ ✕
+        // (جولة الاستخدام: Esc على «لوحات التصميم» لا يفعل شيئًا). وحقلٌ داخل الحوار عالج
+        // Escape بنفسه (`preventDefault` — إلغاءُ إعادة تسمية مثلًا) يبقى الحوارُ معه مفتوحًا.
+        const dialogs = e.defaultPrevented
+          ? {}
+          : { templatesOpen: false, artboardsOpen: false, localModelsOpen: false, refVideoOpen: false, cmdInterpreterOpen: false, mcpOpen: false, aiGenOpen: false };
+        if (!e.defaultPrevented && mcpStateRef.current.aiGenOpen) aiGenAbortRef.current?.abort();
+        patch({ cmdOpen: false, exportOpen: false, exportState: 'idle', cropEditingId: null, ...dialogs });
       }
     };
     window.addEventListener('keydown', onKey);
@@ -2154,34 +2189,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return { cmdSel: next };
         }),
       runSelectedCmd: () => {
-        setState((s) => {
-          const list = visibleCmds(s.cmdQuery);
-          const c = list[s.cmdSel];
-          if (!c) return s;
-          const result = c.run(s);
-          const { doc, rest } = splitDocPatch(result);
-          const hasDoc = Object.keys(doc).length > 0;
-          // **لوحةُ الأوامر بابٌ ثالثٌ يُسلِّح أداة.** «إضافة نص» تُرجِع
-          // `{ tool: 'text', panel: 'props' }` (`data/constants.ts`)، فتصل
-          // الأداةُ إلى الحالة **بدمجِ رُقعةٍ** لا بنداء `setTool` — فكانت تَعبُر
-          // المُوَدِّعَ من تحته: تُسلَّح الأداةُ ويبقى التحديدُ، وتبقى مسودّةُ
-          // القلم. والقاعدةُ واحدةٌ لفعلٍ واحد: ما سلَّح أداةً يَعبُر `armTool`،
-          // من أيّ بابٍ جاء — وإلّا صار للبرنامج سلوكان لأمرٍ واحد.
-          const armed = typeof rest.tool === 'string' && rest.tool !== s.tool ? armTool(s, rest.tool as StudioState['tool']) : s;
-          return {
-            ...armed,
-            ...rest,
-            ...doc,
-            cmdOpen: false,
-            cmdQuery: '',
-            cmdSel: 0,
-            // اللقطةُ من `armed` لا من `s`: لو كان المُوَدِّعُ قد أثبت مسودّةَ
-            // قلمٍ فقد دفع خطوتَه بنفسه، فلقطةٌ محسوبةٌ على الحالة الأصليّة
-            // كانت ستَكتب فوق تلك الخطوة وتُفقِد المسارَ المُثبَّت من السجلّ.
-            // و«قبلَ التغيير» الصحيحةُ لأمرِ المستند هي الحالةُ بعد الإثبات.
-            ...(hasDoc ? pushHistory(armed) : {}),
-          };
-        });
+        const st = mcpStateRef.current;
+        const c = visibleCmds(st.cmdQuery)[st.cmdSel];
+        if (c) runCmd(c);
       },
       runCommand: runCmd,
       setPanel: (panel) => patch({ panel }),
@@ -2276,12 +2286,25 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           if (!after) return {};
           const label = (s.lang === 'ar' ? AR : EN).ctx_animate;
           if (s.medium !== 'timed') {
+            // «بدون» على ساكن لا تطلب حركةً، فلا تجعله مشهدًا. كانت تحوّله فيديو واقفًا
+            // عند اللحظة صفر — وعندها كلّ عنصرٍ له دخولٌ لم يدخل بعد، فاختفى التصميم كلّه
+            // إلا العنصر المحدَّد، ولا شيء يشتغل (جولة الاستخدام: فتح «حرّك» واختار «بدون»).
+            if (preset === 'none') return { elements, ...pushHistory(s, label) };
             // ساكنٌ يصير مشهدًا: الخطّ يطلع من تحت ويشتغل من البداية، فيرى المصمّم
             // الحركة التي طلبها لحظةَ طلبها — لا مؤشّرًا واقفًا بعد نهايتها.
-            return { elements, medium: 'timed', tlOpen: true, t: 0, playing: preset !== 'none', ...pushHistory(s, label) };
+            return { elements, medium: 'timed', tlOpen: true, t: 0, playing: true, ...pushHistory(s, label) };
           }
           const vanished = rendersNothingAt(after.anim, s.t);
           return { elements, ...pushHistory(s, label), t: vanished ? Math.max(s.t, after.anim.start + after.anim.duration) : s.t };
+        }),
+      animateSelectionOrAll: (preset) =>
+        patch((s) => {
+          const ids = s.selectedIds.length ? s.selectedIds : s.elements.filter((e) => e.visible && e.id !== BACKGROUND_ID).map((e) => e.id);
+          if (!ids.length) return {};
+          const targets = new Set(ids);
+          const elements = s.elements.map((e) => (targets.has(e.id) ? { ...e, anim: withPreset(e.anim, preset) } : e));
+          const label = (s.lang === 'ar' ? AR : EN).ctx_animate;
+          return { elements, medium: 'timed', tlOpen: true, t: 0, playing: true, ...pushHistory(s, label) };
         }),
       addTextPreset: (preset: TextPreset) =>
         setState((s) => {
@@ -3159,7 +3182,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             selectedIds: [id],
             sel: id,
             tool: 'select',
-            panel: 'props',
+            // **ولوح «عناصر» يبقى مفتوحًا** (الأداة الشائعة، ولوح «نصوص» عندنا). كان يُرجِع
+            // `panel: 'props'` ليرى المصمّم خصائص الشكل «لا لوح المكتبة الذي انتهى منه» —
+            // وذاك يوم كان لوحٌ واحد يتناوبه الاثنان. وفي «لوحة واحدة، ثلاثة أعماق»
+            // المفتشُ قائمٌ بذاته على الجانب الآخر، فالخصائص أمامه أصلًا، وإغلاقُ اللوح
+            // لا يُكسبه شيئًا ويكلّفه فتحه من جديد لكلّ شكلٍ تالٍ (قيس في الجولة: دائرةٌ
+            // ثم يرجع للشريط ليضع الثانية). ولمسُ اللوحة نفسها ما زال يُغلقه
+            // (`leaveInsertLibrary`).
             shapeDrawKind: recipe.kind,
             shapeDrawN: recipe.n ?? s.shapeDrawN,
             ...pushHistory(s),

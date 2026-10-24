@@ -2,7 +2,7 @@ import { Icon } from './Icon';
 import { useStudio } from '../state/StudioContext';
 import { LibraryTab } from './left-panel/LibraryTab';
 import { AssetsTab } from './left-panel/AssetsTab';
-import { AiTab } from './left-panel/AiTab';
+import { AiTab, MizoAvatar } from './left-panel/AiTab';
 
 /** لوح الإضافة بجانب شريط الإضافة — يطلع لمّا تطلبه، ويختفي لمّا تخلص.
  *
@@ -44,6 +44,7 @@ export function ContentPanel() {
       }}
     >
       <div style={{ height: 44, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px 0 8px', borderBottom: '1px solid var(--line)' }}>
+        {panel === 'ai' && <MizoAvatar size={22} />}
         <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{title}</span>
         <button
           data-testid="content-panel-close"

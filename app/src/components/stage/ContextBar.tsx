@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { Icon } from '../Icon';
 import { MEDIUM_SURFACES, PALETTES } from '../../data/constants';
 import type { HAlign } from '../../state/types';
@@ -8,14 +8,7 @@ import { baseLayerColorOf, normalizeHex, resolveLayerColor } from '../../lib/app
 import { useStudio } from '../../state/StudioContext';
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
-const CMD = isMac ? '⌘' : 'Ctrl ';
-
-export interface ScreenBox {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
+export const CMD = isMac ? '⌘' : 'Ctrl ';
 
 type PopId = 'font' | 'color' | 'anim' | 'more' | 'align' | null;
 
@@ -43,6 +36,8 @@ const ALIGN_ICON: Record<HAlign, string> = {
 export function ContextBar() {
   const { state, actions, dict: L } = useStudio();
   const [pop, setPop] = useState<PopId>(null);
+  /** الزرّ الذي فتح المنبثقة — تنزل المنبثقة تحته هو، لا عند طرف الشريط. */
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const sel = state.elements.filter((e) => state.selectedIds.includes(e.id));
   const el: DocElement | undefined = sel.length === 1 ? sel[0] : undefined;
@@ -66,10 +61,10 @@ export function ContextBar() {
     };
   }, [pop]);
 
-  // الشريط مثبَّتٌ أعلى اللوحة، والمنبثقات تنزل تحته.
-  const below = false;
-
-  const toggle = (p: PopId) => setPop((cur) => (cur === p ? null : p));
+  const toggle = (p: PopId, e: ReactMouseEvent<HTMLElement>) => {
+    setAnchor(e.currentTarget);
+    setPop((cur) => (cur === p ? null : p));
+  };
 
   // ── وضعا التحرير: النقاط والقصّ — شريطٌ يقول أين أنت وكيف تخرج ─────────────
   if (state.nodeEditId || state.cropEditingId) {
@@ -104,7 +99,7 @@ export function ContextBar() {
       <button
         data-testid="ctx-animate"
         aria-expanded={pop === 'anim'}
-        onClick={() => toggle('anim')}
+        onClick={(e) => toggle('anim', e)}
         title={L.ctx_animate}
         style={{ ...pillBtn, background: 'var(--motionSoft)', color: 'var(--motion)', fontWeight: 600, gap: 6, padding: '0 12px' }}
       >
@@ -115,7 +110,7 @@ export function ContextBar() {
   ) : null;
 
   const more = (
-    <button data-testid="ctx-more" aria-label={L.ctx_more} title={L.ctx_more} aria-expanded={pop === 'more'} onClick={() => toggle('more')} style={{ ...iconBtn, fontSize: 18, letterSpacing: 1 }}>
+    <button data-testid="ctx-more" aria-label={L.ctx_more} title={L.ctx_more} aria-expanded={pop === 'more'} onClick={(e) => toggle('more', e)} style={{ ...iconBtn, fontSize: 18, letterSpacing: 1 }}>
       ⋯
     </button>
   );
@@ -125,7 +120,7 @@ export function ContextBar() {
     const color = resolveTextColor(el, pal);
     body = (
       <>
-        <button data-testid="ctx-font" aria-expanded={pop === 'font'} onClick={() => toggle('font')} title={L.ctx_font} style={{ ...pillBtn, background: 'var(--surface2)', maxWidth: 150, gap: 6 }}>
+        <button data-testid="ctx-font" aria-expanded={pop === 'font'} onClick={(e) => toggle('font', e)} title={L.ctx_font} style={{ ...pillBtn, background: 'var(--surface2)', maxWidth: 150, gap: 6 }}>
           <span style={{ fontFamily: `'${el.fontFamily}', sans-serif`, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{el.fontFamily}</span>
           <Icon size={12} path="M5 8l5 5 5-5" />
         </button>
@@ -135,7 +130,7 @@ export function ContextBar() {
           <button data-testid="ctx-size-up" aria-label={L.ctx_bigger} title={L.ctx_bigger} onClick={() => actions.setElementFontSize(el.id, Math.round(el.fontSize) + 4)} style={stepBtn}>+</button>
         </div>
         <Sep />
-        <button data-testid="ctx-color" aria-label={L.ctx_color} title={L.ctx_color} aria-expanded={pop === 'color'} onClick={() => toggle('color')} style={iconBtn}>
+        <button data-testid="ctx-color" aria-label={L.ctx_color} title={L.ctx_color} aria-expanded={pop === 'color'} onClick={(e) => toggle('color', e)} style={iconBtn}>
           <Swatch hex={color} />
         </button>
         <button
@@ -160,7 +155,7 @@ export function ContextBar() {
     const editable = el.shape === 'path' && (el.points?.length ?? 0) >= 2 && !el.outline?.length && !el.subpaths?.length;
     body = (
       <>
-        <button data-testid="ctx-color" aria-label={L.ctx_fill} title={L.ctx_fill} aria-expanded={pop === 'color'} onClick={() => toggle('color')} style={iconBtn}>
+        <button data-testid="ctx-color" aria-label={L.ctx_fill} title={L.ctx_fill} aria-expanded={pop === 'color'} onClick={(e) => toggle('color', e)} style={iconBtn}>
           <Swatch hex={fill} square />
         </button>
         {editable && (
@@ -182,9 +177,10 @@ export function ContextBar() {
             {L.ctx_crop}
           </button>
         )}
+        {/* إطارٌ فاضٍ لا يُستبدَل منه شيء: زرّه «اختر صورة» كما في المفتش، و«بدّل» لما فيه صورة. */}
         <button data-testid="ctx-replace" onClick={() => void actions.replaceImage(el.id)} style={{ ...pillBtn, gap: 6 }}>
-          <Icon size={15} path="M4 7h10l-3-3M16 13H6l3 3" />
-          {L.ctx_replace}
+          <Icon size={15} path={el.src ? 'M4 7h10l-3-3M16 13H6l3 3' : 'M3 5h14v10H3zM3 12l4-4 3 3 2-2 5 5'} />
+          {el.src ? L.ctx_replace : L.choose_image}
         </button>
         {anim}
         {more}
@@ -200,7 +196,7 @@ export function ContextBar() {
   } else if (sel.length > 1) {
     body = (
       <>
-        <button data-testid="ctx-align-sel" aria-expanded={pop === 'align'} onClick={() => toggle('align')} style={{ ...pillBtn, gap: 6 }}>
+        <button data-testid="ctx-align-sel" aria-expanded={pop === 'align'} onClick={(e) => toggle('align', e)} style={{ ...pillBtn, gap: 6 }}>
           <Icon size={15} path="M3 10h14M6 6h8v8H6z" />
           {L.ctx_align_sel}
         </button>
@@ -222,7 +218,6 @@ export function ContextBar() {
       aria-label={L.ctx_more}
       data-testid="context-bar"
       data-stage-overlay
-      data-below={below ? 'true' : 'false'}
       onPointerDown={(e) => e.stopPropagation()}
       onDoubleClick={(e) => e.stopPropagation()}
       style={barStyle}
@@ -230,7 +225,7 @@ export function ContextBar() {
       {body}
 
       {pop === 'font' && el?.type === 'text' && (
-        <Pop below={!below} wide>
+        <Pop anchor={anchor} wide>
           {state.fonts
             .filter((f) => f.status === 'ready')
             .map((f) => (
@@ -250,7 +245,7 @@ export function ContextBar() {
       )}
 
       {pop === 'color' && el && (el.type === 'text' || el.type === 'shape') && (
-        <Pop below={!below}>
+        <Pop anchor={anchor}>
           <ColorGrid
             current={el.type === 'text' ? resolveTextColor(el, pal) : (shapeFill ?? pal.ac)}
             swatches={Array.from(new Set([pal.fg, pal.ac, pal.bg, ...(pal.ac2 ? [pal.ac2] : []), '#FFFFFF', '#111111', '#E8743B', '#FFD15C', '#3DD6C6', '#6D5BFF']))}
@@ -260,7 +255,7 @@ export function ContextBar() {
       )}
 
       {pop === 'anim' && el && (
-        <Pop below={!below}>
+        <Pop anchor={anchor}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, width: 220 }}>
             {PRESETS.map((p) => {
               const active = MEDIUM_SURFACES[state.medium].motionProps && el.anim.preset === p;
@@ -285,7 +280,7 @@ export function ContextBar() {
       )}
 
       {pop === 'align' && sel.length > 1 && (
-        <Pop below={!below}>
+        <Pop anchor={anchor}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 34px)', gap: 4 }}>
             {(['left', 'center', 'right', 'top', 'middle', 'bottom'] as const).map((edge) => (
               <button key={edge} data-testid={`ctx-align-${edge}`} onClick={() => actions.alignSelected(edge)} title={edge} style={{ ...iconBtn, background: 'var(--surface2)' }}>
@@ -297,7 +292,7 @@ export function ContextBar() {
       )}
 
       {pop === 'more' && (
-        <Pop below={!below} end>
+        <Pop anchor={anchor} end>
           <MenuRow testid="ctx-duplicate" label={L.ctx_duplicate} keys={`${CMD}D`} onClick={() => { actions.duplicateSelected(); setPop(null); }} />
           <MenuRow testid="ctx-forward" label={L.bring_forward} keys={`${CMD}]`} onClick={() => { actions.bringForward(state.selectedIds); setPop(null); }} />
           <MenuRow testid="ctx-backward" label={L.send_backward} keys={`${CMD}[`} onClick={() => { actions.sendBackward(state.selectedIds); setPop(null); }} />
@@ -328,14 +323,40 @@ function Swatch({ hex, square }: { hex: string; square?: boolean }) {
   return <span style={{ width: 18, height: 18, borderRadius: square ? 5 : 9, background: hex, boxShadow: '0 0 0 2px var(--surface2), 0 0 0 3.5px var(--lineStrong)', display: 'block' }} />;
 }
 
-function Pop({ children, below, wide, end }: { children: ReactNode; below: boolean; wide?: boolean; end?: boolean }) {
+/** **منبثقةٌ تحت زرّها، ولا تخرج من المسرح.**
+ *
+ * كانت تُثبَّت عند بداية الشريط (`insetInlineStart: 0`) والشريطُ نفسه على نهاية
+ * المسرح — فشريطُ الشكل القصير يفتح لوحَ الألوان ممتدًّا خارج حافّة المسرح تحت المفتش
+ * (نصفُ الألوان مقصوص)، وشريطُ النصّ الطويل يفتح قائمةَ «حرّك» عند طرفه الآخر بعيدًا عن
+ * زرّها (جولة الاستخدام). فالموضعُ يُقاس الآن: حافّةُ البداية على حافّة الزرّ — أو حافّة
+ * النهاية لقائمة `end` — ثم تُحصَر داخل المسرح بهامش ٨ بكسل. وتُخفى إلى أن تُقاس فلا
+ * تومض في موضعٍ خاطئ. */
+function Pop({ children, anchor, wide, end }: { children: ReactNode; anchor: HTMLElement | null; wide?: boolean; end?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const pop = ref.current;
+    const bar = pop?.offsetParent as HTMLElement | null;
+    if (!pop || !bar) return;
+    const barBox = bar.getBoundingClientRect();
+    const bounds = (bar.closest('.mz-stage') ?? document.documentElement).getBoundingClientRect();
+    const a = (anchor && bar.contains(anchor) ? anchor : bar).getBoundingClientRect();
+    const w = pop.offsetWidth;
+    const rtl = getComputedStyle(bar).direction === 'rtl';
+    const alignRightEdges = rtl ? !end : !!end;
+    const PAD = 8;
+    const x = Math.max(bounds.left + PAD, Math.min(alignRightEdges ? a.right - w : a.left, bounds.right - PAD - w));
+    setLeft(x - barBox.left);
+  }, [anchor, end]);
   return (
     <div
+      ref={ref}
       role="menu"
       style={{
         position: 'absolute',
-        ...(below ? { top: 'calc(100% + 6px)' } : { bottom: 'calc(100% + 6px)' }),
-        ...(end ? { insetInlineEnd: 0 } : { insetInlineStart: 0 }),
+        top: 'calc(100% + 6px)',
+        left: left ?? 0,
+        visibility: left === null ? 'hidden' : undefined,
         zIndex: 6,
         minWidth: wide ? 200 : undefined,
         maxHeight: 300,
@@ -379,7 +400,7 @@ function ColorGrid({ current, swatches, onPick }: { current: string; swatches: s
   );
 }
 
-function MenuRow({ label, keys, onClick, danger, testid }: { label: string; keys: string; onClick: () => void; danger?: boolean; testid: string }) {
+export function MenuRow({ label, keys, onClick, danger, testid }: { label: string; keys: string; onClick: () => void; danger?: boolean; testid: string }) {
   return (
     <button data-testid={testid} role="menuitem" onClick={onClick} className="mz-btn" style={{ ...menuItem, color: danger ? 'var(--danger)' : 'var(--text)' }}>
       <span style={{ flex: 1 }}>{label}</span>

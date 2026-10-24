@@ -371,24 +371,38 @@ export const LAYERS: LayerDef[] = [
   { id: 'logo', color: '#9B8CE8', l: 30, w: 70, kfs: [1.5, 1.9] },
 ];
 
+/** إجراءاتٌ يمرّ بها أمرٌ لا تكفيه رُقعة حالة — هي إجراءات البرنامج نفسها، فيفعل الأمرُ
+ * من لوحة البحث ما يفعله زرّه تمامًا. */
+export interface CmdActions {
+  setSizeIdx: (idx: number) => void;
+  animateSelectionOrAll: (preset: 'fade' | 'slide' | 'pop') => void;
+}
+
 export interface CommandDef {
   ar: string;
   en: string;
+  /** الاختصار المكتوب بجانب الأمر — **ما يعمل فعلًا لا غير**. كانت هنا ⌘L و⌘T و⌘H ولا
+   * مستمعَ لأيٍّ منها، و⌘H في ماك «أخفِ البرنامج» أصلًا. */
   k: string;
   icon: string;
   run: (ctx: { tlOpen: boolean }) => Record<string, unknown>;
+  act?: (a: CmdActions) => void;
 }
 
 export const CMDS: CommandDef[] = [
   { ar: 'إضافة نص', en: 'Add text', k: 'T', icon: 'text', run: () => ({ tool: 'text', panel: 'props' }) },
   { ar: 'تصدير…', en: 'Export…', k: '⌘E', icon: 'export', run: () => ({ exportOpen: true }) },
   { ar: 'الاختصارات', en: 'Keyboard shortcuts', k: '?', icon: 'keyboard', run: () => ({ shortcutsOpen: true }) },
-  { ar: 'فتح المكتبة', en: 'Open library', k: '⌘L', icon: 'folder', run: () => ({ panel: 'assets' }) },
+  { ar: 'فتح المكتبة', en: 'Open library', k: '', icon: 'folder', run: () => ({ panel: 'assets' }) },
   { ar: 'استدعاء مِزو', en: 'Ask Mizo', k: '⌘J', icon: 'fx', run: () => ({ panel: 'ai' }) },
-  { ar: 'تغيير المقاس إلى تيك توك', en: 'Resize to TikTok', k: '', icon: 'resize', run: () => ({ sizeIdx: 2 }) },
-  { ar: 'حركة: ظهور تدريجي', en: 'Motion: Fade in', k: '', icon: 'play', run: () => ({ anim: 'fade', tlOpen: true }) },
-  { ar: 'إظهار/إخفاء شريط الحركة', en: 'Toggle timeline', k: '⌘T', icon: 'timeline', run: (s) => ({ tlOpen: !s.tlOpen }) },
-  { ar: 'الرجوع للرئيسية', en: 'Go home', k: '⌘H', icon: 'home', run: () => ({ screen: 'home' }) },
+  // كانت رُقعةً خامًا `{ sizeIdx: 2 }` لا تشتقّ طبيعة المستند: بوستٌ ساكن يصير بمقاس تيك توك
+  // ويبقى ساكنًا بلا خطٍّ زمنيّ — خلافَ اختيار «تيك توك» من منتقي المقاس.
+  { ar: 'تغيير المقاس إلى تيك توك', en: 'Resize to TikTok', k: '', icon: 'resize', run: () => ({}), act: (a) => a.setSizeIdx(2) },
+  // كانت تكتب `anim: 'fade'` — حقلًا قديمًا لا يقرؤه شيء منذ صارت الحركة لكلّ عنصر —
+  // فلا يحدث شيء. الآن: ظهورٌ تدريجيّ للمحدَّد، أو للتصميم كلّه إن لم يُحدَّد شيء.
+  { ar: 'حركة: ظهور تدريجي', en: 'Motion: Fade in', k: '', icon: 'play', run: () => ({}), act: (a) => a.animateSelectionOrAll('fade') },
+  { ar: 'إظهار/إخفاء شريط الحركة', en: 'Toggle timeline', k: '', icon: 'timeline', run: (s) => ({ tlOpen: !s.tlOpen }) },
+  { ar: 'الرجوع للرئيسية', en: 'Go home', k: '', icon: 'home', run: () => ({ screen: 'home' }) },
 ];
 
 export interface FileAsset {

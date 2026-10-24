@@ -4,6 +4,7 @@ import { ArtboardSizeMenu } from './stage/ArtboardSizeMenu';
 import { ToolPill } from './stage/ToolPill';
 import { ArtboardsChip } from './stage/ArtboardsChip';
 import { ContextBar } from './stage/ContextBar';
+import { StageMenu } from './stage/StageMenu';
 import { ElementView } from './stage/ElementView';
 import { Handles, GuideLines } from './stage/Handles';
 import { PALETTES, TOOL_BY_CODE, sizeAt, clamp } from '../data/constants';
@@ -14,6 +15,7 @@ import { closestTOnSegment, fitSmoothPath } from '../lib/pathSmoothing';
 import { entranceStyleAt } from '../lib/animTimeline';
 import type { DocElement } from '../state/elements';
 import { defaultAnim, defaultTextStagger } from '../state/elements';
+import { NEW_TEXT_PLACEHOLDER, isPlaceholderText } from '../lib/textPresets';
 import { dragIsBigEnough, floorDegenerate, shapeDragBox, shapeGeometryFor } from '../lib/shapeFactory';
 import type { ShapeDrawKind } from '../state/types';
 import { useStudio } from '../state/StudioContext';
@@ -94,14 +96,16 @@ export function Stage() {
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const shapeDraftRef = useRef<ShapeDraft | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
+  /** قائمة الزرّ الأيمن — موضعها على الشاشة، وهل فُتحت على عنصرٍ أم على فراغ اللوحة. */
+  const [stageMenu, setStageMenu] = useState<{ x: number; y: number; onElement: boolean } | null>(null);
+  const closeStageMenu = useCallback(() => setStageMenu(null), []);
   /** نفس قيمة `spaceDown`، لكن مقروءة من مُستمع نافذة لا من إعادة رسم: مُستمع
    * `pointermove` مُسجَّل مرّة واحدة ولا يرى الحالة المتجدّدة. */
   const spaceDownRef = useRef(false);
   const editRef = useRef<HTMLDivElement | null>(null);
+  /** موضعُ النقرة المزدوجة التي فتحت التحرير — يُستهلَك مرّةً واحدة عند دخوله ثم يُمسَح.
+   * كان يبقى معلّقًا، فيأخذ دخولٌ لاحقٌ بـEnter على نصٍّ آخر نقطةَ نقرةٍ قديمة لا تخصّه. */
   const dblClickPointRef = useRef<{ x: number; y: number } | null>(null);
-  /** نصٌّ وُضِع للتوّ: يُحدَّد محتواه كلّه عند دخول التحرير بدل أن يُوضَع المؤشّر في
-   * آخره، فأوّل حرف يكتبه المصمم **يستبدل** العنوان النائب «نص جديد» ولا يلتصق به. */
-  const selectAllOnEditRef = useRef(false);
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -673,24 +677,33 @@ export function Stage() {
       const node = editRef.current;
       node.focus();
       const pt = dblClickPointRef.current;
-      if (pt && typeof document.caretRangeFromPoint === 'function') {
-        const range = document.caretRangeFromPoint(pt.x, pt.y);
-        if (range) {
-          const sel = window.getSelection();
-          sel?.removeAllRanges();
-          sel?.addRange(range);
-        }
-      } else {
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        // نصٌّ وُضِع للتوّ يُحدَّد محتواه كلّه (نائبٌ يُستبدل)؛ وما عداه يأخذ
-        // المؤشّر في آخره كما كان (تحريرٌ لمحتوًى حقيقيّ كتبه صاحبه).
-        if (!selectAllOnEditRef.current) range.collapse(false);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
+      dblClickPointRef.current = null;
+      // **أين يقع المؤشّر حين يبدأ التحرير:**
+      //
+      // - **بلا نقطة** (Enter على نصٍّ محدَّد، أو نصٌّ وضعته أداة النصّ للتوّ): يُحدَّد
+      //   المحتوى كلّه، فأوّل حرف يكتبه المصمّم يستبدله — كما في فيغما، Enter يحدّد النصّ
+      //   كلّه. كان Enter يضع المؤشّر في الآخر، فكتب المصمّم في الجولة على «عنوانك هنا»
+      //   فصار «عنوانك هناعرض الصيف».
+      // - **نصٌّ ما زال نائبًا** («عنوانك هنا»، «نص جديد»…): يُحدَّد كلّه ولو بنقرةٍ مزدوجة؛
+      //   غرضه أن يُستبدَل، لا أن يُكتَب في وسطه.
+      // - **نقرةٌ مزدوجة على نصٍّ حقيقيّ**: المؤشّر عند موضع النقر. وإن وقعت النقطة خارج
+      //   حروف النصّ (حاشية الصندوق، أو منطقة مقبضٍ خارجه) فالمؤشّر في الآخر — لا تحديدٌ
+      //   خارج المحرّر تذهب إليه الحروف.
+      const editing = state.elements.find((x) => x.id === state.editingTextId);
+      const placeholder = editing?.type === 'text' && isPlaceholderText(editing.text);
+      let range: Range | null = null;
+      if (pt && !placeholder && typeof document.caretRangeFromPoint === 'function') {
+        const atPoint = document.caretRangeFromPoint(pt.x, pt.y);
+        if (atPoint && node.contains(atPoint.startContainer)) range = atPoint;
       }
-      selectAllOnEditRef.current = false;
+      if (!range) {
+        range = document.createRange();
+        range.selectNodeContents(node);
+        if (pt && !placeholder) range.collapse(false);
+      }
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.editingTextId]);
@@ -770,6 +783,13 @@ export function Stage() {
       // للضغطة يوقف إعادة الضبط تلك وحدها، فيثبت التركيز.
       e.preventDefault();
       const id = `text-${Date.now()}`;
+      // **النصّ يبدأ حيث نقر المصمّم.** كان الصندوق مُتوسِّطًا على نقطة النقر، والنصّ
+      // يُحاذي بدايته (`halign: 'start'`) — فبالعربيّة يطلع أوّلُ حرفٍ على بُعد ١٥٪ من
+      // عرض اللوحة يمين النقرة (١٦٢ بكسل على ١٠٨٠)، وعند حافّة اللوحة يُقصّ الصندوق
+      // نصفُه. فبداية الصندوق (يمينه بالعربيّة، يساره بالإنجليزيّة) على النقطة نفسها.
+      const textW = 0.3;
+      const clickX = p.x / size.w;
+      const startX = lang === 'ar' ? clickX - textW : clickX;
       actions.commitElements((els) => [
         ...els,
         {
@@ -779,8 +799,8 @@ export function Stage() {
           locked: false,
           opacity: 100,
           maskId: null,
-          geo: { x: clamp(p.x / size.w - 0.15, 0, 0.7), y: clamp(p.y / size.h - 0.03, 0, 0.9), w: 0.3, h: 0.1, rotation: 0 },
-          text: 'نص جديد',
+          geo: { x: clamp(startX, 0, 1 - textW), y: clamp(p.y / size.h - 0.03, 0, 0.9), w: textW, h: 0.1, rotation: 0 },
+          text: NEW_TEXT_PLACEHOLDER,
           fontFamily: 'Alexandria',
           fontSize: 48,
           weight: 'bold',
@@ -802,7 +822,6 @@ export function Stage() {
       // لمن وضع النصّ على اللوحة لتوّه. وآلة التركيز موجودة أصلًا ومربوطة
       // بـ`editingTextId` (انظر التأثير أدناه)، ولم تكن تُستدعى من هنا.
       dblClickPointRef.current = null;
-      selectAllOnEditRef.current = true;
       actions.startTextEdit(id);
       // `keepSelection`: ارتدادٌ بعد إنشاء، لا تسليح — انظر الموضعَ الأوّل أعلاه.
       // وللنصّ عليه حِملٌ زائد: `editingTextId` مضبوطٌ على هذا العنصر لتوّه، فنزعُ
@@ -832,6 +851,31 @@ export function Stage() {
     if (state.tool === 'video') {
       actions.insertVideoTool({ x: p.x, y: p.y }).then(() => actions.setTool('select', { keepSelection: true }));
     }
+  };
+
+  /** الزرّ الأيمن: على عنصرٍ يحدّده (إن لم يكن محدَّدًا) ويفتح قائمة أوامره، وعلى الفراغ
+   * يفتح «لصق / حدّد الكل». وحقلُ النصّ قيد التحرير يأخذ قائمته الأصليّة (قص/نسخ/لصق
+   * النصّ نفسه)، وأدوات الواجهة الطافية لا قائمة لها. */
+  const onStageContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isEditableTarget(e.target)) return;
+    e.preventDefault();
+    // ماك يحدّد الكلمة تحت المؤشّر **قبل** حدث القائمة؛ فما حُدِّد هنا يُمسَح.
+    window.getSelection()?.removeAllRanges();
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-stage-overlay]')) return;
+    const id = target.closest('[data-el-id]')?.getAttribute('data-el-id');
+    const hit = id ? state.elements.find((x) => x.id === id) : undefined;
+    if (hit && !hit.locked) {
+      if (!state.selectedIds.includes(hit.id)) actions.selectMany([hit.id]);
+      setStageMenu({ x: e.clientX, y: e.clientY, onElement: true });
+      return;
+    }
+    // منطقةُ مقبضٍ تخصّ التحديد القائم — فالقائمة له.
+    if (target.closest('[data-handle]') && state.selectedIds.length) {
+      setStageMenu({ x: e.clientX, y: e.clientY, onElement: true });
+      return;
+    }
+    setStageMenu({ x: e.clientX, y: e.clientY, onElement: false });
   };
 
   const onBackgroundDoubleClick = () => {
@@ -892,13 +936,22 @@ export function Stage() {
     transformOrigin: '50% 50%',
     background: pal.bg,
     color: pal.fg,
-    boxShadow: '0 24px 60px rgba(0,0,0,.28)',
+    // **حدٌّ شعريّ يبيّن حافّة اللوحة على المسرح الداكن.** الظلّ وحده لا يُرى على خلفيّةٍ
+    // داكنة، ولوحات الألوان الافتراضيّة خلفيّتها داكنة — فمستندٌ فارغ كان لوحًا أسود على
+    // مسرحٍ أسود لا يُعرَف أين يبدأ (جولة الاستخدام: «ابدأ من فراغ»). والسُّمك مقسومٌ على
+    // `scale` ليبقى بكسلًا واحدًا على الشاشة داخل تحويل الزوم، كالمقابض.
+    boxShadow: `0 0 0 ${1 / scale}px var(--lineStrong), 0 24px 60px rgba(0,0,0,.45)`,
     // `clip` لا `hidden`: الصندوق المخفيّ الفائض **قابلٌ للتمرير** برمجيًّا، فكان تركيزُ
     // عنصرٍ يتجاوز حافّة اللوح (أو `scrollIntoView`) يُزيح المحتوى كلّه عن خلفيّته —
     // قيسَ: نقرةٌ على «نص الشارة» عند ١٢٨٠×٧٢٠ جعلت `scrollLeft` = ١٤٧. `clip` يقصّ
     // بلا تمريرٍ أصلًا.
     overflow: 'clip',
     containerType: 'inline-size',
+    // اللوحة سطحُ تصميمٍ لا صفحةُ نصّ: لا تحديدَ متصفّحٍ أزرق على حروفها ولا على صورها حين
+    // يُسحَب فوقها أو يُضغَط بالزرّ الأيمن. والبادئة لأن WebKit لا يقرأ `user-select` بلا
+    // `-webkit-`. النصّ قيد التحرير يستعيد التحديد لنفسه (`ElementView`).
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
     fontFamily: 'Alexandria, sans-serif',
     cursor: spaceDown ? 'grab' : 'default',
   };
@@ -963,6 +1016,7 @@ export function Stage() {
       ref={viewportRef}
       onPointerDown={onBackgroundPointerDown}
       onDoubleClick={onBackgroundDoubleClick}
+      onContextMenu={onStageContextMenu}
       onWheel={onWheel}
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
@@ -1049,7 +1103,7 @@ export function Stage() {
             النقطة. و`scale`/`size` يمرّان لأن المقابض تُرسم بحجم شاشة ثابت بدل أن
             تتقلّص داخل تحويل الزوم (كانت ٣.٧٦ بكسل عند الزوم الافتراضي). */}
         {soleSelected && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id && (
-          <Handles geo={soleSelected.geo} scale={scale} size={size} onHandleDown={onHandleDown} />
+          <Handles geo={soleSelected.geo} scale={scale} size={size} onHandleDown={onHandleDown} onDoubleClick={(e) => onDoubleClickElement(e, soleSelected.id)} />
         )}
         <GuideLines guides={guides} size={size} />
 
@@ -1116,6 +1170,7 @@ export function Stage() {
           البسيط أيضًا. والنوع المسلَّح يظهر في اللوح ببطاقته المُبرَزة. */}
 
       <ToolPill />
+      {stageMenu && <StageMenu x={stageMenu.x} y={stageMenu.y} onElement={stageMenu.onElement} onClose={closeStageMenu} />}
     </div>
   );
 }
@@ -1139,7 +1194,10 @@ function ShapeDraftPreview({ draft, kind, n, size }: { draft: ShapeDraft; kind: 
     pointerEvents: 'none',
   };
   if (g.shape !== 'path') {
-    return <div style={{ ...style, border: '1.5px dashed var(--accent)', background: 'var(--accentSoft)', borderRadius: g.shape === 'ellipse' ? '50%' : `${g.radius * 100}%` }} />;
+    // نصفُ القطر من أقصر الضلعين كما يرسمه العنصر النهائي والتصدير — لا نسبةٌ من كلّ ضلع
+    // (تلك تُعاين المستطيلَ المدوَّر بيضاويًّا). انظر فرع الشكل في `ElementView.tsx`.
+    const radiusCqw = g.radius ? ((g.radius * Math.min(draft.w, draft.h)) / size.w) * 100 : 0;
+    return <div style={{ ...style, border: '1.5px dashed var(--accent)', background: 'var(--accentSoft)', borderRadius: g.shape === 'ellipse' ? '50%' : `${radiusCqw.toFixed(3)}cqw` }} />;
   }
   const cmds = pathElementCommands({ points: g.points, closed: g.closed });
   return (

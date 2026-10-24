@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { StudioProvider, useStudio } from './state/StudioContext';
 import { TopBar } from './components/TopBar';
 import { AddRail } from './components/AddRail';
@@ -22,6 +22,20 @@ import './App.css';
 
 function StudioShell() {
   const { state, dir } = useStudio();
+
+  // **لا قائمة متصفّحٍ عند الزرّ الأيمن.** قائمة WebKit الأصليّة في برنامجٍ مكتبيّ ليس فيها
+  // غير «Reload» بالإنجليزيّة — ونقرةٌ واحدة عليها تُعيد تحميل البرنامج ويضيع سجلّ التراجع
+  // (جولة الاستخدام). فتُمنَع في كلّ مكان، إلا في حقول الكتابة حيث قائمتها هي قصّ/نسخ/لصق
+  // النصّ نفسه. واللوحةُ لها قائمتها الخاصّة (`StageMenu`).
+  useEffect(() => {
+    const onContextMenu = (e: MouseEvent) => {
+      const t = e.target;
+      if (t instanceof HTMLElement && (t.closest('input, textarea, select') || t.isContentEditable)) return;
+      e.preventDefault();
+    };
+    window.addEventListener('contextmenu', onContextMenu);
+    return () => window.removeEventListener('contextmenu', onContextMenu);
+  }, []);
 
   const rootStyle: CSSProperties = {
     ...(THEME.vars as CSSProperties),

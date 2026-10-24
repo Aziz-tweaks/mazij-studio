@@ -294,6 +294,9 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
             display: 'flex',
             flexDirection: 'column',
             justifyContent: VALIGN_JUSTIFY[el.valign],
+            // اللوحةُ كلّها لا تُحدَّد (`Stage.tsx`) — والنصّ قيد التحرير وحده يُحدَّد ويُكتَب.
+            userSelect: 'text',
+            WebkitUserSelect: 'text',
           }}
         >
           {el.text}
@@ -306,7 +309,7 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
       // this pass — see `shapeTextOnCurve`'s doc comment); position/rotation/opacity/
       // mask-clip/selection outline still come from the same shared `baseStyle`.
       return (
-        <div data-testid={testIdFor(el.id)} data-el-id={el.id} onPointerDown={(e) => onPointerDown(e, el.id)} onDoubleClick={(e) => onDoubleClick(e, el.id)} dir={dir} style={{ ...baseStyle, userSelect: 'none' }}>
+        <div data-testid={testIdFor(el.id)} data-el-id={el.id} onPointerDown={(e) => onPointerDown(e, el.id)} onDoubleClick={(e) => onDoubleClick(e, el.id)} dir={dir} style={{ ...baseStyle, userSelect: 'none', WebkitUserSelect: 'none' }}>
           <TextOnPathView el={el} pathShape={pathShape} size={size} color={color} dir={dir} />
         </div>
       );
@@ -347,6 +350,10 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
           // وقد نُعلّم مُصيِّرَنا الموازنةَ لاحقًا — فيَرتفع الطرفان معًا بدل أن
           // يَختلفا.
           userSelect: 'none',
+          // **والبادئة لازمة:** WebKit (محرّك البرنامج المثبّت) لا يقرأ `user-select` بلا
+          // `-webkit-`، فكان نصّ اللوحة قابلًا للتحديد هناك وحده — والزرّ الأيمن على ماك يحدّد
+          // الكلمة تحت المؤشّر فيبقى عليها ظلٌّ أزرق (جولة الاستخدام). كروميوم يقرأ الاثنين.
+          WebkitUserSelect: 'none',
         }}
       >
         {el.textAnim?.enabled ? renderStaggeredText(el, time ?? 0) : el.justify && dir === 'rtl' ? <JustifiedTextView el={el} size={size} /> : el.text}
@@ -483,6 +490,13 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
   const legacyBorder = resolved.shadows.length === 0 ? legacyBorderCss(resolved.strokes) : undefined;
   const strokeShadowStyle: CSSProperties =
     legacyBorder !== undefined ? { border: legacyBorder } : { border: 'none', boxShadow: appearanceBoxShadowCss(resolved.strokes, resolved.shadows) };
+  // **نصفُ القطر كسرٌ من أقصر ضلعَي الصندوق، لا نسبةٌ مئويّة من كلٍّ منهما.**
+  // كان `${radius * 100}%`، والنسبة في CSS تُحسب من العرض أفقيًّا ومن الارتفاع
+  // رأسيًّا — فشريطٌ عريض بـ`radius: 0.5` صار **بيضاويًّا** مدبَّب الطرفين على
+  // اللوحة، بينما يرسمه التصدير كبسولةً (`Math.min(bw, bh) * el.radius`،
+  // `exportArtboard.ts`). ظهر في جولة الاستخدام على أشرطة قالب «إنفوجرافيك»: ما يراه
+  // المصمّم غير ما يطلع في الملف. والصورة تحسبه هكذا أصلًا (فرعها أعلاه).
+  const shapeRadiusCqw = el.radius ? ((el.radius * Math.min(frameBoxPx.w, frameBoxPx.h)) / size.w) * 100 : 0;
   const shapeInner: CSSProperties =
     el.shape === 'path'
       ? {}
@@ -490,7 +504,7 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
           width: '100%',
           height: '100%',
           ...fillCss,
-          borderRadius: el.shape === 'ellipse' ? '50%' : `${el.radius * 100}%`,
+          borderRadius: el.shape === 'ellipse' ? '50%' : `${shapeRadiusCqw.toFixed(3)}cqw`,
           ...strokeShadowStyle,
           display: 'grid',
           placeItems: 'center',
