@@ -673,7 +673,11 @@ try {
     const out = {};
     // صندوقُ الصورة البديل: عنصرُ صورةٍ بلا `src`.
     const ph = { ...base, id: 'ph', type: 'image', src: null, fit: 'cover', cropX: 0.5, cropY: 0.5, cropScale: 1, radius: 0, strokeWidth: 0, stroke: null };
-    out.placeholder = await mod.renderArtboardSvg({ size: { w: 400, h: 400 }, palette: { bg: '#ffffff', fg: '#000000', ac: '#ff0000' }, elements: [ph], transparent: true, lang: 'ar' }).text();
+    // `placeholders: 'block'`: منذ ٢٤ أكتوبر ٢٠٢٦ لا تُرسم الخانةُ الفارغة في الملف
+    // المصدَّر افتراضيًّا (كان إطارُها المنقّط يظهر في PNG النهائيّ — قرارُ المالك
+    // بإصلاح ملاحظات الجولة). الفرعُ نفسُه باقٍ للمصغّرات، وهو ما يقيسه هذا التأكيد:
+    // أن يحمل الضبابيّةَ بمعرّفٍ مستقلّ حين يُرسم.
+    out.placeholder = await mod.renderArtboardSvg({ size: { w: 400, h: 400 }, palette: { bg: '#ffffff', fg: '#000000', ac: '#ff0000' }, elements: [ph], transparent: true, lang: 'ar', placeholders: 'block' }).text();
     return out;
   });
   assert(

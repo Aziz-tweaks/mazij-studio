@@ -93,7 +93,7 @@ export interface PlatformGroup {
 export const PLATFORM_GROUPS: PlatformGroup[] = [
   { id: 'instagram', ar: 'إنستقرام', en: 'Instagram', sizeIds: ['ig', 'ig-story', 'ig-reel', 'ig-portrait'] },
   { id: 'tiktok', ar: 'تيك توك', en: 'TikTok', sizeIds: ['tt'] },
-  { id: 'x', ar: 'X', en: 'X', sizeIds: ['x'] },
+  { id: 'x', ar: 'إكس (تويتر)', en: 'X (Twitter)', sizeIds: ['x'] },
   { id: 'linkedin', ar: 'لينكدإن', en: 'LinkedIn', sizeIds: ['li'] },
   { id: 'youtube', ar: 'يوتيوب', en: 'YouTube', sizeIds: ['yt-short', 'yt-video', 'yt-thumb'] },
   { id: 'snapchat', ar: 'سناب شات', en: 'Snapchat', sizeIds: ['snap'] },

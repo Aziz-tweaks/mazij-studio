@@ -80,7 +80,7 @@ const TEMPLATE_THUMB_H = 144;
  *
  * رُفع من ٥٦ إلى ٧٢ في ٢٣ أكتوبر: بعد تجميعِ المقاسات بالبُعد صارت البطاقاتُ ثمانيًا
  * لا ثلاثةَ عشرَ، فاتّسع عرضُ كلِّ واحدةٍ وصار المربّعُ الصغيرُ يَسبح في فراغها. */
-const SIZE_GLYPH_M = 72;
+const SIZE_GLYPH_M = 96;
 
 /** هل يطابق المقاس نصّ البحث؟ يطابق الاسم العربي والإنجليزي والمعرّف والأبعاد،
  * لأن المصمّم قد يكتب «ستوري» أو «reel» أو «1920» وكلّها نوايا صحيحة. */
@@ -134,35 +134,81 @@ function MediumBadge({ kind, label }: { kind: 'still' | 'timed'; label: string }
  * **وعند التعذّر لا يُخترَع شيء** (نفسُ عقد `ExportDialog`): يبقى لون اللوحة
  * وحده — لا تصميمٌ كاذب — وهو ما تَراه أثناء التصيير أيضًا، لا حالةَ فشلٍ
  * مختلفة. */
-export function ArtboardThumb({ size, palette, elements, decorAccent, lang, w, h, radius = 5 }: { size: SizePreset; palette: Palette; elements: DocElement[]; decorAccent: boolean; lang: Lang; w: number; h: number; radius?: number }) {
+/** مثالُ المقاس في بطاقة البُعد — «كلٌّ بمثالٍ كبير» كما في رسمة المالك. كان
+ * مستطيلًا رماديًّا فارغًا بنسبة المقاس فقط (جولة ٢٤ أكتوبر ٢٠٢٦). الآن: إن كان
+ * بين القوالب قالبٌ بهذا البُعد فمعاينتُه الحقيقيّة، وإلا فتخطيطٌ تمثيليّ — عنوانٌ
+ * وأسطرٌ ومساحةُ صورة — يقرأ منه المصمّم كيف يُملأ هذا الإطار. الصندوق الخارجيّ
+ * يحمل `data-ratio-glyph` ونسبتَه الحقيقيّة كما كان، فيبقى ما يقيسه
+ * `qa/start-screen.spec.mjs` هو نفسه. */
+function SizeExample({ z, lang }: { z: SizePreset; lang: Lang }) {
+  const box = glyphStyle(z, SIZE_GLYPH_M);
+  const w = Number.parseFloat(String(box.width));
+  const h = Number.parseFloat(String(box.height));
+  const tp = STARTER_TEMPLATES.find((t) => SIZES[t.sizeIdx].w === z.w && SIZES[t.sizeIdx].h === z.h);
+  // مرّةً لكلّ قالب: الباني يولّد معرّفاتِ مفاتيحَ جديدة في كلّ نداء، فبدون هذا
+  // تُعاد المصغّرة مع كلّ إعادة تصيير للشاشة.
+  const elements = useMemo(() => tp?.elements() ?? [], [tp]);
+  const wide = z.w / z.h > 1.2;
+  return (
+    <span data-ratio-glyph="1" style={{ ...box, border: '1px solid var(--line)', borderRadius: 4, overflow: 'hidden', position: 'relative', background: 'var(--surface2)', boxSizing: 'border-box' }}>
+      {tp ? (
+        <ArtboardThumb size={SIZES[tp.sizeIdx]} palette={PALETTES[tp.paletteIdx]} elements={elements} decorAccent={tp.decorAccent} lang={lang} w={w - 2} h={h - 2} radius={0} fit="cover" />
+      ) : (
+        <span aria-hidden style={{ position: 'absolute', inset: '12%', display: 'flex', flexDirection: wide ? 'row' : 'column', gap: '8%' }}>
+          <span style={{ flex: wide ? '0 0 42%' : '0 0 46%', borderRadius: 3, background: 'var(--accentSoft)' }} />
+          <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, justifyContent: 'center' }}>
+            <span style={{ height: 5, width: '80%', borderRadius: 3, background: 'var(--accent)' }} />
+            <span style={{ height: 3, width: '100%', borderRadius: 2, background: 'var(--line)' }} />
+            <span style={{ height: 3, width: '65%', borderRadius: 2, background: 'var(--line)' }} />
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function ArtboardThumb({ size, palette, elements, decorAccent, lang, w, h, radius = 5, fit = 'contain' }: { size: SizePreset; palette: Palette; elements: DocElement[]; decorAccent: boolean; lang: Lang; w: number; h: number; radius?: number; fit?: 'contain' | 'cover' }) {
   const [url, setUrl] = useState<string | null>(null);
   const key = JSON.stringify([size.id, size.w, size.h, palette.bg, palette.ac, elements, decorAccent, lang]);
 
+  // الرابطُ السابق لا يُلغى إلا بعد أن يحلّ محلّه الجديد: إلغاؤه في تنظيف المؤثّر
+  // كان يترك `<img>` يشير إلى blob ميّت للحظة، فيسجّل المتصفّح ERR_FILE_NOT_FOUND.
+  const shownRef = useRef<string | null>(null);
+  useEffect(() => () => {
+    if (shownRef.current) URL.revokeObjectURL(shownRef.current);
+  }, []);
   useEffect(() => {
     let dead = false;
     let objUrl: string | null = null;
     // مقياسٌ يكفي صندوقَ المصغّرة على شاشةٍ مضاعفةِ الكثافة فقط، بنفس حساب
     // `ExportDialog.tsx` حرفيًّا — لا دقّةُ تصديرٍ كاملة لسطحٍ بهذا الصغر.
     const scale = Math.min(1, (Math.max(w, h) * 2) / Math.max(size.w, size.h));
-    renderArtboardPng({ size, palette, elements, transparent: false, scale, lang, decorAccent })
+    renderArtboardPng({ size, palette, elements, transparent: false, scale, lang, decorAccent, placeholders: 'block' })
       .then((blob) => {
         if (dead) return;
         objUrl = URL.createObjectURL(blob);
+        const prev = shownRef.current;
+        shownRef.current = objUrl;
         setUrl(objUrl);
+        if (prev) window.setTimeout(() => URL.revokeObjectURL(prev), 1000);
       })
       .catch(() => {
         if (!dead) setUrl(null);
       });
     return () => {
       dead = true;
-      if (objUrl) URL.revokeObjectURL(objUrl);
+      // رابطٌ وُلد بعد أن تقرّر الاستغناء عنه لم يُعرض قطّ، فيُلغى فورًا.
+      if (objUrl && objUrl !== shownRef.current) URL.revokeObjectURL(objUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
   return (
-    <span style={{ width: w, height: h, flex: 'none', borderRadius: radius, background: palette.bg, position: 'relative', overflow: 'hidden', display: 'block' }}>
-      {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+    // `contain` افتراضيًّا: بطاقةُ القالب كانت `cover` فتقصّ التصميم — «إعلان رسمي»
+    // (A4) يظهر بلا عنوانه، و«عقار» (١٠٨٠×١٩٢٠) شريطًا أبيض من وسطه. المصمّم
+    // يختار القالب بما يراه، فالمعاينة تُريه التصميمَ كاملًا على أرضيّةٍ محايدة.
+    <span style={{ width: w, height: h, flex: 'none', borderRadius: radius, background: fit === 'cover' ? palette.bg : 'var(--surface2)', position: 'relative', overflow: 'hidden', display: 'block' }}>
+      {url && <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: fit, display: 'block', filter: fit === 'contain' ? 'drop-shadow(0 1px 3px rgba(0,0,0,.18))' : 'none' }} />}
     </span>
   );
 }
@@ -238,6 +284,9 @@ export function HomeScreen() {
    * `starter-demo-poster` ولا أيّ قالبٍ آخر عن أيّ مواصفةٍ تنقره مباشرةً من دون
    * اختيار تصنيفٍ أولًا (`qa/helpers/boot.mjs` ونحوه). */
   const filteredTemplates = useMemo(() => STARTER_TEMPLATES.filter((tp) => templateCategory === 'all' || tp.category === templateCategory), [templateCategory]);
+  // عناصرُ كلّ قالبٍ مرّةً واحدة: الباني يولّد معرّفاتِ مفاتيحَ جديدة في كلّ نداء، فكان
+  // كلُّ تصييرٍ للشاشة يعيد رسم المصغّرات الستَّ عشرة من الصفر.
+  const templateElements = useMemo(() => new Map(STARTER_TEMPLATES.map((tp) => [tp.id, tp.elements()])), []);
 
   // تفاصيل بطاقة المتابعة من **الحالة الحيّة**، لا من لقطةٍ تُؤخَذ عند الإقلاع:
   // البطاقة تصف المشروع الذي سيفتحه النقر عليها فعلًا. ولقطةٌ مجمّدة كانت تكذب
@@ -352,10 +401,12 @@ export function HomeScreen() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: 18,
+              // من الأعلى لا من المنتصف: العمودُ بطول الشبكة كلّها (رسمة المالك)،
+              // فكان زرُّه في منتصفه يقع تحت حافّة الشاشة الأولى. يبقى العمود كما
+              // رُسم، ويلتصق محتواه بأعلى ما يظهر منه أثناء التمرير.
+              justifyContent: 'flex-start',
               flex: '0 0 208px',
-              padding: '28px 18px',
+              padding: '36px 18px',
               border: '2px dashed var(--accent)',
               borderRadius: 'var(--r)',
               background: 'var(--surface)',
@@ -363,14 +414,16 @@ export function HomeScreen() {
               textAlign: 'center',
             }}
           >
-            <span style={{ width: 52, height: 52, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: '50%', background: 'var(--accentSoft)', color: 'var(--accent)' }}>
-              <Icon size={24} strokeWidth={2} path="M10 4v12M4 10h12" />
+            <span style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
+              <span style={{ width: 52, height: 52, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: '50%', background: 'var(--accentSoft)', color: 'var(--accent)' }}>
+                <Icon size={24} strokeWidth={2} path="M10 4v12M4 10h12" />
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontWeight: 800, fontSize: 19 }}>{L.h_blank}</span>
+                <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>{L.h_blank_hint}</span>
+              </span>
+              <span dir="ltr" style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(sizeAt(state.sizeIdx, state.customW, state.customH))}</span>
             </span>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontWeight: 800, fontSize: 19 }}>{L.h_blank}</span>
-              <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>{L.h_blank_hint}</span>
-            </span>
-            <span dir="ltr" style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(sizeAt(state.sizeIdx, state.customW, state.customH))}</span>
           </button>
 
           <div data-testid="start-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -436,7 +489,7 @@ export function HomeScreen() {
                       onClick={() => actions.startFromStarter(tp.id)}
                       style={{ display: 'flex', flexDirection: 'column', flex: 'none', width: TEMPLATE_CARD_W, border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden', background: 'var(--surface)', textAlign: 'start', color: 'var(--text)' }}
                     >
-                      <ArtboardThumb size={size} palette={pal} elements={tp.elements()} decorAccent={tp.decorAccent} lang={state.lang} w={TEMPLATE_CARD_W} h={TEMPLATE_THUMB_H} radius={0} />
+                      <ArtboardThumb size={size} palette={pal} elements={templateElements.get(tp.id) ?? []} decorAccent={tp.decorAccent} lang={state.lang} w={TEMPLATE_CARD_W} h={TEMPLATE_THUMB_H} radius={0} />
                       <span style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px' }}>
                         <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{L[tp.nameKey]}</span>
                         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -584,7 +637,7 @@ export function HomeScreen() {
                           مستقلّةٌ أمتنُ من `querySelector('span > span')` الذي كان
                           يصطاد أوّلَ تعشيشٍ في البطاقة أيًّا كان. */}
                       <span style={{ flex: 'none', width: SIZE_GLYPH_M, height: SIZE_GLYPH_M, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span data-ratio-glyph="1" style={{ ...glyphStyle(g.members[0].z, SIZE_GLYPH_M), background: 'var(--surface2)' }} />
+                        <SizeExample z={g.members[0].z} lang={state.lang} />
                       </span>
 
                       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>

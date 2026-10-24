@@ -343,6 +343,19 @@ pub fn is_listening() -> bool {
     LISTENER.lock().unwrap().is_some()
 }
 
+/// للوكلاء الخارجيّين (`agents.rs`): رمزُ فترة الاستماع الحاليّة، لكن فقط حين
+/// يكون الجسر جاهزًا فعلًا — نافذةٌ متّصلة وفهرسُ أدواتٍ غيرُ فارغ. قبل ذلك لا
+/// معنى لتشغيل وكيلٍ سيسأل `tools/list` فيجد قائمةً فارغة. الرمز لا يخرج من Rust
+/// إلا إلى بيئةِ العمليّة الفرعيّة التي نُشغّلها نحن، ولا يُطبَع ولا يُسجَّل.
+pub fn ready_token() -> Option<String> {
+    let st = shared().state.lock().unwrap();
+    if st.enabled && !st.tools.is_empty() {
+        st.token.clone()
+    } else {
+        None
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Request admission
 // ---------------------------------------------------------------------------
@@ -650,7 +663,11 @@ fn route_mcp(body: &str) -> Response<Cursor<Vec<u8>>> {
                 }
             }),
         ),
-        "notifications/initialized" | "ping" => json_resp(200, &json!({"jsonrpc": "2.0", "id": id, "result": {}})),
+        // إشعارٌ لا طلب: لا `id` له ولا ينتظر ردًّا. مواصفة النقل عبر HTTP تقول
+        // ‏202 بلا جسم؛ كان الخادم يردّ بكائنِ JSON-RPC معرّفُه null، وعميلُ
+        // Claude Code الرسميّ يحاول مطابقته بطلبٍ لا وجود له.
+        "notifications/initialized" => empty_resp(202),
+        "ping" => json_resp(200, &json!({"jsonrpc": "2.0", "id": id, "result": {}})),
         "tools/list" => {
             // Reaching this line already required the token, so the catalog is no
             // longer the open metadata read it used to be. It is still gated on

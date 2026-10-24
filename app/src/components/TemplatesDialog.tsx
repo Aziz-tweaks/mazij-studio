@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Icon } from './Icon';
 import { ArtboardThumb } from './HomeScreen';
-import { PALETTES, sizeAt } from '../data/constants';
+import { PALETTES, SIZES, sizeAt } from '../data/constants';
+import { STARTER_TEMPLATES } from '../lib/starterTemplates';
 import { useStudio } from '../state/StudioContext';
 import type { Dictionary } from '../i18n/strings';
 import type { SlotFill, SlotKind, TemplateSlot } from '../lib/templates';
@@ -108,7 +109,24 @@ export function TemplatesDialog() {
           </button>
         </div>
 
+        {/* القوالبُ الجاهزة داخل المشروع المفتوح — طلبُ المالك: قائمةٌ بمصغّراتٍ من
+            داخل المشروع، والقالبُ ينزل على مقاسه هو. كانت هذه النافذة لا تعرض إلا
+            «احفظ تصميمك كقالب» و«لا توجد قوالب محفوظة بعد»، فبدا زرُّ «القوالب»
+            في المحرّر بلا قوالب أصلًا (جولة ٢٤ أكتوبر ٢٠٢٦). */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="mz-label">{L.tpl_ready}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>{L.tpl_ready_hint}</div>
+          <div data-testid="ready-templates" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(132px,1fr))', gap: 10 }}>
+            {STARTER_TEMPLATES.map((tp) => (
+              <ReadyTemplateCard key={tp.id} id={tp.id} />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ height: 1, background: 'var(--line)' }} />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{L.tpl_yours}</div>
           <div className="mz-label">{L.tpl_mark_slots}</div>
           <div data-testid="template-builder" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {state.elements.map((el) => {
@@ -221,5 +239,23 @@ export function TemplatesDialog() {
         )}
       </div>
     </div>
+  );
+}
+
+function ReadyTemplateCard({ id }: { id: string }) {
+  const { state, actions, dict: L } = useStudio();
+  const tp = STARTER_TEMPLATES.find((t) => t.id === id)!;
+  const elements = useMemo(() => tp.elements(), [tp]);
+  const size = SIZES[tp.sizeIdx];
+  return (
+    <button
+      data-testid={`ready-template-${tp.id}`}
+      onClick={() => actions.applyStarterHere(tp.id)}
+      title={L[tp.nameKey] as string}
+      style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 6, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', color: 'var(--text)', textAlign: 'start' }}
+    >
+      <ArtboardThumb size={size} palette={PALETTES[tp.paletteIdx]} elements={elements} decorAccent={tp.decorAccent} lang={state.lang} w={118} h={96} radius={6} />
+      <span style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 2px' }}>{L[tp.nameKey] as string}</span>
+    </button>
   );
 }
