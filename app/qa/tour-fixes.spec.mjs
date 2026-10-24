@@ -25,6 +25,7 @@
 //  ١٧. البسيط يمسك النصّ كما في الأداة الشائعة، والاحترافي كما في أداة المتّجهات.
 //  ١٨. نصٌّ تجاوز حافّة الصفحة تبقى مقابضه تُرى وتُمسَك.
 //  ١٩. الملف المصدَّر يطابق اللوحة: زاوية التدرّج (CSS)، والحدّ صفر.
+//  ٢٠. بعد التصدير: تغيير أيّ إعداد (الصيغة، الدقّة…) يُرجع زرّ التصدير — لا يبقى الحوار على «تم».
 import { chromium } from 'playwright';
 import { bootBlank, bootDemo, switchToTimed, resumeAfterReload, AUTOSAVE_KEY } from './helpers/boot.mjs';
 
@@ -626,6 +627,37 @@ async function main() {
   assert(exp.wide.svg[0] === 'from' && exp.wide.svg[1] === 'to', `SVG بزاوية ٤٥° على صندوقٍ عريض: الركنان المتقابلان على لونَي الطرفين (وُجد ${exp.wide.svg})`);
   assert(exp.zero.rectOut.a === 0 && exp.zero.rectIn.r < 10, `مستطيلٌ بحدٍّ سُمكه صفر: لا بكسل خارج حافّته، وداخلها لونه (خارج a=${exp.zero.rectOut.a}، داخل r=${exp.zero.rectIn.r})`);
   assert(exp.zero.pathOut.a === 0 && exp.zero.pathIn.r < 10, `مسارٌ بحدٍّ سُمكه صفر — كأوراق الاختبار: لا خيط حوله (خارج a=${exp.zero.pathOut.a}، داخل r=${exp.zero.pathIn.r})`);
+
+  // ═════════════════════════ ٢٠. تصديرٌ ثانٍ من الحوار نفسه ═════════════════════════
+  console.log('\n٢٠. بعد التصدير: تغيير الصيغة يُرجع زرّ التصدير، والملف الثاني يُكتب');
+  // كُشف في اختبار المطابقة الثاني على البرنامج المثبّت: صُدِّر PNG، ثم اختير SVG لكتابة
+  // الملف نفسه بصيغةٍ ثانية — فبقي الحوار على «✓ تم التصدير» و«فتح المجلد» بلا زرّ
+  // تصدير، ولا سبيل إلى الملف الثاني إلا بإغلاق الحوار وفتحه من جديد.
+  const dl20 = [];
+  const onDl20 = (d) => dl20.push(d.suggestedFilename());
+  page.on('download', onDl20);
+  await page.getByRole('button', { name: 'تصدير', exact: true }).click();
+  await page.waitForSelector('[data-testid="export-submit"]');
+  await page.locator('button:has-text("PNG")').click();
+  await page.locator('[data-testid="export-submit"]').click();
+  await page.waitForFunction(() => document.body.innerText.includes('تم التصدير'), null, { timeout: 15000 });
+  await page.waitForTimeout(250);
+  assert(dl20.some((n) => n.endsWith('.png')), `التصدير الأوّل كتب PNG (${dl20.join('، ') || 'لا شيء'})`);
+  await page.locator('button:has-text("SVG")').click();
+  await page.waitForTimeout(150);
+  assert((await page.locator('[data-testid="export-submit"]').count()) === 1, 'اختيار SVG بعد التصدير يُرجع زرّ التصدير — «تم» كانت تصف إعدادًا تغيّر');
+  assert(!(await page.locator('body').innerText()).includes('تم التصدير'), 'و«✓ تم التصدير» تختفي معه');
+  await page.locator('[data-testid="export-submit"]').click();
+  await page.waitForFunction(() => document.body.innerText.includes('تم التصدير'), null, { timeout: 15000 });
+  await page.waitForTimeout(250);
+  assert(dl20.some((n) => n.endsWith('.svg')), `والتصدير الثاني من الحوار نفسه كتب SVG (${dl20.join('، ')})`);
+  // وأيُّ إعدادٍ آخر كذلك، لا الصيغة وحدها: الدقّة.
+  await page.getByRole('button', { name: '2x', exact: true }).click();
+  await page.waitForTimeout(150);
+  assert((await page.locator('[data-testid="export-submit"]').count()) === 1, 'وتغيير الدقّة بعد التصدير يُرجع الزرّ كذلك');
+  page.off('download', onDl20);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
 
   // ═════════════════════════ أخطاء صامتة ═════════════════════════
   const realErrors = pageErrors.filter((e) => !/favicon|ResizeObserver loop/i.test(e));

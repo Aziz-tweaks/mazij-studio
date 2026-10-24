@@ -326,6 +326,21 @@ function pushHistory(s: StudioState, label = ''): Pick<StudioState, 'historyPast
   };
 }
 
+/** **إعدادٌ تغيّر بعد التصدير = تصديرٌ لم يحدث بعد.**
+ *
+ * كُشف في اختبار المطابقة الثاني على البرنامج المثبّت: صُدِّر PNG، ثم اختير SVG
+ * لكتابة الملف نفسه بصيغةٍ ثانية — فبقي الحوار على «✓ تم التصدير» و«فتح المجلد»
+ * بلا زرّ تصدير، والطريقُ الوحيد إلى الملف الثاني إغلاقُ الحوار وفتحُه من جديد.
+ * «تم» وصفٌ لإعداداتٍ لم تعد هي المعروضة؛ فأيُّ إعدادٍ يتغيّر يُرجع الحوار إلى
+ * «جاهز» (`idle`) فيعود زرّ التصدير. وكذلك «غير متاح» و«خطأ»: رسالتاهما عن صيغةٍ
+ * أو محاولةٍ سابقة، لا عمّا اختير الآن.
+ *
+ * والنتائج تبقى معروضة (`exportResults`): هي سجلُّ ما كُتب فعلًا، ومنها زرّ «أضف إلى
+ * الصور» للصورة الحيّة — والتصدير التالي يستبدلها لحظة يبدأ. و«جارٍ» لا يُمَسّ. */
+function exportSettingChanged(s: StudioState, p: Partial<StudioState>): Partial<StudioState> {
+  return s.exportState === 'idle' || s.exportState === 'busy' ? p : { ...p, exportState: 'idle', exportError: null };
+}
+
 /** يُثبِّت مسودّةَ القلم عنصرَ مسارٍ في المستند بخطوةِ تراجعٍ واحدة — أو يمسحها
  * إن لم تكن مسارًا بعد (أقلّ من نقطتين).
  *
@@ -2383,7 +2398,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             ...pushHistory(s),
           };
         }),
-      setExportMagicResize: (exportMagicResize) => patch({ exportMagicResize }),
+      setExportMagicResize: (exportMagicResize) => patch((s) => exportSettingChanged(s, { exportMagicResize })),
       openArtboards: () => patch({ artboardsOpen: true }),
       closeArtboards: () => patch({ artboardsOpen: false }),
       // Roadmap #16: swaps the active doc/undo-history with `id`'s stored doc —
@@ -2513,8 +2528,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             dirty: true,
           };
         }),
-      setExportAllArtboards: (exportAllArtboards) => patch({ exportAllArtboards }),
-      setExportArtboardOwnSize: (exportArtboardOwnSize) => patch({ exportArtboardOwnSize }),
+      setExportAllArtboards: (exportAllArtboards) => patch((s) => exportSettingChanged(s, { exportAllArtboards })),
+      setExportArtboardOwnSize: (exportArtboardOwnSize) => patch((s) => exportSettingChanged(s, { exportArtboardOwnSize })),
       setElementEasing: (id, easing) =>
         commitElements((els) =>
           els.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, easing, tracks: cascadeEasingToTracks(e.anim.tracks, easing, e.anim.bezier) } } : e)),
@@ -3484,20 +3499,20 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           if (exportFormat === 'mp4' || exportFormat === 'gif') {
             const choices = FPS_OPTIONS[exportFormat];
             const fps = choices.includes(s.exportFps) ? s.exportFps : DEFAULT_FPS[exportFormat];
-            return { exportFormat, exportFps: fps, exportTransparent: exportFormat === 'mp4' ? false : s.exportTransparent };
+            return exportSettingChanged(s, { exportFormat, exportFps: fps, exportTransparent: exportFormat === 'mp4' ? false : s.exportTransparent });
           }
           // Live Photo's still half is a JPEG — no alpha channel either, same
           // belt-and-suspenders lockout as mp4 above.
           if (exportFormat === 'livephoto') {
-            return { exportFormat, exportTransparent: false };
+            return exportSettingChanged(s, { exportFormat, exportTransparent: false });
           }
-          return { exportFormat };
+          return exportSettingChanged(s, { exportFormat });
         }),
-      toggleExportTarget: (id) => patch((s) => ({ targets: { ...s.targets, [id]: !s.targets[id] } })),
+      toggleExportTarget: (id) => patch((s) => exportSettingChanged(s, { targets: { ...s.targets, [id]: !s.targets[id] } })),
       // يشتق القائمة من `SIZES` بدل تعدادٍ مكتوب بالاسم: كان مكتوبًا
       // `{ ig, x, tt, li }` حرفيًا، فصار «تحديد الكل» يحدّد أربعةً من ثلاثة عشر
       // بعد توسيع فهرس المقاسات — زرٌّ يقول الكل ويعني بعضه.
-      selectAllTargets: () => patch({ targets: Object.fromEntries(SIZES.map((z) => [z.id, true])) }),
+      selectAllTargets: () => patch((s) => exportSettingChanged(s, { targets: Object.fromEntries(SIZES.map((z) => [z.id, true])) })),
       selectProjectSizeTarget: () =>
         patch((s) => {
           // هدفٌ واحد: مقاس هذه اللوحة بعينه — بـ`defaultTargetsFor` نفسِها التي
@@ -3510,13 +3525,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           // الواحد بعد «تحديد الكل» أو بعد نقراتٍ على البلاطات — وهو دَورٌ قائم:
           // الرجوعُ من ثلاثةَ عشر إلى واحدٍ نقرةٌ واحدة، لا اثنتا عشرة.
           const targets = defaultTargetsFor(s.sizeIdx);
-          return Object.keys(targets).length ? { targets } : {};
+          return Object.keys(targets).length ? exportSettingChanged(s, { targets }) : {};
         }),
-      setExportScale: (exportScale) => patch({ exportScale }),
-      setExportQuality: (exportQuality) => patch({ exportQuality }),
-      setExportTransparent: (exportTransparent) => patch({ exportTransparent }),
-      setExportFps: (exportFps) => patch({ exportFps }),
-      setExportShutterSamples: (exportShutterSamples) => patch({ exportShutterSamples }),
+      setExportScale: (exportScale) => patch((s) => exportSettingChanged(s, { exportScale })),
+      setExportQuality: (exportQuality) => patch((s) => exportSettingChanged(s, { exportQuality })),
+      setExportTransparent: (exportTransparent) => patch((s) => exportSettingChanged(s, { exportTransparent })),
+      setExportFps: (exportFps) => patch((s) => exportSettingChanged(s, { exportFps })),
+      setExportShutterSamples: (exportShutterSamples) => patch((s) => exportSettingChanged(s, { exportShutterSamples })),
       startExport,
       setHomePrompt: (homePrompt) => patch({ homePrompt }),
       startFromPrompt: () => patch({ screen: 'editor', panel: 'ai' }),
