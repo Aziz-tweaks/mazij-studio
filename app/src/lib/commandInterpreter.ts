@@ -221,15 +221,30 @@ const CHANGE_WORDS = ['غير', 'change', 'set', 'rename'];
 const PALETTE_WORDS = ['لوحه', 'palette'];
 const NEW_DOC_WORDS = ['مستند', 'document', 'project'];
 const HELP_WORDS = ['مساعده', 'ساعدني', 'ساعد', 'اوامر', 'help', 'commands'];
+const TRACE_WORDS = ['تتبع', 'trace', 'vectorize', 'vectorise'];
+const CONVERT_WORDS = ['حول', 'حولها', 'حوله', 'convert', 'turn', 'make', 'سو', 'سوي', 'سوها', 'خل', 'خلي', 'خليها', 'اجعل', 'اعمل', 'اقلب', 'اقلبها'];
+const VECTOR_WORDS = ['متجهات', 'متجه', 'فكتور', 'فيكتور', 'vector', 'vectors', 'svg', 'مسارات', 'paths'];
 
 const HELP_MESSAGE_AR =
-  'الأوامر المدعومة: تراجع/إعادة، حذف، تحديد، تغيير اللون (نص أو شكل)، تكبير/تصغير الخط أو العنصر، تحريك لأربع جهات، ضبط الشفافية، إضافة نص أو شكل، تغيير نص موجود، تطبيق لوحة ألوان برقمها، ومستند جديد. مثال: «كبّر العنوان» أو «غيّر لون الشكل للأحمر».';
+  'الأوامر المدعومة: تراجع/إعادة، حذف، تحديد، تغيير اللون (نص أو شكل)، تكبير/تصغير الخط أو العنصر، تحريك لأربع جهات، ضبط الشفافية، إضافة نص أو شكل، تغيير نص موجود، تطبيق لوحة ألوان برقمها، تحويل صورة إلى متجهات، ومستند جديد. مثال: «كبّر العنوان» أو «غيّر لون الشكل للأحمر» أو «حوّل الصورة لمتجهات».';
 const HELP_MESSAGE_EN =
-  'Supported commands: undo/redo, delete, select, change color (text or shape), grow/shrink the font or the element, move in four directions, set opacity, add text or a shape, change existing text, apply a numbered palette, and a new document. Example: "make the title bigger" or "change the shape color to red".';
+  'Supported commands: undo/redo, delete, select, change color (text or shape), grow/shrink the font or the element, move in four directions, set opacity, add text or a shape, change existing text, apply a numbered palette, trace an image to vectors, and a new document. Example: "make the title bigger", "change the shape color to red" or "trace the image".';
 
 function ruleNewDocument(tokens: string[]): Plan | null {
   if (!hasAny(tokens, NEW_DOC_WORDS) || !hasAny(tokens, ['جديد', 'new'])) return null;
   return { tool: 'document_new', args: {} };
+}
+
+/** «حوّل الصورة لمتجهات» / «تتبّع الشعار» / «سوّها فكتور» / "vectorize the logo" — تتبّع
+ * صورةٍ إلى مسارات (`image_trace`). الفعلُ وحده لا يكفي («حوّل» و«خلّ» لهما معانٍ
+ * أخرى)، فإمّا «تتبّع» صريحة وإمّا فعلُ تحويلٍ مع كلمةِ متجهات. والهدف صورةٌ دائمًا:
+ * الشعارُ المذكور باسمه، أو المحدَّدة، أو أوّل صورةٍ ظاهرة. */
+function ruleTrace(tokens: string[], _raw: string, state: Parameters<Rule>[2]) {
+  if (!hasAny(tokens, TRACE_WORDS) && !(hasAny(tokens, CONVERT_WORDS) && hasAny(tokens, VECTOR_WORDS))) return null;
+  const role = extractRole(tokens);
+  const target = resolveTarget(role === 'logo' ? 'logo' : 'image', state.elements, state.selectedIds);
+  if (!target || target.type !== 'image' || !target.src) return { error: 'target-image' };
+  return { tool: 'image_trace', args: { id: target.id } };
 }
 
 function ruleUndo(tokens: string[]): Plan | null {
@@ -381,6 +396,7 @@ const RULES: Rule[] = [
   ruleNewDocument,
   ruleUndo,
   ruleRedo,
+  ruleTrace,
   ruleColor,
   ruleFontSize,
   ruleResize,
@@ -399,6 +415,7 @@ const ERROR_MESSAGES: Record<string, { ar: string; en: string }> = {
   value: { ar: 'فهمت الأمر لكن لم أجد القيمة المطلوبة (لون/نسبة/نص بين علامتي تنصيص).', en: "Understood the verb, but couldn't find the needed value (a color/percentage/quoted text)." },
   direction: { ar: 'حدد اتجاهاً: لتحت/لفوق/لليسار/لليمين.', en: 'Specify a direction: down/up/left/right.' },
   'unsupported-color-target': { ar: 'تغيير اللون غير متاح على هذا النوع من العناصر.', en: "Changing color isn't supported on this element type." },
+  'target-image': { ar: 'لم أجد صورةً أتتبّعها — حدّد صورةً أوّلًا.', en: "Couldn't find an image to trace — select one first." },
 };
 
 /** اسمُ العنصر كما يراه المصمّم: اسمُ الطبقة، أو مطلعُ النص، أو نوعُه. */
@@ -418,7 +435,7 @@ function displayName(el: DocElement | undefined, ar: boolean): string {
 /** جملةُ الردّ: ما الذي تغيّر وعلى أيّ عنصر، بلغة المصمّم. كان الردّ وصفَ الأداة
  * («تم: نقل/تحجيم/تدوير عنصر — بالبكسل، نسبةً لمقاس اللوحة الحالي»)، فلا يعرف
  * المستخدم من الردّ أيَّ عنصرٍ تغيّر — وهو بالضبط ما كان يحتاج أن يعرفه حين أخطأ. */
-function describe(plans: Plan[], before: DocElement[], tokens: string[]): { ar: string; en: string } {
+function describe(plans: Plan[], before: DocElement[], tokens: string[], result?: unknown): { ar: string; en: string } {
   const p = plans[0];
   const el = before.find((e) => e.id === p.args.id);
   const nA = `«${displayName(el, true)}»`;
@@ -427,6 +444,15 @@ function describe(plans: Plan[], before: DocElement[], tokens: string[]): { ar: 
   switch (p.tool) {
     case 'document_set_background':
       return { ar: 'غيّرت لون الخلفية.', en: 'Changed the background color.' };
+    case 'image_trace': {
+      const r = (result ?? {}) as { shapes?: number; colors?: string[] };
+      const n = r.shapes ?? 0;
+      const c = r.colors?.length ?? 0;
+      return {
+        ar: `حوّلت ${nA} إلى متجهات: ${n} شكل بـ${c} ألوان، كلّها في مجموعة محدَّدة الآن. الصورة الأصلية مخفيّة تحتها — ترجعها من الطبقات.`,
+        en: `Traced ${nE} into ${n} vector shapes in ${c} colors, grouped and selected. The original image is hidden underneath — unhide it from Layers.`,
+      };
+    }
     case 'element_set_text_style':
       if (plans.length > 1 || typeof p.args.fontSize === 'number')
         return bigger ? { ar: `كبّرت ${nA}.`, en: `Enlarged ${nE}.` } : { ar: `صغّرت ${nA}.`, en: `Shrank ${nE}.` };
@@ -504,7 +530,7 @@ export async function interpretAndRun(text: string, ctx: McpCtx): Promise<Interp
       const msg = err instanceof Error ? err.message : String(err);
       return { understood: false, messageAr: `فشل التنفيذ: ${msg}`, messageEn: `Execution failed: ${msg}` };
     }
-    const said = describe(plans, state.elements, tokens);
+    const said = describe(plans, state.elements, tokens, result);
     return { understood: true, tool: plans[0].tool, args: plans[0].args, result, messageAr: said.ar, messageEn: said.en };
   }
 

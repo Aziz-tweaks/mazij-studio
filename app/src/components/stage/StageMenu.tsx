@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStudio } from '../../state/StudioContext';
 import { CMD, MenuRow } from './ContextBar';
+import type { ImageElement } from '../../state/elements';
 
 /** **قائمة الزرّ الأيمن على اللوحة.**
  *
@@ -51,6 +52,13 @@ export function StageMenu({ x, y, onElement, onClose }: { x: number; y: number; 
     };
   }, [onClose]);
 
+  // صورةٌ واحدة محدَّدة (بمصدرٍ حقيقيّ، لا خانةٍ فارغة): «تتبّع إلى متجهات» — الفعلُ
+  // نفسه الذي في قسم الصورة (`traceImage`).
+  const selectedImages = state.selectedIds
+    .map((id) => state.elements.find((e) => e.id === id))
+    .filter((e): e is ImageElement => !!e && e.type === 'image' && !!e.src);
+  const traceable = selectedImages.length === 1 && !state.traceBusyId ? selectedImages[0] : null;
+
   const run = (fn: () => void) => () => {
     fn();
     onClose();
@@ -87,6 +95,12 @@ export function StageMenu({ x, y, onElement, onClose }: { x: number; y: number; 
           <MenuRow testid="sm-cut" label={L.sc_cut} keys={`${CMD}X`} onClick={run(actions.cutSelected)} />
           <MenuRow testid="sm-paste" label={L.sc_paste} keys={`${CMD}V`} onClick={run(actions.pasteClipboard)} />
           <MenuRow testid="sm-duplicate" label={L.sc_dup} keys={`${CMD}D`} onClick={run(actions.duplicateSelected)} />
+          {traceable && (
+            <>
+              {sep}
+              <MenuRow testid="sm-trace" label={L.trace_btn} keys="" onClick={run(() => void actions.traceImage(traceable.id))} />
+            </>
+          )}
           {sep}
           <MenuRow testid="sm-forward" label={L.bring_forward} keys={`${CMD}]`} onClick={run(() => actions.bringForward(state.selectedIds))} />
           <MenuRow testid="sm-backward" label={L.send_backward} keys={`${CMD}[`} onClick={run(() => actions.sendBackward(state.selectedIds))} />

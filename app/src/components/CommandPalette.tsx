@@ -6,7 +6,7 @@ export function CommandPalette() {
   const { state, actions, dict: L } = useStudio();
   if (!state.cmdOpen) return null;
 
-  const list = cmdListFor(state.cmdQuery);
+  const list = cmdListFor(state.cmdQuery, state);
 
   return (
     <div

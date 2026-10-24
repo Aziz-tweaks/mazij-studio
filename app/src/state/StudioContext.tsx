@@ -17,12 +17,13 @@ import { initialStudioState } from './types';
 // و`AnimPreset` من رحلة الفيديو (ربط الحركة بالعنصر المحدَّد)، و`withBaseLayerColor`
 // من رحلة البوست (تلوين الشكل عبر كومة المظهر لا عبر الحقل القديم). لا تعارض في
 // النيّة — ملفٌّ واحد التقت عليه ثلاثة فروع.
-import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
+import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, ImageElement, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
 import { DEFAULT_IMAGE_CROP, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
 import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor, withBaseStroke, withBaseStrokeHidden, withBaseStrokeWidth } from '../lib/appearance';
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
+import type { TraceOptions } from '../lib/imageTrace';
 import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, effectiveScale, frameDuration, quantizeKfValue, resolveAnimAt, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
 import { splitAt } from '../lib/timelineEdit';
 import { fetchAndRegisterFont } from '../lib/loadFont';
@@ -273,10 +274,13 @@ function writeKeyframeValue(els: DocElement[], id: ElementId, property: AnimProp
   });
 }
 
-function visibleCmds(query: string) {
+/** الأمرُ الذي لا يصحّ على المستند الحاضر لا يُعرض (`when`): «تتبّع الصورة» بلا صورةٍ
+ * أمرٌ يُختار فلا يحدث شيء — صمتٌ يشبه العطل. */
+function visibleCmds(query: string, s: Pick<StudioState, 'elements' | 'selectedIds'>) {
   const q = query.trim().toLowerCase();
-  if (!q) return CMDS;
-  return CMDS.filter((c) => c.ar.includes(q) || c.en.toLowerCase().includes(q));
+  const usable = CMDS.filter((c) => !c.when || c.when(s));
+  if (!q) return usable;
+  return usable.filter((c) => c.ar.includes(q) || c.en.toLowerCase().includes(q));
 }
 
 /** تحديدُ عنصر قائم ينقل المصمم من **الإدراج** إلى **التحرير**، فيرتدّ اللوح من
@@ -1049,7 +1053,17 @@ export interface StudioActions {
    * step, same shape as `setImageBackgroundRemoved` above. The on-canvas frame
    * (`geo`) is left untouched; only the image's own resolution changed. */
   setImageUpscaled: (id: ElementId, src: string, naturalW: number, naturalH: number) => void;
+  /** **تتبُّع الصورة إلى متجهات** (`src/lib/imageTrace.ts`) — على الجهاز، بلا شبكة.
+   * يُتتبَّع ما يظهر من الصورة في إطارها، فتوضع فوقها مباشرةً مجموعةُ مساراتٍ بألوانها
+   * (وخلفيّتُها مستطيلًا إن كانت معتمة)، وتُخفى الصورة ولا تُحذف، وتُحدَّد المجموعة —
+   * خطوةَ تراجعٍ واحدة. `id` غائبًا: أعلى صورةٍ في المحدَّد، وإلّا أعلى صورةٍ ظاهرة.
+   * لا يرمي أبدًا: الفشلُ نتيجةٌ بسببٍ ورسالةٍ بلغة الواجهة. */
+  traceImage: (id?: ElementId, opts?: TraceOptions) => Promise<TraceOutcome>;
 }
+
+export type TraceOutcome =
+  | { ok: true; imageId: ElementId; groupId: string; ids: ElementId[]; colors: string[]; anchors: number; ms: number }
+  | { ok: false; reason: 'no-image' | 'busy' | 'decode' | 'empty' | 'failed'; message: string };
 
 interface StudioContextValue {
   state: StudioState;
@@ -1470,6 +1484,64 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         patch((s) => ({ fonts: s.fonts.map((f) => (f.id === id ? { ...f, status: 'error' as const, error: err.message } : f)) }));
       });
   }, [patch, state.fontUrl]);
+
+  /** انظر `traceImage` في `StudioActions`. الحسابُ في عاملٍ خلفيّ (`imageTraceDoc.ts`)،
+   * والوحدةُ نفسها تُحمَّل عند أوّل استعمال لا مع البرنامج. والعناصر تُبنى **خارج**
+   * مُحدِّث الحالة: مُحدِّثٌ يُنادى مرّتين (وضع React الصارم) كان سيصنع معرّفاتٍ
+   * مختلفةً في كلّ مرّة، فتُخبر النتيجةُ عن عناصرَ غيرِ التي في المستند. */
+  const traceImage = useCallback(async (id?: ElementId, opts?: TraceOptions): Promise<TraceOutcome> => {
+    const s = stateRef.current;
+    const L = s.lang === 'ar' ? AR : EN;
+    const traceable = (e: DocElement | undefined): e is ImageElement => !!e && e.type === 'image' && !!e.src;
+    let target: ImageElement | undefined;
+    if (id) {
+      const e = s.elements.find((x) => x.id === id);
+      target = traceable(e) ? e : undefined;
+    } else {
+      // أعلى صورةٍ في المحدَّد، وإلّا أعلى صورةٍ ظاهرة في المستند: الأمرُ من لوحة البحث أو
+      // من مِزو لا يصمت لأن المحدَّد نصّ.
+      const selected = s.selectedIds.map((sid) => s.elements.find((x) => x.id === sid)).filter(traceable);
+      const pool = selected.length ? selected : s.elements.filter((e): e is ImageElement => traceable(e) && e.visible !== false);
+      target = pool.sort((a, b) => s.elements.indexOf(b) - s.elements.indexOf(a))[0];
+    }
+    if (!target) return { ok: false, reason: 'no-image', message: L.trace_no_image };
+    if (s.traceBusyId) return { ok: false, reason: 'busy', message: L.trace_busy };
+    const imageId = target.id;
+    patch({ traceBusyId: imageId, traceError: null });
+    try {
+      const { traceImageElement, tracedElements } = await import('../lib/imageTraceDoc');
+      const run = await traceImageElement(target, sizeAt(s.sizeIdx, s.customW, s.customH), opts);
+      const now = stateRef.current;
+      const img = now.elements.find((e) => e.id === imageId);
+      if (!img || img.type !== 'image') throw new Error('gone');
+      const groupId = newGroupId();
+      const made = tracedElements(run.result, run.placement, { groupId, opacity: img.opacity, anim: img.anim, backgroundName: L.trace_bg_name, frameRadius: img.radius });
+      if (!made.length) throw new Error('empty');
+      setState((st) => {
+        const at = st.elements.findIndex((e) => e.id === imageId);
+        if (at < 0) return { ...st, traceBusyId: null };
+        const cur = st.elements[at];
+        const elements = [...st.elements.slice(0, at), { ...cur, visible: false }, ...made, ...st.elements.slice(at + 1)];
+        return {
+          ...st,
+          elements,
+          selectedIds: made.map((e) => e.id),
+          sel: made[0].id,
+          cropEditingId: st.cropEditingId === imageId ? null : st.cropEditingId,
+          traceBusyId: null,
+          traceError: null,
+          ...pushHistory(st, L.trace_btn),
+        };
+      });
+      return { ok: true, imageId, groupId, ids: made.map((e) => e.id), colors: run.result.palette, anchors: run.result.stats.anchors, ms: run.result.stats.ms };
+    } catch (err) {
+      const code = err instanceof Error ? err.message : '';
+      const reason = code === 'decode' ? 'decode' : code === 'empty' ? 'empty' : 'failed';
+      const message = reason === 'decode' ? L.trace_err_decode : reason === 'empty' ? L.trace_err_empty : L.trace_err_failed;
+      patch({ traceBusyId: null, traceError: { id: imageId, message } });
+      return { ok: false, reason, message };
+    }
+  }, [patch]);
 
   const startExport = useCallback(() => {
     const ids = Object.entries(state.targets)
@@ -2202,13 +2274,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setCmdQuery: (cmdQuery) => patch({ cmdQuery, cmdSel: 0 }),
       moveCmdSel: (dir) =>
         patch((s) => {
-          const list = visibleCmds(s.cmdQuery);
+          const list = visibleCmds(s.cmdQuery, s);
           const next = dir === 1 ? Math.min(list.length - 1, s.cmdSel + 1) : Math.max(0, s.cmdSel - 1);
           return { cmdSel: next };
         }),
       runSelectedCmd: () => {
         const st = mcpStateRef.current;
-        const c = visibleCmds(st.cmdQuery)[st.cmdSel];
+        const c = visibleCmds(st.cmdQuery, st)[st.cmdSel];
         if (c) runCmd(c);
       },
       runCommand: runCmd,
@@ -3618,6 +3690,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       closeCmdInterpreter: () => patch({ cmdInterpreterOpen: false }),
       setImageUpscaled: (id, src, naturalW, naturalH) =>
         commitElements((els) => els.map((e) => (e.id === id && e.type === 'image' ? { ...e, src, naturalW, naturalH } : e))),
+      traceImage,
       newDocument: (opts) =>
         setState((s) => ({
           ...s,
@@ -3660,6 +3733,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       cancelAi,
       detectAiAgents,
       startExport,
+      traceImage,
       runCmd,
       setMcpServerEnabled,
       undo,
@@ -3887,8 +3961,8 @@ export function useStudio() {
   return ctx;
 }
 
-export function cmdListFor(query: string) {
-  return visibleCmds(query);
+export function cmdListFor(query: string, s: Pick<StudioState, 'elements' | 'selectedIds'>) {
+  return visibleCmds(query, s);
 }
 
 export type { Lang };

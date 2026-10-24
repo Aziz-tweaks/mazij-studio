@@ -381,6 +381,7 @@ export interface CmdActions {
   setSizeIdx: (idx: number) => void;
   animateSelectionOrAll: (preset: 'fade' | 'slide' | 'pop') => void;
   togglePro: () => void;
+  traceImage: () => Promise<unknown>;
 }
 
 export interface CommandDef {
@@ -392,6 +393,8 @@ export interface CommandDef {
   icon: string;
   run: (ctx: { tlOpen: boolean }) => Record<string, unknown>;
   act?: (a: CmdActions) => void;
+  /** يُعرض الأمر في اللوحة فقط حين يصحّ على المستند الحاضر. غيابه = دائمًا. */
+  when?: (s: { elements: ReadonlyArray<{ type: string; src?: string | null; visible?: boolean }>; selectedIds: string[] }) => boolean;
 }
 
 export const CMDS: CommandDef[] = [
@@ -401,6 +404,18 @@ export const CMDS: CommandDef[] = [
   { ar: 'الوضع الاحترافي (مسك أداة المتّجهات)', en: 'Pro mode (أداة متّجهات grip)', k: '', icon: 'direct', run: () => ({}), act: (a) => a.togglePro() },
   { ar: 'فتح المكتبة', en: 'Open library', k: '', icon: 'folder', run: () => ({ panel: 'assets' }) },
   { ar: 'استدعاء مِزو', en: 'Ask Mizo', k: '⌘J', icon: 'fx', run: () => ({ panel: 'ai' }) },
+  // تتبُّع الصورة المحدَّدة (أو أعلى صورةٍ ظاهرة إن لم يُحدَّد شيء) إلى مسارات — الفعلُ
+  // نفسه الذي في قسم الصورة وفي قائمة الزرّ الأيمن (`traceImage`).
+  {
+    ar: 'تتبّع الصورة إلى متجهات',
+    en: 'Trace image to vectors',
+    k: '',
+    icon: 'pen',
+    run: () => ({}),
+    act: (a) => void a.traceImage(),
+    // صورةٌ ظاهرة: بعد التتبّع تُخفى الصورة، فلا يبقى الأمر معروضًا بلا ما يتتبّعه.
+    when: (s) => s.elements.some((e) => e.type === 'image' && !!e.src && e.visible !== false),
+  },
   // كانت رُقعةً خامًا `{ sizeIdx: 2 }` لا تشتقّ طبيعة المستند: بوستٌ ساكن يصير بمقاس تيك توك
   // ويبقى ساكنًا بلا خطٍّ زمنيّ — خلافَ اختيار «تيك توك» من منتقي المقاس.
   { ar: 'تغيير المقاس إلى تيك توك', en: 'Resize to TikTok', k: '', icon: 'resize', run: () => ({}), act: (a) => a.setSizeIdx(2) },

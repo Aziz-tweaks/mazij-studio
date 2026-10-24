@@ -255,6 +255,11 @@ export interface StudioState {
   selectedIds: ElementId[];
   editingTextId: ElementId | null;
   cropEditingId: ElementId | null;
+  /** الصورة التي يجري تتبّعها الآن إلى متجهات (`traceImage`)، أو `null`. حالةُ واجهةٍ لا
+   * مستند: لا تُحفظ ولا تُسجَّل في التراجع — الخطوةُ الوحيدة في السجلّ هي النتيجة. */
+  traceBusyId: ElementId | null;
+  /** آخرُ تتبّعٍ فشل: لأيّ صورة وبأيّ رسالة، يعرضها قسمُ الصورة تحت زرّه. */
+  traceError: { id: ElementId; message: string } | null;
   lockAspect: boolean;
   /** Roadmap #8: when on, applying a new artboard size from `ArtboardSizeMenu` runs
    * the document's elements through `magicResizeElements` (anchored contain-fit,
@@ -486,6 +491,8 @@ export const initialStudioState: StudioState = {
   selectedIds: [],
   editingTextId: null,
   cropEditingId: null,
+  traceBusyId: null,
+  traceError: null,
   lockAspect: false,
   magicResizeOn: false,
   pendingEditSnapshot: null,

@@ -125,6 +125,8 @@ export interface Dictionary {
   local_models_downloaded: string; local_models_not_downloaded: string; local_models_non_commercial: string;
   bg_remove_btn: string; bg_restore_btn: string; bg_downloading: string; bg_processing: string; bg_local_badge: string;
   upscale_btn: string; upscale_downloading: string; upscale_processing: string; upscale_local_badge: string;
+  trace_btn: string; trace_busy: string; trace_hint: string; trace_no_image: string; trace_err_decode: string;
+  trace_err_empty: string; trace_err_failed: string; trace_bg_name: string; ctx_trace: string;
   nl_cmd_btn: string; nl_cmd_title: string; nl_cmd_hint: string; nl_cmd_ph: string; nl_cmd_run: string;
   nl_cmd_examples: string; nl_cmd_not_understood: string; nl_cmd_local_badge: string; nl_cmd_llm_limit: string;
   refvideo_btn: string; refvideo_title: string; refvideo_hint: string; refvideo_drop: string; refvideo_pick_btn: string;
@@ -349,6 +351,11 @@ export const AR: Dictionary = {
   bg_local_badge: 'يعمل على جهازك — لا تغادر بياناتك',
   upscale_btn: 'تحسين الدقة ×4', upscale_downloading: 'تنزيل النموذج…', upscale_processing: 'تحسين الدقة…',
   upscale_local_badge: 'يعمل على جهازك — لا تغادر بياناتك',
+  trace_btn: 'تتبّع إلى متجهات', trace_busy: 'جارٍ التتبّع…',
+  trace_hint: 'يحوّل الصورة إلى أشكال تقدر تعدّلها — على جهازك، بدون نت.',
+  trace_no_image: 'حدّد صورة أوّلًا.', trace_err_decode: 'تعذّرت قراءة الصورة.',
+  trace_err_empty: 'ما يظهر شيء من الصورة داخل إطارها.', trace_err_failed: 'تعذّر التتبّع.',
+  trace_bg_name: 'خلفية الصورة', ctx_trace: 'تتبّع الصورة',
   nl_cmd_btn: 'مفسّر الأوامر', nl_cmd_title: 'مفسّر أوامر بلغة طبيعية',
   nl_cmd_hint: 'اكتب أمراً بالعربية أو الإنجليزية — يعمل محلياً بلا إنترنت، ويُنفَّذ عبر نفس طبقة أوامر خادم MCP (البند #20).',
   nl_cmd_ph: 'مثال: كبّر العنوان · غيّر اللون للأخضر · احذف الشعار',
@@ -611,6 +618,11 @@ export const EN: Dictionary = {
   bg_local_badge: 'Runs on your device — your data never leaves it',
   upscale_btn: 'Enhance resolution ×4', upscale_downloading: 'Downloading model…', upscale_processing: 'Upscaling…',
   upscale_local_badge: 'Runs on your device — your data never leaves it',
+  trace_btn: 'Trace to vectors', trace_busy: 'Tracing…',
+  trace_hint: 'Turns the image into shapes you can edit — on your device, offline.',
+  trace_no_image: 'Select an image first.', trace_err_decode: 'Couldn’t read the image.',
+  trace_err_empty: 'None of the image shows inside its frame.', trace_err_failed: 'Tracing failed.',
+  trace_bg_name: 'Image background', ctx_trace: 'Image trace',
   nl_cmd_btn: 'Command interpreter', nl_cmd_title: 'Natural-language command interpreter',
   nl_cmd_hint: 'Type a command in Arabic or English — runs fully offline, driving the same tool layer as the MCP server (item #20).',
   nl_cmd_ph: 'e.g. make the title bigger · change the color to green · delete the logo',

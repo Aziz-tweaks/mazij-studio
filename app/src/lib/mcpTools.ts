@@ -559,6 +559,34 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
+    name: 'image_trace',
+    descriptionAr: 'تتبُّع صورةٍ إلى أشكالٍ متجهة تُعدَّل (على الجهاز، بلا شبكة): تُضاف فوقها مباشرةً مجموعةُ مساراتٍ بألوانها، وتُخفى الصورة الأصليّة ولا تُحذف. بلا `id`: الصورة المحدَّدة، أو أعلى صورةٍ ظاهرة إن لم يُحدَّد شيء.',
+    descriptionEn: 'Trace an image into editable vector shapes (on-device, offline): a group of filled paths in its exact colors is added right above it, and the original image is hidden, not deleted. Without `id`: the selected image, or the topmost visible one when nothing is selected.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        maxColors: { type: 'number', description: 'Most colors to keep, background included (2–64, default 16).' },
+        includeBackground: { type: 'boolean', description: 'Draw the background color as one rectangle under the shapes (default true); false cuts it out like transparency.' },
+      },
+      additionalProperties: false,
+    },
+    run: async (args, ctx) => {
+      const id = typeof args.id === 'string' && args.id ? args.id : undefined;
+      if (id) {
+        const el = requireElement(ctx.getState(), id);
+        if (el.type !== 'image') throw new Error(`element "${id}" is not an image element`);
+      }
+      const out = await ctx.actions.traceImage(id, {
+        ...(typeof args.maxColors === 'number' ? { maxColors: args.maxColors } : {}),
+        ...(typeof args.includeBackground === 'boolean' ? { includeBackground: args.includeBackground } : {}),
+      });
+      if (!out.ok) throw new Error(out.message);
+      await flush();
+      return { imageId: out.imageId, groupId: out.groupId, shapeIds: out.ids, shapes: out.ids.length, colors: out.colors, anchors: out.anchors, ms: out.ms };
+    },
+  },
+  {
     name: 'export_run',
     descriptionAr: 'تصدير التصميم الحالي — PNG/JPG/SVG/MP4/GIF — لأكثر من مقاس دفعة واحدة، وإرجاع مسارات الملفات الناتجة.',
     descriptionEn: 'Export the current design — PNG/JPG/SVG/MP4/GIF — for one or more sizes in a batch, returning the resulting file paths.',

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../Icon';
-import { MEDIUM_SURFACES, PALETTES, sizeAt, seg } from '../../data/constants';
+import { ICONS, MEDIUM_SURFACES, PALETTES, sizeAt, seg } from '../../data/constants';
 import type { HAlign, VAlign } from '../../state/types';
 import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
 import { geoToPx } from '../../lib/geometry';
@@ -1015,6 +1015,7 @@ function ImageProps({ el }: { el: DocElement & { type: 'image' } }) {
 
       {el.src && (
         <>
+          <ImageTraceSection el={el} />
           <BackgroundRemovalSection el={el} />
           <UpscaleSection el={el} />
 
@@ -1278,6 +1279,37 @@ function VideoProps({ el }: { el: DocElement & { type: 'video' } }) {
 
       <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.video_audio_soon}</p>
     </section>
+  );
+}
+
+/** **تتبُّع الصورة إلى متجهات.** الفعلُ نفسه في `actions.traceImage` لا هنا، لأن له
+ * أربعة أبواب: هذا الزرّ، وقائمةُ الزرّ الأيمن، ولوحةُ الأوامر، ومِزو. لذا «جارٍ»
+ * والخطأ في الحالة العامّة لا في هذا المكوّن — فيراهما الزرّ أيًّا كان الباب الذي
+ * بدأ منه التتبّع. والنتيجة خطوةُ تراجعٍ واحدة تُحدِّد المجموعة الناتجة. */
+function ImageTraceSection({ el }: { el: DocElement & { type: 'image' } }) {
+  const { state, actions, dict: L } = useStudio();
+  const busy = state.traceBusyId === el.id;
+  const blocked = !!state.traceBusyId;
+  const error = state.traceError?.id === el.id ? state.traceError.message : null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        data-testid="trace-image-btn"
+        onClick={() => void actions.traceImage(el.id)}
+        disabled={blocked}
+        aria-busy={busy}
+        style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, fontWeight: 600, opacity: blocked ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+      >
+        <Icon size={14} path={ICONS.pen} />
+        {busy ? L.trace_busy : L.trace_btn}
+      </button>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.trace_hint}</div>
+      {error && (
+        <div data-testid="trace-image-error" style={{ fontSize: 11, color: 'var(--danger)' }}>
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
 

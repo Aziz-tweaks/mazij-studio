@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { Icon } from '../Icon';
-import { MEDIUM_SURFACES, PALETTES } from '../../data/constants';
+import { ICONS, MEDIUM_SURFACES, PALETTES } from '../../data/constants';
 import type { HAlign } from '../../state/types';
 import type { AnimPreset, DocElement } from '../../state/elements';
 import { hasCustomAnimation, resolveTextColor } from '../../state/elements';
@@ -175,6 +175,20 @@ export function ContextBar() {
           <button data-testid="ctx-crop" onClick={() => actions.startCropEdit(el.id)} style={{ ...pillBtn, gap: 6 }}>
             <Icon size={15} path="M6 2v12h12M2 6h12v12" />
             {L.ctx_crop}
+          </button>
+        )}
+        {/* «تتبّع الصورة» كما يسمّيه أداة المتّجهات: الصورة ← مساراتٌ تُعدَّل، بالفعل نفسه الذي
+          * في قسم الصورة وقائمة الزرّ الأيمن (`traceImage`). */}
+        {el.src && (
+          <button
+            data-testid="ctx-trace"
+            onClick={() => void actions.traceImage(el.id)}
+            disabled={!!state.traceBusyId}
+            title={L.trace_hint}
+            style={{ ...pillBtn, gap: 6, opacity: state.traceBusyId ? 0.6 : 1 }}
+          >
+            <Icon size={15} path={ICONS.pen} />
+            {state.traceBusyId === el.id ? L.trace_busy : L.ctx_trace}
           </button>
         )}
         {/* إطارٌ فاضٍ لا يُستبدَل منه شيء: زرّه «اختر صورة» كما في المفتش، و«بدّل» لما فيه صورة. */}
