@@ -8,6 +8,8 @@ import type { DocElement, ElementId } from './elements';
 import { DEFAULT_POLYGON_N } from '../lib/shapeFactory';
 import { DEFAULT_DOC_FPS } from '../lib/animTimeline';
 import type { Template } from '../lib/templates';
+import type { AgentInfo, AiEngine } from '../lib/agentClient';
+import { loadAiPrefs } from '../lib/agentClient';
 
 export type Screen = 'editor' | 'home';
 export type Mode = 'simple' | 'pro';
@@ -217,6 +219,13 @@ export interface StudioState {
   aiMsgs: AiMessage[];
   aiInput: string;
   aiTyping: boolean;
+  /** من يُنفّذ رسائل مِزو: المفسّرُ المحلّيّ، أو وكيلٌ خارجيّ عبر خادم MCP المحلّيّ
+   * (`src/lib/agentClient.ts`). اختيارُ المستخدم يُحفظ لكلّ جهاز. */
+  aiEngine: AiEngine;
+  /** نتيجةُ اكتشاف Claude/Codex على الجهاز؛ `null` قبل أن يكتمل الاكتشاف. */
+  aiAgents: AgentInfo[] | null;
+  /** قالبُ أمر «وكيل مخصّص»، مثل `gemini -p {prompt} --yolo`. */
+  aiCustomCmd: string;
   sizeIdx: number;
   customW: number;
   customH: number;
@@ -433,6 +442,9 @@ export const initialStudioState: StudioState = {
   aiMsgs: [],
   aiInput: '',
   aiTyping: false,
+  aiEngine: loadAiPrefs().engine ?? 'local',
+  aiAgents: null,
+  aiCustomCmd: loadAiPrefs().customCmd ?? '',
   sizeIdx: INITIAL_SIZE_IDX,
   customW: 1080,
   customH: 1080,

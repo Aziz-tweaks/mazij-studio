@@ -12,6 +12,7 @@ export interface Dictionary {
   tl_simple_hint: string; tl_play: string; tl_pause: string;
   l_bg: string; l_img: string; l_head: string; l_badge: string; l_logo: string;
   anim_none: string; anim_fade: string; anim_slide: string; anim_pop: string;
+  align_h: string; align_v: string; al_start: string; al_center: string; al_end: string; al_top: string; al_middle: string; al_bottom: string;
   sec_text: string; color: string; align: string; animation: string; transform: string; blend: string;
   tracking: string;
   justify_kashida: string;
@@ -28,6 +29,7 @@ export interface Dictionary {
   loading: string; ready: string; installed: string; sample: string;
   project_colors: string; brand: string;
   ai_name: string; ai_welcome: string; ai_ph: string; ai_note: string;
+  ai_eng_local: string; ai_eng_custom: string; ai_note_agent: string; ai_note_custom: string; ai_missing: string; ai_custom_ph: string; ai_stop: string; ai_working: string; ai_welcome_agent: string;
   sug1: string; sug2: string; sug3: string; sug4: string;
   apply: string;
   cmd_ph: string; cmd_hint: string; no_results: string;
@@ -111,6 +113,7 @@ export interface Dictionary {
   stagger_fx_fade: string; stagger_fx_slide: string; stagger_fx_scale: string; stagger_fx_rotate: string;
   stagger_delay: string; stagger_unit_duration: string; stagger_line_hint: string;
   templates_btn: string; tpl_dialog_title: string; tpl_mark_slots: string; tpl_slot_none: string;
+  tpl_ready: string; tpl_ready_hint: string; tpl_yours: string;
   tpl_slot_text: string; tpl_slot_image: string; tpl_slot_color: string; tpl_name_ph: string;
   tpl_save: string; tpl_library: string; tpl_empty: string; tpl_apply_motion: string;
   tpl_fill_apply: string; tpl_delete: string; tpl_fill_title: string; tpl_apply_btn: string;
@@ -172,6 +175,7 @@ export const AR: Dictionary = {
   more_tools: 'أدوات متقدّمة',
   l_bg: 'الخلفية', l_img: 'الصورة', l_head: 'العنوان', l_badge: 'الشارة', l_logo: 'الشعار',
   anim_none: 'بدون', anim_fade: 'ظهور تدريجي', anim_slide: 'انزلاق لأعلى', anim_pop: 'تكبير',
+  align_h: 'أفقيًا', align_v: 'عموديًا', al_start: 'بداية السطر (يمين)', al_center: 'وسط', al_end: 'نهاية السطر (يسار)', al_top: 'أعلى', al_middle: 'منتصف', al_bottom: 'أسفل',
   sec_text: 'النص', color: 'اللون', align: 'المحاذاة', animation: 'الحركة', transform: 'التحويل',
   tracking: 'تتبُّع الأحرف',
   justify_kashida: 'تبرير بالكشيدة',
@@ -196,7 +200,14 @@ export const AR: Dictionary = {
   ai_name: 'مِزو',
   ai_welcome: 'أهلاً! أنا مِزو. اكتب أمرًا صريحًا بالعربي أو الإنجليزي وأنفّذه فورًا على مستندك الحقيقي — بلا إنترنت وبلا حساب. اكتب «مساعدة» لرؤية كل الأوامر المدعومة.',
   ai_ph: 'اكتب أمرك…',
-  ai_note: 'يعمل محليًا بقواعد ثابتة — بلا إنترنت وبلا حساب.',
+  ai_note: 'محلّي: أوامر قصيرة ثابتة، فوريّ وبلا إنترنت.',
+  ai_eng_local: 'محلّي', ai_eng_custom: 'وكيل آخر',
+  ai_note_agent: 'يعمل بحسابك على هذا الجهاز ويعدّل التصميم أمامك.',
+  ai_note_custom: 'أي وكيل يقبل أمرًا نصيًا. يجد رابط الأدوات في MAZIJ_MCP_URL ورمزها في MAZIJ_MCP_TOKEN.',
+  ai_missing: 'غير مثبّت على هذا الجهاز',
+  ai_custom_ph: 'مثال: gemini -p {prompt} --yolo',
+  ai_stop: 'إيقاف', ai_working: 'يعمل على تصميمك…',
+  ai_welcome_agent: 'أهلًا! أنا مِزو. اطلب ما تريد بكلامك: «خلّ الخلفية زرقاء وكبّر العنوان»، «رتّب العناصر بشكل أنظف»، «غيّر النص لعرض رمضان». أعدّل التصميم مباشرةً، وتقدر تتراجع عن أي خطوة.',
   sug1: 'كبّر العنوان', sug2: 'غيّر لون الشارة للأحمر', sug3: 'اجعل الشعار نصف شفاف',
   sug4: 'مساعدة',
   apply: 'تطبيق',
@@ -297,7 +308,8 @@ export const AR: Dictionary = {
   stagger_fx_fade: 'ظهور تدريجي', stagger_fx_slide: 'انزلاق', stagger_fx_scale: 'تكبير', stagger_fx_rotate: 'دوران',
   stagger_delay: 'التأخير بين الوحدات', stagger_unit_duration: 'مدة كل وحدة',
   stagger_line_hint: 'وحدة "سطر" تعتمد على فواصل الأسطر التي تكتبها أنت (Shift+Enter) داخل النص، لا على التفاف السطر التلقائي — نص بسطر واحد يُعامل كوحدة واحدة.',
-  templates_btn: 'القوالب', tpl_dialog_title: 'قوالب التصميم والحركة',
+  templates_btn: 'القوالب', tpl_dialog_title: 'القوالب',
+  tpl_ready: 'قوالب جاهزة', tpl_ready_hint: 'ينزل القالب على مقاس لوحتك الحالي ويحلّ محلّ محتواها — وتقدر تتراجع بخطوة واحدة.', tpl_yours: 'احفظ تصميمك كقالب',
   tpl_mark_slots: 'علّم عناصر التصميم كخانات قابلة للتعبئة، ثم احفظه كقالب',
   tpl_slot_none: 'ليست خانة', tpl_slot_text: 'نص', tpl_slot_image: 'صورة', tpl_slot_color: 'لون',
   tpl_name_ph: 'اسم القالب…', tpl_save: 'حفظ كقالب', tpl_library: 'مكتبة القوالب',
@@ -373,9 +385,9 @@ export const AR: Dictionary = {
   mcp_token_waiting: 'جاري فتح المنفذ…',
   mcp_copy: 'نسخ', mcp_copied: 'تم النسخ',
   mcp_error_label: 'فشل فتح المنفذ',
-  text_outline_title: 'تشكيل عربي (بند #12)', text_outline_btn: 'تحويل النص إلى مخطط متجهي',
+  text_outline_title: 'تحويل إلى مخطّط', text_outline_btn: 'حوّل النص إلى مخطّط',
   text_outline_converting: 'جارٍ التشكيل والتحويل…',
-  text_outline_hint: 'يستخدم HarfBuzz الحقيقي (تشكيل + ربط + GSUB/GPOS) على نسخة من النص — المسارات الناتجة متجهات حقيقية (قابلة للتصدير كـSVG بلا اعتماد على الخط)، لكنها تستبدل عنصر النص بشكل، ولن تبقى قابلة للتحرير كنص بعد ذلك.',
+  text_outline_hint: 'يحوّل الحروف إلى أشكال بتشكيلها العربي الكامل، فيظهر النص مطابقًا في أي برنامج حتى بدون الخط. بعدها لا يُحرَّر كنص — وتقدر تتراجع.',
   text_outline_unsupported_font: 'متاح فقط لخطوط مزيج المدمجة (Alexandria / Readex Pro / Vazirmatn) — هذا الخط مخصّص ولا تتوفر بياناته الثنائية لإعادة التشكيل.',
   text_outline_error: 'فشل التحويل',
   text_on_path_btn: 'نص على مسار منحني', sec_text_on_path: 'نص على مسار',
@@ -410,6 +422,7 @@ export const EN: Dictionary = {
   more_tools: 'Advanced tools',
   l_bg: 'Background', l_img: 'Image', l_head: 'Headline', l_badge: 'Badge', l_logo: 'Logo',
   anim_none: 'None', anim_fade: 'Fade in', anim_slide: 'Slide up', anim_pop: 'Pop',
+  align_h: 'Across', align_v: 'Down', al_start: 'Line start', al_center: 'Center', al_end: 'Line end', al_top: 'Top', al_middle: 'Middle', al_bottom: 'Bottom',
   sec_text: 'Text', color: 'Color', align: 'Align', animation: 'Motion', transform: 'Transform',
   tracking: 'Letter spacing',
   justify_kashida: 'Kashida justify',
@@ -434,7 +447,14 @@ export const EN: Dictionary = {
   ai_name: 'Mizo',
   ai_welcome: 'Hi! I\'m Mizo. Type a plain command in Arabic or English and I\'ll run it on your real document right away — no internet, no account. Type "help" to see every supported command.',
   ai_ph: 'Type a command…',
-  ai_note: 'Runs locally with fixed rules — no internet, no account.',
+  ai_note: 'Local: short fixed commands, instant and offline.',
+  ai_eng_local: 'Local', ai_eng_custom: 'Other agent',
+  ai_note_agent: 'Runs with your account on this computer and edits the design in front of you.',
+  ai_note_custom: 'Any agent that takes a text prompt. It finds the tools URL in MAZIJ_MCP_URL and the token in MAZIJ_MCP_TOKEN.',
+  ai_missing: 'Not installed on this computer',
+  ai_custom_ph: 'e.g. gemini -p {prompt} --yolo',
+  ai_stop: 'Stop', ai_working: 'Working on your design…',
+  ai_welcome_agent: 'Hi! I\'m Mizo. Ask in your own words: "make the background blue and enlarge the title", "tidy up the layout". I edit the design directly, and every step can be undone.',
   sug1: 'Make the title bigger', sug2: 'Change the badge color to red', sug3: 'Make the logo half transparent',
   sug4: 'help',
   apply: 'Apply',
@@ -531,7 +551,8 @@ export const EN: Dictionary = {
   stagger_fx_fade: 'Fade', stagger_fx_slide: 'Slide', stagger_fx_scale: 'Scale', stagger_fx_rotate: 'Rotate',
   stagger_delay: 'Delay between units', stagger_unit_duration: 'Duration per unit',
   stagger_line_hint: '"Line" relies on line breaks you author (Shift+Enter) inside the text, not automatic wrapping — single-line text is treated as one unit.',
-  templates_btn: 'Templates', tpl_dialog_title: 'Design & Motion Templates',
+  templates_btn: 'Templates', tpl_dialog_title: 'Templates',
+  tpl_ready: 'Ready-made templates', tpl_ready_hint: 'The template lands at your current artboard size and replaces its content — one undo step brings it back.', tpl_yours: 'Save your design as a template',
   tpl_mark_slots: 'Mark design elements as fillable slots, then save as a template',
   tpl_slot_none: 'Not a slot', tpl_slot_text: 'Text', tpl_slot_image: 'Image', tpl_slot_color: 'Color',
   tpl_name_ph: 'Template name…', tpl_save: 'Save as template', tpl_library: 'Template library',
@@ -603,9 +624,9 @@ export const EN: Dictionary = {
   mcp_token_waiting: 'Opening the port…',
   mcp_copy: 'Copy', mcp_copied: 'Copied',
   mcp_error_label: 'Could not open the port',
-  text_outline_title: 'Arabic shaping (item #12)', text_outline_btn: 'Convert text to outlines',
+  text_outline_title: 'Convert to outlines', text_outline_btn: 'Convert text to outlines',
   text_outline_converting: 'Shaping and converting…',
-  text_outline_hint: 'Uses real HarfBuzz (shaping + joining + GSUB/GPOS) on a copy of the text — the resulting paths are real vectors (exportable as SVG with no font dependency), but they replace the text element with a shape, and it won’t stay text-editable afterward.',
+  text_outline_hint: 'Turns the letters into shapes with full Arabic shaping, so the text looks identical anywhere, even without the font. It won’t be editable as text afterward — undo brings it back.',
   text_outline_unsupported_font: 'Only available for Mazij’s built-in fonts (Alexandria / Readex Pro / Vazirmatn) — this is a custom font and its binary data isn’t available to re-shape.',
   text_outline_error: 'Conversion failed',
   text_on_path_btn: 'Text on a curved path', sec_text_on_path: 'Text on path',

@@ -42,6 +42,11 @@ export interface ArtboardRenderSpec {
    * فارغ» كانت تعني أن أي مصمّم يضع أوّل عنصرٍ له يجد في زاويته قرصًا لم يطلبه ولا
    * يستطيع حذفه. والمعاينة في `Stage.tsx` تقرأ الحقل نفسه بالشرط نفسه. */
   decorAccent: boolean;
+  /** كيف تُرسم خانةُ صورةٍ أو فيديو فارغة. الإطارُ المنقّط دليلُ تحريرٍ على اللوحة،
+   * لا جزءٌ من التصميم — وكان يُصدَّر في ملف PNG النهائيّ (جولة ٢٤ أكتوبر ٢٠٢٦).
+   * الافتراضيّ `'none'`: لا شيء في الملف. `'block'` للمصغّرات: مستطيلٌ خافت يدلّ
+   * على مكان الصورة دون خطوطٍ منقّطة. */
+  placeholders?: 'none' | 'block';
   /** Timeline time (seconds) at which every element's entrance clip is resolved.
    * Defaults to `settledTimeOf(spec)` — the instant every clip in **this document**
    * has finished, which is the same "freeze on the final state" behaviour static
@@ -410,16 +415,8 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         } catch {
           // fall through to placeholder box below if the image fails to decode
         }
-      } else {
-        ctx.save();
-        ctx.strokeStyle = spec.palette.fg;
-        ctx.globalAlpha *= 0.5;
-        ctx.setLineDash([w * 0.012, w * 0.012]);
-        ctx.lineWidth = Math.max(1, w * 0.004);
-        ctx.beginPath();
-        ctx.roundRect(0, 0, bw, bh, w * 0.02);
-        ctx.stroke();
-        ctx.restore();
+      } else if (spec.placeholders === 'block') {
+        paintPlaceholderBlock(ctx, spec, w, bw, bh);
       }
     } else if (el.type === 'lottie') {
       // Real pixel compositing, not a placeholder box: the exact same frame math
@@ -465,16 +462,8 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
           // already validated it via FFmpeg/the browser's own decoder) — fall through
           // rather than throwing mid-export and losing every other element.
         }
-      } else {
-        ctx.save();
-        ctx.strokeStyle = spec.palette.fg;
-        ctx.globalAlpha *= 0.5;
-        ctx.setLineDash([w * 0.012, w * 0.012]);
-        ctx.lineWidth = Math.max(1, w * 0.004);
-        ctx.beginPath();
-        ctx.roundRect(0, 0, bw, bh, w * 0.02);
-        ctx.stroke();
-        ctx.restore();
+      } else if (spec.placeholders === 'block') {
+        paintPlaceholderBlock(ctx, spec, w, bw, bh);
       }
     } else if (el.type === 'shape') {
       const resolved = resolveAppearance(el, spec.palette);
@@ -663,6 +652,16 @@ async function prepareArtboardCanvas(spec: Pick<ArtboardRenderSpec, 'size' | 'sc
   await document.fonts.ready;
 
   return { canvas, ctx, w, h };
+}
+
+function paintPlaceholderBlock(ctx: CanvasRenderingContext2D, spec: Pick<ArtboardRenderSpec, 'palette'>, w: number, bw: number, bh: number) {
+  ctx.save();
+  ctx.fillStyle = spec.palette.fg;
+  ctx.globalAlpha *= 0.1;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, bw, bh, w * 0.02);
+  ctx.fill();
+  ctx.restore();
 }
 
 /** Paints one frame (background + decorative accent + every element resolved at
@@ -994,8 +993,8 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
         parts.push(
           `<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${filterAttr}><g clip-path="url(#${clipId})"><image href="${esc(el.src)}" x="${layout.tx}" y="${layout.ty}" width="${layout.dw}" height="${layout.dh}"${flipTransform} /></g>${strokeSvg}</g>`,
         );
-      } else {
-        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${blurOnlyAttr()}><rect width="${bw}" height="${bh}" rx="${w * 0.02}" fill="none" stroke="${spec.palette.fg}" stroke-opacity="0.5" stroke-dasharray="${w * 0.012} ${w * 0.012}" stroke-width="${Math.max(1, w * 0.004)}" /></g>`);
+      } else if (spec.placeholders === 'block') {
+        parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${blurOnlyAttr()}><rect width="${bw}" height="${bh}" rx="${w * 0.02}" fill="${spec.palette.fg}" fill-opacity="0.1" /></g>`);
       }
     } else if (el.type === 'shape') {
       // Roadmap #17 — rect/ellipse get the full multi-layer treatment (every fill

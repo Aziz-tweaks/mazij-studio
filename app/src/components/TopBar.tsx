@@ -59,8 +59,13 @@ export function TopBar() {
         gap: 10,
         // Window-chrome padding is physical (left/right), not logical: the traffic
         // lights / window buttons sit at a fixed screen edge regardless of language.
+        //
+        // لكن «الحافّة الثابتة» ليست اليسار دائمًا: على ماكٍ لغةُ نظامه العربية يعكس
+        // macOS شريطَ العنوان كلّه، فتنزل الأزرارُ الثلاثة يمينًا — فوق شعار «مزيج»
+        // مباشرةً (لقطة جولة ٢٤ أكتوبر ٢٠٢٦ على جهازِ الاختبار). ولا تكشف الواجهةُ عن
+        // اتّجاه النظام بثقة، فتُحجَز المساحةُ على الحافّتين معًا.
         paddingLeft: isMac ? 84 : 12,
-        paddingRight: isMac ? 12 : 150,
+        paddingRight: isMac ? 84 : 150,
         borderBottom: '0px solid var(--line)',
       }}
     >

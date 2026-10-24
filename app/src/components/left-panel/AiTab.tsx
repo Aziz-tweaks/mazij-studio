@@ -1,4 +1,5 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
+import type { AiEngine } from '../../lib/agentClient';
 import { Icon } from '../Icon';
 import { useStudio } from '../../state/StudioContext';
 import type { Dictionary } from '../../i18n/strings';
@@ -8,12 +9,73 @@ const SUGGESTIONS: Array<keyof Dictionary> = ['sug1', 'sug2', 'sug3', 'sug4'];
 export function AiTab() {
   const { state, actions, dict: L, dir } = useStudio();
 
+  // الاكتشاف يشغّل `claude --version` و`codex --version`؛ مرّةً واحدة لكلّ جلسة تكفي.
+  useEffect(() => {
+    if (state.aiAgents === null) actions.detectAiAgents();
+  }, [state.aiAgents, actions]);
+
+  const engines: Array<{ id: AiEngine; label: string; available: boolean; title?: string }> = [
+    // أثناء الاكتشاف تظهر الشريحتان معطّلتين في مكانهما، لا تُضافان لاحقًا: إضافتُهما
+    // بعد ثانيتين كانت تزيح بقيّة الشرائح تحت المؤشّر، فتقع النقرةُ على غير ما قُصد.
+    ...(state.aiAgents ?? [
+      { id: 'claude' as const, label: 'Claude', path: null, version: null },
+      { id: 'codex' as const, label: 'Codex', path: null, version: null },
+    ]).map((a) => ({ id: a.id, label: a.label, available: !!a.path, title: a.path ? a.version ?? a.path : state.aiAgents === null ? '…' : L.ai_missing })),
+    { id: 'custom', label: L.ai_eng_custom, available: true },
+    { id: 'local', label: L.ai_eng_local, available: true },
+  ];
+  const note = state.aiEngine === 'local' ? L.ai_note : state.aiEngine === 'custom' ? L.ai_note_custom : L.ai_note_agent;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--line)', flex: 'none' }}>
-        <MizoAvatar size={26} />
-        <span style={{ fontWeight: 700, fontSize: 13 }}>{L.ai_name}</span>
-        <span style={{ fontSize: 11, color: 'var(--muted)', flex: 1 }}>{L.ai_note}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--line)', flex: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <MizoAvatar size={26} />
+          <span style={{ fontWeight: 700, fontSize: 13 }}>{L.ai_name}</span>
+        </div>
+        <div data-testid="ai-engines" role="radiogroup" style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: 3, borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>
+          {engines.map((e) => {
+            const on = state.aiEngine === e.id;
+            return (
+              <button
+                key={e.id}
+                role="radio"
+                aria-checked={on}
+                data-testid={`ai-engine-${e.id}`}
+                disabled={!e.available || state.aiTyping}
+                title={e.title}
+                onClick={() => actions.setAiEngine(e.id)}
+                style={{
+                  flex: '1 1 auto',
+                  height: 26,
+                  padding: '0 10px',
+                  border: 0,
+                  borderRadius: 'calc(var(--rs) - 2px)',
+                  background: on ? 'var(--surface)' : 'transparent',
+                  boxShadow: on ? '0 1px 2px rgba(0,0,0,.12)' : 'none',
+                  color: !e.available ? 'var(--muted2, var(--muted))' : on ? 'var(--text)' : 'var(--muted)',
+                  fontWeight: on ? 700 : 500,
+                  fontSize: 11.5,
+                  opacity: e.available ? 1 : 0.5,
+                  cursor: e.available ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {e.label}
+              </button>
+            );
+          })}
+        </div>
+        {state.aiEngine === 'custom' && (
+          <input
+            data-testid="ai-custom-cmd"
+            dir="ltr"
+            value={state.aiCustomCmd}
+            onChange={(e) => actions.setAiCustomCmd(e.target.value)}
+            placeholder={L.ai_custom_ph}
+            style={{ height: 30, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', outline: 0, fontSize: 11.5, fontFamily: 'ui-monospace, Menlo, monospace' }}
+          />
+        )}
+        <span style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{note}</span>
       </div>
 
       <MessageList />
@@ -40,9 +102,15 @@ export function AiTab() {
             placeholder={L.ai_ph}
             style={{ flex: 1, minWidth: 0, height: 36, padding: '0 12px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', outline: 0 }}
           />
-          <button onClick={() => actions.sendAi(state.aiInput)} style={{ width: 36, height: 36, border: 0, borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', display: 'grid', placeItems: 'center' }}>
-            <Icon size={16} path="M3 10L17 3l-4 14-3-6-7-1z" style={{ transform: dir === 'rtl' ? 'scaleX(-1)' : 'none' }} />
-          </button>
+          {state.aiTyping && state.aiEngine !== 'local' ? (
+            <button data-testid="ai-stop" onClick={actions.cancelAi} title={L.ai_stop} style={{ width: 36, height: 36, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', color: 'var(--text)', display: 'grid', placeItems: 'center' }}>
+              <span style={{ width: 11, height: 11, borderRadius: 2, background: 'currentColor' }} />
+            </button>
+          ) : (
+            <button data-testid="ai-send" onClick={() => actions.sendAi(state.aiInput)} disabled={state.aiTyping} style={{ width: 36, height: 36, border: 0, borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', display: 'grid', placeItems: 'center' }}>
+              <Icon size={16} path="M3 10L17 3l-4 14-3-6-7-1z" style={{ transform: dir === 'rtl' ? 'scaleX(-1)' : 'none' }} />
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -52,10 +120,14 @@ export function AiTab() {
 function MessageList() {
   const { state, dict: L } = useStudio();
   const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [state.aiMsgs.length, state.aiTyping]);
 
   return (
     <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {!state.aiMsgs.length && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.7, padding: '4px 2px' }}>{L.ai_welcome}</div>}
+      {!state.aiMsgs.length && <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.7, padding: '4px 2px' }}>{state.aiEngine === 'local' ? L.ai_welcome : L.ai_welcome_agent}</div>}
       {state.aiMsgs.map((m, i) => {
         const isUser = m.role === 'u';
         return (
@@ -68,10 +140,11 @@ function MessageList() {
       })}
       {state.aiTyping && (
         <div style={{ display: 'flex' }}>
-          <div style={{ display: 'flex', gap: 4, padding: '12px 14px', borderRadius: 14, background: 'var(--surface2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 14px', borderRadius: 14, background: 'var(--surface2)' }}>
             <Dot delay={0} />
             <Dot delay={0.2} />
             <Dot delay={0.4} />
+            {state.aiEngine !== 'local' && <span style={{ fontSize: 11.5, color: 'var(--muted)', marginInlineStart: 6 }}>{L.ai_working}</span>}
           </div>
         </div>
       )}

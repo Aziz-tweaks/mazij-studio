@@ -322,6 +322,15 @@ async function testInterpreterPureFunction(page) {
     await run('no-target-found', 'حرّك الشعار لتحت', [textEl, shapeEl], []); // no image element exists
     await run('unsupported-video-trim', 'قص أول ثانيتين', [], []);
     await run('unsupported-fade-animation', 'خلّ النص يظهر تدريجيًا', [textEl], ['t1']);
+    // ٢٤ أكتوبر ٢٠٢٦ — ثلاثُ حالاتٍ من جولةٍ حقيقيّة في البرنامج: «كبّر العنوان» والسطرُ
+    // الفرعيّ محدَّد كبّر السطرَ الفرعيّ وأخرجه عن اللوحة، و«خلّ الخلفية زرقاء» لم
+    // يُفهم، و«غيّر لون الخلفية للأزرق» لوّن العنوان.
+    const subEl = { id: 'sub', type: 'text', text: 'سطر فرعي', fontSize: 20, geo: { x: 0.5, y: 0.6, w: 0.48, h: 0.1, rotation: 0 } };
+    const edgeTitle = { id: 'edge', type: 'text', name: 'العنوان', text: 'عنوان', fontSize: 30, geo: { x: 0.5, y: 0.3, w: 0.5, h: 0.2, rotation: 0 } };
+    await run('title-role-ignores-selection', 'كبّر العنوان', [textEl, subEl], ['sub']);
+    await run('title-by-layer-name', 'كبّر العنوان', [textEl, edgeTitle], []);
+    await run('background-feminine-color', 'خلّ الخلفية زرقاء', [textEl], ['t1']);
+    await run('background-color-verb', 'غيّر لون الخلفية للأزرق', [textEl, subEl], ['sub']);
     await run('nonsense', 'zzz 999 qqq blah', [], []);
     await run('empty', '   ', [], []);
 
@@ -352,6 +361,16 @@ async function testInterpreterPureFunction(page) {
   assert(!byLabel['no-target-found'].understood, `honest limit: "حرّك الشعار لتحت" with no image element in the document reports not-understood, never a fabricated success (${JSON.stringify(byLabel['no-target-found'])})`);
   assert(!byLabel['unsupported-video-trim'].understood, `honest limit: "قص أول ثانيتين" (video trim — no such MCP tool exists) is reported as not understood (${JSON.stringify(byLabel['unsupported-video-trim'])})`);
   assert(!byLabel['unsupported-fade-animation'].understood, `honest limit: "خلّ النص يظهر تدريجيًا" (animation — no such MCP tool exists) is reported as not understood (${JSON.stringify(byLabel['unsupported-fade-animation'])})`);
+  assert(byLabel['title-role-ignores-selection'].understood && byLabel['title-role-ignores-selection'].args.id === 't1', `role: "كبّر العنوان" targets the title even while another text is selected (${JSON.stringify(byLabel['title-role-ignores-selection'])})`);
+  {
+    const c = byLabel['title-by-layer-name'];
+    const fontCall = c.calls.find(([name]) => name === 'setElementFontSize');
+    assert(c.understood && c.args.id === 'edge', `role: a layer named "العنوان" wins over the largest font (${JSON.stringify(c)})`);
+    assert(c.args.x + c.args.w <= 1080 && c.args.x >= 0, `resize: enlarging a title that touches the edge keeps it inside the artboard (${JSON.stringify(c.args)})`);
+    assert(fontCall && fontCall[1][1] > 30, `resize: enlarging a text also enlarges its font, not just its box (${JSON.stringify(fontCall)})`);
+  }
+  assert(byLabel['background-feminine-color'].understood && byLabel['background-feminine-color'].tool === 'document_set_background' && byLabel['background-feminine-color'].args.color === '#3b82f6', `background: "خلّ الخلفية زرقاء" sets the background, feminine color word included (${JSON.stringify(byLabel['background-feminine-color'])})`);
+  assert(byLabel['background-color-verb'].understood && byLabel['background-color-verb'].tool === 'document_set_background', `background: "غيّر لون الخلفية للأزرق" never recolors a text element (${JSON.stringify(byLabel['background-color-verb'])})`);
   assert(!byLabel.nonsense.understood, `nonsense input is reported as not understood (${JSON.stringify(byLabel.nonsense)})`);
   assert(!byLabel.empty.understood, `empty input is reported as not understood (${JSON.stringify(byLabel.empty)})`);
 }

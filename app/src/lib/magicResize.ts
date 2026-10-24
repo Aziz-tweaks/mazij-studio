@@ -159,3 +159,42 @@ export function magicResizeElements(elements: DocElement[], from: ResizeSize, to
     return { ...el, geo };
   });
 }
+
+/** نقلُ تصميمٍ كاملٍ إلى إطارٍ نسبتُه بعيدة جدًّا عن نسبته (قالبُ A4 على لوحٍ مربّع):
+ * تحجيمٌ **منتظم** للتكوين كلّه بأصغر النسبتين، ثم توسيطُه — كما تفعل «ملاءمة» في أيّ
+ * برنامج تصميم. لا شيء يتمدّد في اتّجاهٍ دون الآخر، فلا يتراكب نصٌّ على نصّ.
+ *
+ * لماذا لا `magicResizeElements` هنا: هي مبنيّةٌ لفروقٍ معقولة في النسبة، تمدّ الصناديق
+ * بنسبتَي العرض والارتفاع كلٌّ على حدة. قالبٌ عموديٌّ مضبوطٌ بالعين يفقد ٣٠٪ من ارتفاعه
+ * فتنضغط أسطرُه فوق بعضها — رأيتُ ذلك على «إعلان رسمي» في جولة ٢٤ أكتوبر ٢٠٢٦.
+ *
+ * `fontSize` مرجعُه لوحٌ عرضه ١٠٨٠ (`state/elements.ts`)، فالحجمُ الظاهر = fontSize ×
+ * عرض اللوح ÷ ١٠٨٠. ليبقى الحجمُ الظاهرُ مضروبًا في `s` تمامًا كبقيّة التكوين:
+ * fontSize′ = fontSize × from.w × s ÷ to.w. */
+export function fitElementsUniform(elements: DocElement[], from: ResizeSize, to: ResizeSize): DocElement[] {
+  const s = Math.min(to.w / from.w, to.h / from.h);
+  const offX = (to.w - from.w * s) / 2;
+  const offY = (to.h - from.h * s) / 2;
+  const mapGeo = (g: Geometry): Geometry => ({
+    ...g,
+    x: (g.x * from.w * s + offX) / to.w,
+    y: (g.y * from.h * s + offY) / to.h,
+    w: (g.w * from.w * s) / to.w,
+    h: (g.h * from.h * s) / to.h,
+  });
+  return elements.map((el) => {
+    const geo = mapGeo(el.geo);
+    if (el.type === 'text') return { ...el, geo, fontSize: (el.fontSize * from.w * s) / to.w };
+    return { ...el, geo };
+  });
+}
+
+/** أيُّ الطريقتين: النسبتان متقاربتان (حتى ٢٥٪) ← التحجيم السحريّ الذي يملأ الإطار؛
+ * متباعدتان ← الملاءمة المنتظمة التي لا تكسر التكوين. */
+export function placeDesignInFrame(elements: DocElement[], from: ResizeSize, to: ResizeSize): DocElement[] {
+  if (from.w === to.w && from.h === to.h) return elements;
+  const ra = from.w / from.h;
+  const rb = to.w / to.h;
+  const drift = Math.max(ra, rb) / Math.min(ra, rb);
+  return drift <= 1.25 ? magicResizeElements(elements, from, to) : fitElementsUniform(elements, from, to);
+}

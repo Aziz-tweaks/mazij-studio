@@ -96,7 +96,10 @@ export function createDemoPosterElements(): DocElement[] {
       locked: false,
       opacity: 100,
       maskId: null,
-      geo: { x: 0.08, y: 0.485, w: 0.34, h: 0.425, rotation: 0 },
+      // كانت تبدأ عند 0.485 فيدخل ذيلُ «الأسبوع» في السطر الثاني من العنوان إلى
+      // زاويتها اليمنى العليا (لقطة التصدير، ٢٤ أكتوبر ٢٠٢٦). نزلت تحت آخر حرفٍ في
+      // العنوان، بالارتفاع نفسه تقريبًا، وتبقى فوق الحافة السفلى بهامشها.
+      geo: { x: 0.08, y: 0.56, w: 0.34, h: 0.36, rotation: 0 },
       src: null,
       fit: 'cover',
       ...DEFAULT_IMAGE_CROP,

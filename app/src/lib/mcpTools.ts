@@ -3,6 +3,7 @@ import type { StudioState } from '../state/types';
 import type { DocElement } from '../state/elements';
 import { defaultAnim, defaultTextStagger, newElementId } from '../state/elements';
 import { SIZES, CUSTOM_SIZE_IDX, sizeAt, PALETTES } from '../data/constants';
+import { AR } from '../i18n/strings';
 
 /** Roadmap #20 (+ #24-ب, which will drive the exact same registry locally): the
  * single typed command surface for "the chat becomes an interface to the app".
@@ -48,16 +49,34 @@ function requireElement(state: StudioState, id: string): DocElement {
   return el;
 }
 
+/** الاسمُ الذي تعرضه قائمة الطبقات لهذا العنصر إن كان له اسمٌ دلاليّ: ما كتبه المصمّم،
+ * أو اسمُ دوره في القالب («العنوان» لـ`head`، كما في `l_head`). `null` حين لا يكون
+ * إلا مطلعَ نصّه — وذلك موجودٌ في `text` أصلًا. */
+export function layerLabel(e: DocElement): string | null {
+  if (e.name?.trim()) return e.name.trim();
+  const key = `l_${e.id}` as keyof typeof AR;
+  const v = AR[key];
+  return typeof v === 'string' ? v : null;
+}
+
 function docSummary(state: StudioState) {
   const size = sizeAt(state.sizeIdx, state.customW, state.customH);
   return {
     size: { w: size.w, h: size.h, id: size.id },
     paletteIndex: state.postPalette,
+    // ألوانُ اللوحة الفعليّة، لا رقمُها وحده: «الخلفية» عند المصمّم هي `bg` هنا، وعنصرٌ
+    // `fill` فيه null يأخذ لونَه من `fillToken` في هذه اللوحة.
+    palette: PALETTES[state.postPalette] ?? PALETTES[0],
     selectedIds: state.selectedIds,
     elementCount: state.elements.length,
+    // الترتيب من الخلف إلى الأمام: العنصر الأوّل هو الأبعد.
     elements: state.elements.map((e) => ({
       id: e.id,
       type: e.type,
+      // الاسم الذي يراه المصمّم في قائمة الطبقات («العنوان»، «الشارة»…) إن وُجد. بدونه
+      // لم يكن لوكيلٍ أن يعرف أيَّ نصٍّ هو «العنوان» إلا بالتخمين.
+      name: layerLabel(e),
+      locked: e.locked,
       visible: e.visible,
       opacity: e.opacity,
       geo: e.geo,
@@ -84,6 +103,52 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, intervalMs =
     if (Date.now() - start > timeoutMs) throw new Error('timed out waiting for the app to finish the action');
     await new Promise((r) => setTimeout(r, intervalMs));
   }
+}
+
+/** معرّفُ طبقة الخلفية التي تضعها `document_set_background`. ثابتٌ كي تُحدَّث الطبقة
+ * نفسُها في المرّة الثانية بدل أن تتكدّس خلفيّاتٌ فوق بعضها. */
+export const BACKGROUND_ID = 'mz-background';
+
+export function backgroundLayer(color: string): DocElement {
+  return {
+    id: BACKGROUND_ID,
+    type: 'shape',
+    name: 'الخلفية',
+    visible: true,
+    locked: true,
+    opacity: 100,
+    maskId: null,
+    geo: { x: 0, y: 0, w: 1, h: 1, rotation: 0 },
+    shape: 'rect',
+    fill: color,
+    fillToken: 'bg',
+    stroke: null,
+    strokeWidth: 0,
+    radius: 0,
+    anim: defaultAnim('none', 0, 0.01, 'linear'),
+  };
+}
+
+/** زخرفة اللوحة (`decorAccent`) عنصرًا حقيقيًّا، بمعادلة `Stage.tsx`/`exportArtboard.ts`
+ * نفسها: يسارٌ عند 0.68w، أعلى عند ‑0.16h، قطرٌ 0.46w. */
+export function decorLayer(w: number, h: number): DocElement {
+  return {
+    id: newElementId('decor'),
+    type: 'shape',
+    name: 'الزخرفة',
+    visible: true,
+    locked: false,
+    opacity: 100,
+    maskId: null,
+    geo: { x: 0.68, y: -0.16, w: 0.46, h: (0.46 * w) / h, rotation: 0 },
+    shape: 'ellipse',
+    fill: null,
+    fillToken: 'ac',
+    stroke: null,
+    strokeWidth: 0,
+    radius: 0,
+    anim: defaultAnim('none', 0, 0.01, 'linear'),
+  };
 }
 
 export const MCP_TOOLS: McpTool[] = [
@@ -173,6 +238,28 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
+    // ٢٤ أكتوبر ٢٠٢٦: «خلّ الخلفية زرقاء» كان يلوّن العنوان، لأن الخلفية في مزيج ليست
+    // عنصرًا بل لونُ `bg` في اللوحة، ولا أداةَ تضبط لونًا حرًّا لها. هذه الأداة تضع
+    // طبقةً حقيقيّة باسم «الخلفية» خلف كلّ شيء — مقفلة، تملأ اللوحة، تظهر في قائمة
+    // الطبقات وتُصدَّر كما تُرى — أو تُحدّث لونها إن كانت موجودة. لا حالةَ موازية.
+    name: 'document_set_background',
+    descriptionAr: 'تغيير لون خلفية التصميم.',
+    descriptionEn: 'Change the design background color.',
+    inputSchema: {
+      type: 'object',
+      properties: { color: { type: 'string', description: 'CSS color, e.g. "#1D4ED8".' } },
+      required: ['color'],
+      additionalProperties: false,
+    },
+    run: async (args, ctx) => {
+      const color = str(args.color).trim();
+      if (!color) throw new Error('missing required "color"');
+      ctx.actions.setBackgroundColor(color);
+      await flush();
+      return { background: color };
+    },
+  },
+  {
     name: 'element_add_text',
     descriptionAr: 'إضافة عنصر نص جديد عند موضع ومقاس محددين (بكسل).',
     descriptionEn: 'Add a new text element at a given position/size (pixels).',
@@ -185,7 +272,7 @@ export const MCP_TOOLS: McpTool[] = [
         w: { type: 'number' },
         h: { type: 'number' },
         fontFamily: { type: 'string' },
-        fontSize: { type: 'number' },
+        fontSize: { type: 'number', description: 'Reference px against a 1080-wide artboard (rendered size = fontSize × artboardWidth / 1080).' },
         weight: { type: 'string', enum: ['regular', 'medium', 'bold'] },
         color: { type: 'string' },
       },
@@ -271,7 +358,7 @@ export const MCP_TOOLS: McpTool[] = [
       properties: {
         id: { type: 'string' },
         fontFamily: { type: 'string' },
-        fontSize: { type: 'number' },
+        fontSize: { type: 'number', description: 'Reference px against a 1080-wide artboard (rendered size = fontSize × artboardWidth / 1080).' },
         weight: { type: 'string', enum: ['regular', 'medium', 'bold'] },
         color: { type: 'string' },
         halign: { type: 'string', enum: ['start', 'center', 'end'] },

@@ -8,6 +8,9 @@ fn greet(name: &str) -> String {
 // headless (no Tauri window) for QA; see `mcp.rs` for the design rationale.
 pub mod mcp;
 
+// مِزو عبر وكلاءٍ خارجيّين (Claude Code / Codex / مخصّص) — انظر `agents.rs`.
+pub mod agents;
+
 /// Roadmap #20, security fix: `run()` used to call `mcp::spawn(mcp::MCP_PORT)`
 /// unconditionally, so 127.0.0.1:7420 went to LISTEN the instant the app launched
 /// while the MCP dialog (whose `mcpServerEnabled` flag defaults to `false`)
@@ -45,12 +48,13 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![greet, mcp_start, mcp_stop, mcp_is_listening])
+        .invoke_handler(tauri::generate_handler![greet, mcp_start, mcp_stop, mcp_is_listening, agents::agent_detect, agents::agent_run, agents::agent_cancel])
         // The bridge must not outlive the window that owns the document, and a
         // listener surviving a quit would be a local control surface with no UI
         // at all attached to it.
         .on_window_event(|_window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
+                agents::agent_cancel();
                 mcp::stop();
             }
         })

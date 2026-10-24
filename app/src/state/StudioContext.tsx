@@ -41,7 +41,7 @@ import { justifySvgTextElement } from '../lib/kashidaJustify';
 import { LIVE_PHOTO_DEFAULT_DURATION } from '../lib/livePhotoExport';
 import { computeBooleanOp, isBooleanEligible, type BooleanOp } from '../lib/pathBoolean';
 import { insertAnchorOnSegment } from '../lib/pathSmoothing';
-import { magicResizeElements } from '../lib/magicResize';
+import { magicResizeElements, placeDesignInFrame } from '../lib/magicResize';
 import { saveExportedFile } from '../lib/saveExport';
 import { effectiveExportScale } from '../lib/exportEstimate';
 import { pickImageFile, readImageFile, type LoadedImage } from '../lib/imageFile';
@@ -51,7 +51,8 @@ import { inTauri } from '../lib/tauriEnv';
 import { startMcpBridge, stopMcpBridge } from '../lib/mcpBridge';
 import { startMcpServer, stopMcpServer } from '../lib/mcpServerControl';
 import { interpretAndRun } from '../lib/commandInterpreter';
-import type { McpCtx } from '../lib/mcpTools';
+import { agentSystemPrompt, cancelAgent, detectAgents, loadAiPrefs, runAgent, saveAiPrefs, type AiEngine } from '../lib/agentClient';
+import { BACKGROUND_ID, backgroundLayer, decorLayer, type McpCtx } from '../lib/mcpTools';
 import { describeAiError, providerById } from '../lib/aiProviders';
 import { loadApiKey } from '../lib/aiKeyStore';
 
@@ -908,6 +909,8 @@ export interface StudioActions {
   setFontUrl: (url: string) => void;
   addFont: () => void;
   setPostPalette: (idx: number) => void;
+  /** لونُ خلفيةٍ حرّ: طبقةٌ حقيقيّة باسم «الخلفية» خلف كلّ شيء (انظر `BACKGROUND_ID`). */
+  setBackgroundColor: (color: string) => void;
   /** يقلب زخرفة اللوحة — انظر `DocSnapshot.decorAccent`. حقلُ مستندٍ، فيمرّ
    * بـ`patchDoc`: خطوةُ تراجعٍ واحدة ويُحفَظ مع المستند. */
   setDecorAccent: (on: boolean) => void;
@@ -918,6 +921,10 @@ export interface StudioActions {
   applyPaletteToAll: () => void;
   setAiInput: (text: string) => void;
   sendAi: (text?: string) => void;
+  setAiEngine: (engine: AiEngine) => void;
+  setAiCustomCmd: (cmd: string) => void;
+  cancelAi: () => void;
+  detectAiAgents: () => void;
   openExport: () => void;
   closeExport: () => void;
   setExportFormat: (fmt: StudioState['exportFormat']) => void;
@@ -940,6 +947,10 @@ export interface StudioActions {
   /** Rebuilds the current document from a template's structure, with slotted
    * elements' content overwritten by `fills` — see `fillTemplate` in `templates.ts`. */
   applyTemplateFill: (templateId: string, fills: Record<string, SlotFill>) => void;
+  /** يضع قالبًا جاهزًا (`STARTER_TEMPLATES`) في المشروع المفتوح **على مقاسه هو**:
+   * المحتوى يُعاد تحجيمه بـ`magicResizeElements` من مقاس القالب إلى مقاس اللوحة، في
+   * خطوة تراجعٍ واحدة. */
+  applyStarterHere: (id: string) => void;
   /** Replays a template's saved montage structure (clip timing, keyframe tracks,
    * text-stagger sequencing) onto the *current* document's elements, matched by
    * kind/position — leaves their own content/geometry untouched. */
@@ -1299,17 +1310,72 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     (text?: string) => {
       const txt = (text ?? '').trim();
       if (!txt) return;
+      const st = mcpStateRef.current;
+      if (st.aiTyping) return;
       patch((s) => ({ aiMsgs: [...s.aiMsgs, { role: 'u' as const, text: txt }], aiInput: '', aiTyping: true }));
-      const ctx: McpCtx = { getState: () => mcpStateRef.current, actions: mcpLiveActionsRef.current };
-      interpretAndRun(txt, ctx).then((outcome) => {
-        patch((s) => ({
-          aiMsgs: [...s.aiMsgs, { role: 'a' as const, text: s.lang === 'ar' ? outcome.messageAr : outcome.messageEn }],
-          aiTyping: false,
-        }));
-      });
+      const reply = (t: string) => patch((s) => ({ aiMsgs: [...s.aiMsgs, { role: 'a' as const, text: t }], aiTyping: false }));
+      const ar = st.lang === 'ar';
+
+      if (st.aiEngine === 'local') {
+        const ctx: McpCtx = { getState: () => mcpStateRef.current, actions: mcpLiveActionsRef.current };
+        interpretAndRun(txt, ctx).then((outcome) => reply(ar ? outcome.messageAr : outcome.messageEn));
+        return;
+      }
+
+      // وكيلٌ خارجيّ: يحتاج خادمَ MCP المحلّيّ وجسرَ النافذة. إن لم يكن المستخدم قد
+      // شغّله بنفسه شغّلناه لهذا الطلب وحده، ثم أطفأناه — كي لا يبقى منفذٌ مفتوح لم يطلبه.
+      const engine = st.aiEngine;
+      void (async () => {
+        let startedHere = false;
+        try {
+          const now = mcpStateRef.current;
+          if (!now.mcpServerEnabled || !now.mcpToken) {
+            const info = await startMcpServer();
+            startedHere = true;
+            patch({ mcpServerEnabled: true, mcpToken: info.token, mcpError: null });
+          }
+          const r = await runAgent(engine, txt, agentSystemPrompt(st.lang, mcpStateRef.current.selectedIds), mcpStateRef.current.aiCustomCmd);
+          reply(r.text || (r.ok ? (ar ? 'تم.' : 'Done.') : ar ? 'لم يُكمل الوكيلُ الطلب.' : 'The agent did not finish.'));
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          reply(ar ? `تعذّر التنفيذ: ${msg}` : `Couldn't run it: ${msg}`);
+        } finally {
+          if (startedHere) {
+            patch({ mcpServerEnabled: false, mcpToken: null });
+            void stopMcpServer().catch(() => {});
+          }
+        }
+      })();
     },
     [patch],
   );
+
+  const setAiEngine = useCallback((engine: AiEngine) => {
+    saveAiPrefs({ engine });
+    patch({ aiEngine: engine });
+  }, [patch]);
+
+  const setAiCustomCmd = useCallback((cmd: string) => {
+    saveAiPrefs({ customCmd: cmd });
+    patch({ aiCustomCmd: cmd });
+  }, [patch]);
+
+  const cancelAi = useCallback(() => {
+    void cancelAgent();
+  }, []);
+
+  const detectAiAgents = useCallback(() => {
+    void detectAgents()
+      .then((agents) => {
+        patch(() => {
+          // أوّلُ تشغيل: لم يختر المستخدم محرّكًا بعد، وClaude مثبّت — فهو الافتراضيّ.
+          const chosen = loadAiPrefs().engine;
+          const claude = agents.find((a) => a.id === 'claude' && a.path);
+          return { aiAgents: agents, ...(chosen === undefined && claude ? { aiEngine: 'claude' as const } : {}) };
+        });
+      })
+      .catch(() => patch({ aiAgents: [] }));
+  }, [patch]);
 
   const addFont = useCallback(() => {
     const url = state.fontUrl.trim();
@@ -2004,7 +2070,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             { paletteIdx: tpl.paletteIdx, sel: tpl.selectOnOpen },
           );
         }),
-      resumeOpenProject: () => patch({ screen: 'editor', cmdOpen: false }),
+      // المستندُ الساكن يُفتح على لحظة استقراره، كما يُصدَّر. المؤشّرُ لا يُحفظ مع
+      // المستند، فكان «كمّل» بعد إعادة تشغيل البرنامج يفتح على t=0 — قبل دخول أيّ
+      // عنصر — فتظهر اللوحة خلفيةً فارغة والطبقاتُ كلّها في القائمة. ولا مسطرةَ
+      // في الساكن يُحرَّك منها المؤشّر، فلا مخرجَ للمصمّم من ذلك.
+      resumeOpenProject: () =>
+        patch((s) => ({
+          screen: 'editor',
+          cmdOpen: false,
+          ...(s.medium !== 'timed' ? { t: settledTime(s.elements, s.fps ?? DEFAULT_DOC_FPS) } : {}),
+        })),
       toggleLang: () => patch((s) => ({ lang: s.lang === 'ar' ? 'en' : 'ar' })),
       // الرجوعُ إلى الوضع البسيط يَنزع أدواتَ الوضع الاحترافيّ من اليد، **فهو
       // بابٌ ثالثٌ تُغادَر منه أداةُ القلم** — ولم يكن يَعبُر المُوَدِّع. وأثرُه
@@ -3161,6 +3236,25 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // `ArtboardMeta.paletteIdx`) so a palette choice survives switching away and
       // back — the global `postPalette`/`PALETTES[...]` read everywhere else always
       // reflects whichever artboard is currently active, unchanged.
+      setBackgroundColor: (color) =>
+        setState((s) => {
+          // خطوةٌ واحدة في سجلّ التراجع، لا اثنتان: إن كانت زخرفة اللوحة ظاهرة فهي
+          // تُرسم تحت العناصر كلّها، وطبقةُ خلفيةٍ تملأ اللوحة كانت ستُخفيها. فتصير
+          // الزخرفة عنصرًا حقيقيًّا (بالمعادلة نفسها في `Stage.tsx` و`exportArtboard.ts`)
+          // فوق الخلفية مباشرةً — يبقى المظهر كما هو، وتصير الدائرة قابلةً للتحديد.
+          const exists = s.elements.some((e) => e.id === BACKGROUND_ID);
+          let elements = exists
+            ? s.elements.map((e) => (e.id === BACKGROUND_ID && e.type === 'shape' ? { ...e, fill: color } : e))
+            : [backgroundLayer(color), ...s.elements];
+          let decorAccent = s.decorAccent;
+          if (decorAccent) {
+            const size = sizeAt(s.sizeIdx, s.customW, s.customH);
+            const at = elements.findIndex((e) => e.id === BACKGROUND_ID) + 1;
+            elements = [...elements.slice(0, at), decorLayer(size.w, size.h), ...elements.slice(at)];
+            decorAccent = false;
+          }
+          return { ...s, elements, decorAccent, ...pushHistory(s, 'الخلفية') };
+        }),
       setPostPalette: (postPalette) => patch((s) => ({ postPalette, artboards: s.artboards.map((a) => (a.id === s.activeArtboardId ? { ...a, paletteIdx: postPalette } : a)) })),
       setDecorAccent: (decorAccent) => patchDoc({ decorAccent }),
       applyPaletteToAll: () =>
@@ -3178,6 +3272,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         ),
       setAiInput: (aiInput) => patch({ aiInput }),
       sendAi,
+      setAiEngine,
+      setAiCustomCmd,
+      cancelAi,
+      detectAiAgents,
       openExport: () => patch({ exportOpen: true, exportState: 'idle', exportProgress: 0, exportError: null, exportResults: [] }),
       closeExport: () => {
         patch({ exportOpen: false, exportState: 'idle' });
@@ -3263,6 +3361,26 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           };
         });
       },
+      applyStarterHere: (id) =>
+        setState((s) => {
+          const tpl = STARTER_TEMPLATES.find((t) => t.id === id);
+          if (!tpl) return s;
+          const from = SIZES[tpl.sizeIdx];
+          const to = sizeAt(s.sizeIdx, s.customW, s.customH);
+          const elements = placeDesignInFrame(tpl.elements(), from, to);
+          return {
+            ...s,
+            elements,
+            decorAccent: tpl.decorAccent,
+            postPalette: tpl.paletteIdx,
+            artboards: s.artboards.map((a) => (a.id === s.activeArtboardId ? { ...a, paletteIdx: tpl.paletteIdx } : a)),
+            selectedIds: [],
+            sel: null,
+            templatesOpen: false,
+            ...(s.medium !== 'timed' ? { t: settledTime(elements, s.fps ?? DEFAULT_DOC_FPS) } : {}),
+            ...pushHistory(s, 'قالب'),
+          };
+        }),
       applyTemplateMotion: (templateId) => {
         const tpl = state.templates.find((t) => t.id === templateId);
         if (!tpl) return;
@@ -3325,6 +3443,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       togglePlay,
       addFont,
       sendAi,
+      setAiEngine,
+      setAiCustomCmd,
+      cancelAi,
+      detectAiAgents,
       startExport,
       runCmd,
       setMcpServerEnabled,

@@ -363,7 +363,8 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
           onChange={(e) => actions.setElementText(el.id, e.target.value)}
           style={{ height: 34, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', outline: 0, width: '100%', fontWeight: 600 }}
         />
-        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 76px', gap: 8 }}>
+        {/* ٩٦ لا ٧٦: حجمٌ مثل ٣٤٫٥٦ مع سهمَي الحقل كان يُقصّ إلى «34.5(» (جولة ٢٤ أكتوبر). */}
+        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1fr 96px', gap: 8 }}>
           <button
             onClick={() => setFontPickerOpen((v) => !v)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, textAlign: 'start' }}
@@ -377,7 +378,7 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
               type="number"
               min={8}
               max={400}
-              value={sizeDraft ?? el.fontSize}
+              value={sizeDraft ?? Math.round(el.fontSize * 10) / 10}
               onChange={(e) => {
                 const raw = e.target.value;
                 setSizeDraft(raw);
@@ -469,20 +470,34 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="mz-label">{L.align}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 4 }}>
-          {ALIGN_BUTTONS.map(({ d, kind, value }) => {
-            const active = kind === 'h' ? el.halign === value : el.valign === value;
-            return (
-              <button
-                key={`${kind}-${value}`}
-                onClick={() => (kind === 'h' ? actions.setElementHAlign(el.id, value as HAlign) : actions.setElementVAlign(el.id, value as VAlign))}
-                style={{ height: 30, display: 'grid', placeItems: 'center', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--muted)' }}
-              >
-                <Icon size={16} path={d} />
-              </button>
-            );
-          })}
-        </div>
+        {/* مجموعتان مسمّاتان لا صفٌّ من ستّ أيقوناتٍ صامتة: كانت الأفقيّةُ والعموديّةُ
+            مخلوطتين، و«البداية» في تصميمٍ عربيّ هي **اليمين** بينما أيقونتُها خطوطٌ
+            مصفوفةٌ إلى اليسار — فالزرّ المفعَّل يقول «يسار» والنصّ على اللوحة يمين.
+            الأيقوناتُ الأفقيّة تنعكس الآن مع اتّجاه الواجهة، ولكلّ زرٍّ اسمُه. */}
+        {(['h', 'v'] as const).map((kind) => (
+          <div key={kind} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 44, flex: 'none', fontSize: 11.5, color: 'var(--muted)' }}>{kind === 'h' ? L.align_h : L.align_v}</span>
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 4 }}>
+              {ALIGN_BUTTONS.filter((b) => b.kind === kind).map(({ d, value }) => {
+                const active = kind === 'h' ? el.halign === value : el.valign === value;
+                const label = L[`al_${value as HAlign | VAlign}` as const];
+                return (
+                  <button
+                    key={`${kind}-${value}`}
+                    data-testid={`align-${kind}-${value}`}
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={active}
+                    onClick={() => (kind === 'h' ? actions.setElementHAlign(el.id, value as HAlign) : actions.setElementVAlign(el.id, value as VAlign))}
+                    style={{ height: 30, display: 'grid', placeItems: 'center', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--muted)' }}
+                  >
+                    <Icon size={16} path={d} style={{ transform: kind === 'h' && state.lang === 'ar' ? 'scaleX(-1)' : 'none' }} />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)' }}>
           <input data-testid="justify-kashida-toggle" type="checkbox" checked={!!el.justify} onChange={(e) => actions.setElementJustify(el.id, e.target.checked)} />
           {L.justify_kashida}
