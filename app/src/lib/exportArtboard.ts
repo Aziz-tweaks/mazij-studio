@@ -15,6 +15,7 @@ import { normalizeShutter, runningMeanAlpha, shutterIsOpen, shutterSampleTimes, 
 import { shapeTextOnCurve } from './textOnPath';
 import { justifyWithKashida } from './kashidaJustify';
 import {
+  cssGradientLine,
   ellipseTracer,
   paintFillsCanvas,
   paintInnerShadowsCanvas,
@@ -613,7 +614,8 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         // Only the topmost visible stroke layer paints glyph outlines (multi-layer
         // text stroke isn't independently composited — a documented limitation).
         const topStroke = resolved.strokes[resolved.strokes.length - 1];
-        if (topStroke) {
+        // سُمك صفر = لا حدّ (`paintStrokesCanvas`): الـcanvas يتجاهل `lineWidth = 0`.
+        if (topStroke && topStroke.width > 0) {
           ctx.save();
           ctx.globalAlpha = baseAlpha * topStroke.opacity;
           ctx.strokeStyle = topStroke.color;
@@ -813,9 +815,15 @@ function esc(s: string) {
 /** A fill layer's 2-stop linear gradient as a standalone SVG `<linearGradient>` def,
  * referenced by the caller via `fill="url(#id)"` — the SVG-export equivalent of
  * `buildLinearGradient` in `appearance.ts` (same angle/from/to, SVG's own gradient
- * machinery instead of a `CanvasGradient`). */
-function svgGradientDef(grad: { angle: number; from: string; to: string }, id: string): string {
-  return `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0" gradientTransform="rotate(${grad.angle} 0.5 0.5)"><stop offset="0" stop-color="${grad.from}" /><stop offset="1" stop-color="${grad.to}" /></linearGradient>`;
+ * machinery instead of a `CanvasGradient`).
+ *
+ * بإحداثيّات الصندوق نفسه (`userSpaceOnUse`، والعنصر مرسومٌ في `0..bw × 0..bh` داخل
+ * مجموعته) وبخطّ CSS نفسه (`cssGradientLine`): كان `objectBoundingBox` مع
+ * `rotate(angle)` — زاويةُ رياضيّات (٠ نحو اليمين) لا زاوية CSS التي تعرضها اللوحة،
+ * وتدويرٌ في فضاءٍ مُطبَّع ينحرف على أيّ صندوقٍ غير مربّع. */
+function svgGradientDef(grad: { angle: number; from: string; to: string }, id: string, bw: number, bh: number): string {
+  const l = cssGradientLine(grad.angle, bw, bh);
+  return `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${l.x0}" y1="${l.y0}" x2="${l.x1}" y2="${l.y1}"><stop offset="0" stop-color="${grad.from}" /><stop offset="1" stop-color="${grad.to}" /></linearGradient>`;
 }
 
 /** Roadmap #17 — every *outer* shadow layer (there can be several) as one SVG
@@ -1017,7 +1025,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
             let fillAttr = f.color;
             if (f.kind === 'gradient' && f.gradient) {
               const gid = `grad-${esc(el.id)}-${i}`;
-              defs.push(svgGradientDef(f.gradient, gid));
+              defs.push(svgGradientDef(f.gradient, gid, bw, bh));
               fillAttr = `url(#${gid})`;
             }
             const geomAttr = el.shape === 'rect' ? `width="${bw}" height="${bh}" rx="${radiusPx}"` : `cx="${bw / 2}" cy="${bh / 2}" rx="${bw / 2}" ry="${bh / 2}"`;
@@ -1101,7 +1109,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
       let gradientDef = '';
       if (topFill?.kind === 'gradient' && topFill.gradient) {
         const gid = `grad-${esc(el.id)}`;
-        gradientDef = svgGradientDef(topFill.gradient, gid);
+        gradientDef = svgGradientDef(topFill.gradient, gid, bw, bh);
         fillAttr = `url(#${gid})`;
       }
       const fontPx = (el.fontSize / 1080) * w;

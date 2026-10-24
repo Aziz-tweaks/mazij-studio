@@ -24,6 +24,7 @@
 //  ١٦. اقتراحات مِزو باللهجة، ومِزو المحلّي يفهمها.
 //  ١٧. البسيط يمسك النصّ كما في الأداة الشائعة، والاحترافي كما في أداة المتّجهات.
 //  ١٨. نصٌّ تجاوز حافّة الصفحة تبقى مقابضه تُرى وتُمسَك.
+//  ١٩. الملف المصدَّر يطابق اللوحة: زاوية التدرّج (CSS)، والحدّ صفر.
 import { chromium } from 'playwright';
 import { bootBlank, bootDemo, switchToTimed, resumeAfterReload, AUTOSAVE_KEY } from './helpers/boot.mjs';
 
@@ -530,6 +531,101 @@ async function main() {
   await page.waitForTimeout(200);
   const back = await page.locator('[data-el-id="head"]').boundingBox();
   assert(back.x + back.width <= ab18.x + ab18.width, 'وسحبُه من خارج الصفحة يُرجعها داخلها — المقبض يُمسَك لا يُرى فقط');
+
+  // ═════════════════════════ ١٩. الملف المصدَّر يطابق اللوحة ═════════════════════════
+  console.log('\n١٩. الملف المصدَّر يطابق اللوحة: زاوية التدرّج، والحدّ صفر');
+  // كُشف في اختبار نسخ صورةٍ مرجعيّة على البرنامج المثبّت (٢٤ أكتوبر ٢٠٢٦): اللوحة طابقت
+  // المرجع، والملف خرج بتدرّجٍ بالعرض بدل الطول، وبخيطٍ فاتح حول أوراقٍ صُفِّر حدّها.
+  // اللوحة ترسم التدرّج بـ`linear-gradient(${angle}deg, …)` — زاوية CSS — فالعقد هنا:
+  // التصديران (PNG وSVG) يتبعان زاوية CSS نفسها. وأيّ نقطة تُقرأ من بكسلات الملف نفسه.
+  const exp = await page.evaluate(async () => {
+    const mod = await import('/src/lib/exportArtboard.ts');
+    const ap = await import('/src/lib/appearance.ts');
+    const size = { w: 200, h: 200 };
+    const palette = { bg: '#000000', fg: '#ffffff', ac: '#ffb703' };
+    const anim = { preset: 'none', start: 0, duration: 1, easing: 'linear', bezier: [0, 0, 1, 1], keyframes: [], tracks: {} };
+    const base = { type: 'shape', visible: true, locked: false, opacity: 100, maskId: null, fill: '#000000', fillToken: null, stroke: null, strokeWidth: 0, radius: 0, anim };
+    const grad = (angle) => ({
+      ...base,
+      id: `g${angle}`,
+      shape: 'rect',
+      geo: { x: 0, y: 0, w: 1, h: 1, rotation: 0 },
+      appearance: { fills: [ap.newFillLayer({ kind: 'gradient', gradientAngle: angle, gradientFrom: '#ff0000', gradientTo: '#0000ff' })], strokes: [], shadows: [] },
+    });
+    async function pixels(blob) {
+      const bmp = await createImageBitmap(blob);
+      const c = new OffscreenCanvas(size.w, size.h);
+      const ctx = c.getContext('2d');
+      ctx.drawImage(bmp, 0, 0, size.w, size.h);
+      return (x, y) => {
+        const d = ctx.getImageData(x, y, 1, 1).data;
+        return { r: d[0], g: d[1], b: d[2], a: d[3] };
+      };
+    }
+    async function svgPixels(el) {
+      const text = await mod.renderArtboardSvg({ size, palette, elements: [el], transparent: true, lang: 'ar' }).text();
+      const img = new Image();
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(text);
+      await img.decode();
+      const c = document.createElement('canvas');
+      c.width = size.w;
+      c.height = size.h;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, size.w, size.h);
+      return (x, y) => {
+        const d = ctx.getImageData(x, y, 1, 1).data;
+        return { r: d[0], g: d[1], b: d[2], a: d[3] };
+      };
+    }
+    // «أحمر» = لون البداية، «أزرق» = لون النهاية، في الطرف الذي تقول CSS إنه طرفه.
+    const side = (p) => (p.r > p.b + 80 ? 'from' : p.b > p.r + 80 ? 'to' : 'mid');
+    const out = {};
+    for (const angle of [0, 90, 180, 270]) {
+      const png = await pixels(await mod.renderArtboardPng({ size, palette, elements: [grad(angle)], transparent: true, lang: 'ar', scale: 1 }));
+      const svg = await svgPixels(grad(angle));
+      out[angle] = {
+        png: { top: side(png(100, 4)), bottom: side(png(100, 195)), left: side(png(4, 100)), right: side(png(195, 100)) },
+        svg: { top: side(svg(100, 4)), bottom: side(svg(100, 195)), left: side(svg(4, 100)), right: side(svg(195, 100)) },
+      };
+    }
+    // صندوقٌ غير مربّع بزاوية ٤٥: خطّ CSS يمرّ بالركنين المتقابلين — فالركن السفليّ الأيسر
+    // لون البداية والعلويّ الأيمن لون النهاية، في الملفّين.
+    // والحكم هنا صارم: الركن **قريبٌ من اللون الصافي** لا مائلٌ إليه فقط — فزاويةٌ
+    // خاطئة تُعطي الركنين خليطًا (٦٦٪ أحمر مثلًا) ينجح فيه الحكم الرخو.
+    const pure = (p) => (p.r > 225 && p.b < 35 ? 'from' : p.b > 225 && p.r < 35 ? 'to' : 'mid');
+    const wide = { ...grad(45), geo: { x: 0, y: 0.25, w: 1, h: 0.5, rotation: 0 } };
+    const wPng = await pixels(await mod.renderArtboardPng({ size, palette, elements: [wide], transparent: true, lang: 'ar', scale: 1 }));
+    const wSvg = await svgPixels(wide);
+    out.wide = { png: [pure(wPng(2, 147)), pure(wPng(197, 52))], svg: [pure(wSvg(2, 147)), pure(wSvg(197, 52))] };
+
+    // حدٌّ بسُمك صفر: لا يُرسَم شيءٌ خارج حافّة الشكل.
+    const zeroStroke = (shape) => ({
+      ...base,
+      id: `z-${shape}`,
+      shape,
+      geo: { x: 0.25, y: 0.25, w: 0.5, h: 0.5, rotation: 0 },
+      ...(shape === 'path' ? { points: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }], closed: true } : {}),
+      appearance: { fills: [ap.newFillLayer({ color: '#000000' })], strokes: [ap.newStrokeLayer({ color: '#ffffff', width: 0, position: 'center' })], shadows: [] },
+    });
+    const rectPx = await pixels(await mod.renderArtboardPng({ size, palette, elements: [zeroStroke('rect')], transparent: true, lang: 'ar', scale: 1 }));
+    const pathPx = await pixels(await mod.renderArtboardPng({ size, palette, elements: [zeroStroke('path')], transparent: true, lang: 'ar', scale: 1 }));
+    // الحافّة اليسرى عند x=50: البكسل ٤٩ خارجها، و٥٠ داخلها.
+    out.zero = { rectOut: rectPx(49, 100), rectIn: rectPx(50, 100), pathOut: pathPx(49, 100), pathIn: pathPx(50, 100) };
+    return out;
+  });
+  const cssWant = { 0: { top: 'to', bottom: 'from' }, 90: { left: 'from', right: 'to' }, 180: { top: 'from', bottom: 'to' }, 270: { left: 'to', right: 'from' } };
+  for (const angle of [0, 90, 180, 270]) {
+    for (const kind of ['png', 'svg']) {
+      const got = exp[angle][kind];
+      const want = cssWant[angle];
+      const ok = Object.entries(want).every(([k, v]) => got[k] === v);
+      assert(ok, `${kind.toUpperCase()} بزاوية ${angle}°: الطرفان كما في CSS — ${JSON.stringify(want)} (وُجد ${JSON.stringify(got)})`);
+    }
+  }
+  assert(exp.wide.png[0] === 'from' && exp.wide.png[1] === 'to', `PNG بزاوية ٤٥° على صندوقٍ عريض: الركنان المتقابلان على لونَي الطرفين (وُجد ${exp.wide.png})`);
+  assert(exp.wide.svg[0] === 'from' && exp.wide.svg[1] === 'to', `SVG بزاوية ٤٥° على صندوقٍ عريض: الركنان المتقابلان على لونَي الطرفين (وُجد ${exp.wide.svg})`);
+  assert(exp.zero.rectOut.a === 0 && exp.zero.rectIn.r < 10, `مستطيلٌ بحدٍّ سُمكه صفر: لا بكسل خارج حافّته، وداخلها لونه (خارج a=${exp.zero.rectOut.a}، داخل r=${exp.zero.rectIn.r})`);
+  assert(exp.zero.pathOut.a === 0 && exp.zero.pathIn.r < 10, `مسارٌ بحدٍّ سُمكه صفر — كأوراق الاختبار: لا خيط حوله (خارج a=${exp.zero.pathOut.a}، داخل r=${exp.zero.pathIn.r})`);
 
   // ═════════════════════════ أخطاء صامتة ═════════════════════════
   const realErrors = pageErrors.filter((e) => !/favicon|ResizeObserver loop/i.test(e));

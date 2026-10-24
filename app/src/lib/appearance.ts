@@ -391,14 +391,30 @@ export function pathCmdsTracer(cmds: PathCmd[], bw: number, bh: number): Silhoue
   };
 }
 
-function buildLinearGradient(ctx: CanvasRenderingContext2D, grad: { angle: number; from: string; to: string }, bw: number, bh: number): CanvasGradient {
-  const rad = (grad.angle * Math.PI) / 180;
-  const dx = Math.cos(rad);
-  const dy = Math.sin(rad);
+/** **خطّ التدرّج بزاوية CSS — للّوحة والتصديرين معًا.**
+ *
+ * زاوية المستند (`gradientAngle`) هي زاوية CSS نفسها التي ترسمها اللوحة
+ * (`linear-gradient(${angle}deg, …)` في `fillsToCss` و`ElementView`): ٠ نحو الأعلى،
+ * وتدور مع عقارب الساعة، فـ٩٠ من اليسار إلى اليمين و١٨٠ من فوق لتحت. كان التصدير
+ * يحسبها بزاوية الرياضيّات (٠ نحو اليمين) — فتدرّجٌ بزاوية ٠ يُرى على اللوحة من تحت
+ * لفوق ويخرج في الملف من اليسار لليمين. كُشف في اختبار نسخ صورةٍ مرجعيّة على البرنامج
+ * المثبّت (٢٤ أكتوبر ٢٠٢٦): اللوحة طابقت المرجع والملف لا.
+ *
+ * والطول طولُ خطّ CSS نفسه (`|W·sinθ| + |H·cosθ|`، مارًّا بالمركز)، فيقع لونا
+ * الطرفين على الركنين المتقابلين بالضبط كما في المعاينة. */
+export function cssGradientLine(angle: number, bw: number, bh: number): { x0: number; y0: number; x1: number; y1: number } {
+  const rad = (angle * Math.PI) / 180;
+  const dx = Math.sin(rad);
+  const dy = -Math.cos(rad);
+  const half = (Math.abs(dx) * bw + Math.abs(dy) * bh) / 2 || 1;
   const cx = bw / 2;
   const cy = bh / 2;
-  const len = (Math.abs(dx) * bw + Math.abs(dy) * bh) / 2 || 1;
-  const g = ctx.createLinearGradient(cx - dx * len, cy - dy * len, cx + dx * len, cy + dy * len);
+  return { x0: cx - dx * half, y0: cy - dy * half, x1: cx + dx * half, y1: cy + dy * half };
+}
+
+function buildLinearGradient(ctx: CanvasRenderingContext2D, grad: { angle: number; from: string; to: string }, bw: number, bh: number): CanvasGradient {
+  const l = cssGradientLine(grad.angle, bw, bh);
+  const g = ctx.createLinearGradient(l.x0, l.y0, l.x1, l.y1);
   g.addColorStop(0, grad.from);
   g.addColorStop(1, grad.to);
   return g;
@@ -438,6 +454,10 @@ export function paintFillsCanvas(ctx: CanvasRenderingContext2D, fills: ResolvedF
 export function paintStrokesCanvas(ctx: CanvasRenderingContext2D, strokes: ResolvedStrokePaint[], tracer: SilhouetteTracer) {
   const baseAlpha = ctx.globalAlpha;
   for (const s of strokes) {
+    // حدٌّ سُمكه صفر لا يُرسَم. `ctx.lineWidth = 0` قيمةٌ يتجاهلها الـcanvas فيبقى السُّمك
+    // السابق (١ افتراضيًّا) — فكان التصدير يرسم خيطًا رفيعًا حول شكلٍ صفّر المصمّم حدّه،
+    // واللوحة (SVG بسُمك ٠) لا ترسم شيئًا. كُشف في اختبار النسخ نفسه.
+    if (!(s.width > 0)) continue;
     const inset = s.position === 'inside' ? s.width / 2 : s.position === 'outside' ? -s.width / 2 : 0;
     ctx.save();
     ctx.globalAlpha = baseAlpha * s.opacity;

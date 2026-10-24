@@ -316,7 +316,9 @@ export type AppearanceCategory = 'fills' | 'strokes' | 'shadows';
 /** One fill layer in an element's appearance stack (roadmap #17). `kind:'solid'` paints
  * `colorToken ? resolvePaletteToken(pal,colorToken) : color`; `kind:'gradient'` paints a
  * 2-stop linear gradient at `gradientAngle` degrees between `gradientFrom`/`gradientTo`
- * (never palette-tracking — gradients are always explicit colors). `blend` is a CSS
+ * (never palette-tracking — gradients are always explicit colors). The angle is a **CSS
+ * angle** in every render path (0 = toward the top, clockwise; 90 = left→right): see
+ * `cssGradientLine` in `appearance.ts`. `blend` is a CSS
  * `mix-blend-mode`/`background-blend-mode` name that is *also* a valid canvas
  * `globalCompositeOperation` value, so the same name works unchanged across every
  * render path. See `src/lib/appearance.ts` for how a stack resolves/paints. */
