@@ -198,7 +198,7 @@ export function TemplatesDialog() {
                 <button data-testid={`apply-motion-${t.id}`} onClick={() => actions.applyTemplateMotion(t.id)} style={{ height: 28, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontSize: 11.5 }}>
                   {L.tpl_apply_motion}
                 </button>
-                <button data-testid={`open-fill-${t.id}`} onClick={() => openFill(t.id)} style={{ height: 28, padding: '0 10px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 11.5, fontWeight: 600 }}>
+                <button data-testid={`open-fill-${t.id}`} onClick={() => openFill(t.id)} style={{ height: 28, padding: '0 10px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 11.5, fontWeight: 600 }}>
                   {L.tpl_fill_apply}
                 </button>
                 <button data-testid={`delete-template-${t.id}`} onClick={() => actions.deleteTemplate(t.id)} style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)' }}>

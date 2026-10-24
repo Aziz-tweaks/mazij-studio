@@ -28,7 +28,7 @@ function AddToPhotosButton({ result }: { result: ExportResult }) {
   if (!result.path || !result.pairedMovPath) return null;
 
   if (phase === 'done') {
-    return <span data-testid={`add-to-photos-done-${result.id}`} style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)' }}>✓ {L.ex_lp_added}</span>;
+    return <span data-testid={`add-to-photos-done-${result.id}`} style={{ fontSize: 11, fontWeight: 600, color: 'var(--accentText)' }}>✓ {L.ex_lp_added}</span>;
   }
 
   return (
@@ -54,7 +54,7 @@ function AddToPhotosButton({ result }: { result: ExportResult }) {
         {phase === 'busy' ? L.ex_lp_adding : L.ex_lp_add}
       </button>
       {phase === 'error' && (
-        <span data-testid={`add-to-photos-error-${result.id}`} dir="auto" style={{ color: '#D97A6C', fontSize: 10.5, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>{error}</span>
+        <span data-testid={`add-to-photos-error-${result.id}`} dir="auto" style={{ color: 'var(--danger)', fontSize: 10.5, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>{error}</span>
       )}
     </>
   );
@@ -68,7 +68,7 @@ function qBtnStyle(active: boolean): CSSProperties {
     borderRadius: 'calc(var(--rs) - 2px)',
     fontSize: 12,
     fontWeight: active ? 600 : 500,
-    background: active ? 'var(--surface)' : 'transparent',
+    background: active ? 'var(--seg)' : 'transparent',
     color: active ? 'var(--text)' : 'var(--muted)',
     boxShadow: active ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
   };
@@ -288,7 +288,7 @@ export function ExportDialog() {
                 data-testid="export-magic-resize-toggle"
                 title={L.magic_resize_hint}
                 onClick={() => actions.setExportMagicResize(!state.exportMagicResize)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24, padding: '0 8px', marginInlineEnd: 8, border: `1px solid ${state.exportMagicResize ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.exportMagicResize ? 'var(--accentSoft)' : 'transparent', color: state.exportMagicResize ? 'var(--accent)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24, padding: '0 8px', marginInlineEnd: 8, border: `1px solid ${state.exportMagicResize ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.exportMagicResize ? 'var(--accentSoft)' : 'transparent', color: state.exportMagicResize ? 'var(--accentText)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
               >
                 <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid currentColor', display: 'grid', placeItems: 'center', flex: 'none' }}>
                   {state.exportMagicResize && <Icon size={8} strokeWidth={2.6} path="M4 10l4 4 8-8" />}
@@ -300,7 +300,7 @@ export function ExportDialog() {
                   data-testid="export-all-artboards-toggle"
                   title={L.ex_all_artboards_hint}
                   onClick={() => actions.setExportAllArtboards(!state.exportAllArtboards)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24, padding: '0 8px', marginInlineEnd: 8, border: `1px solid ${state.exportAllArtboards ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.exportAllArtboards ? 'var(--accentSoft)' : 'transparent', color: state.exportAllArtboards ? 'var(--accent)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24, padding: '0 8px', marginInlineEnd: 8, border: `1px solid ${state.exportAllArtboards ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.exportAllArtboards ? 'var(--accentSoft)' : 'transparent', color: state.exportAllArtboards ? 'var(--accentText)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
                 >
                   <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid currentColor', display: 'grid', placeItems: 'center', flex: 'none' }}>
                     {state.exportAllArtboards && <Icon size={8} strokeWidth={2.6} path="M4 10l4 4 8-8" />}
@@ -319,7 +319,7 @@ export function ExportDialog() {
                 data-testid="export-only-project-size"
                 title={L.ex_only_project_size_hint}
                 onClick={actions.selectProjectSizeTarget}
-                style={{ height: 24, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}
+                style={{ height: 24, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accentText)', fontSize: 11, fontWeight: 600 }}
               >
                 {L.ex_only_project_size}
               </button>
@@ -333,7 +333,7 @@ export function ExportDialog() {
                   title={L.ex_own_size_hint}
                   aria-pressed={state.exportArtboardOwnSize}
                   onClick={() => actions.setExportArtboardOwnSize(!state.exportArtboardOwnSize)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24, padding: '0 8px', marginInlineEnd: 8, border: `1px solid ${state.exportArtboardOwnSize ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.exportArtboardOwnSize ? 'var(--accentSoft)' : 'transparent', color: state.exportArtboardOwnSize ? 'var(--accent)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24, padding: '0 8px', marginInlineEnd: 8, border: `1px solid ${state.exportArtboardOwnSize ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.exportArtboardOwnSize ? 'var(--accentSoft)' : 'transparent', color: state.exportArtboardOwnSize ? 'var(--accentText)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
                 >
                   <span style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid currentColor', display: 'grid', placeItems: 'center', flex: 'none' }}>
                     {state.exportArtboardOwnSize && <Icon size={8} strokeWidth={2.6} path="M4 10l4 4 8-8" />}
@@ -341,7 +341,7 @@ export function ExportDialog() {
                   {L.ex_own_size}
                 </button>
               )}
-              <button onClick={actions.selectAllTargets} style={{ height: 24, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>{L.select_all}</button>
+              <button onClick={actions.selectAllTargets} style={{ height: 24, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accentText)', fontSize: 11, fontWeight: 600 }}>{L.select_all}</button>
             </div>
             {/* قائمة المقاسات لا دور لها في وضع «كل لوحة بمقاسها»: تُعطَّل بصريًّا بدل
                 أن تبقى تدعو إلى اختيارٍ لن يُقرأ. */}
@@ -539,14 +539,14 @@ export function ExportDialog() {
               <span className="mz-label">{L.ex_results}</span>
               {state.exportResults.map((r) => (
                 <div key={r.id} data-testid={`export-result-${r.id}`} data-ok={r.ok} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                  <span style={{ width: 16, height: 16, borderRadius: '50%', display: 'grid', placeItems: 'center', background: r.ok ? 'var(--accentSoft)' : 'rgba(217,122,108,.15)', color: r.ok ? 'var(--accent)' : '#D97A6C', flexShrink: 0 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: '50%', display: 'grid', placeItems: 'center', background: r.ok ? 'var(--accentSoft)' : 'rgba(255,107,107,.14)', color: r.ok ? 'var(--accentText)' : 'var(--danger)', flexShrink: 0 }}>
                     {r.ok ? <Icon size={10} strokeWidth={2.4} path="M4 10l4 4 8-8" /> : <Icon size={10} strokeWidth={2.4} path="M5 5l10 10M15 5L5 15" />}
                   </span>
                   <span style={{ flex: 1 }}>{r.label}</span>
                   {/* أبعاد الملف المكتوب، لا الهدف الاسمي — انظر `ExportResult.outW`. */}
                   <span dir="ltr" data-out={r.outW ? `${r.outW}x${r.outH}` : ''} style={{ color: 'var(--muted)' }}>{r.outW ?? r.w}×{r.outH ?? r.h}</span>
                   {r.ok && <AddToPhotosButton result={r} />}
-                  {!r.ok && <span style={{ color: '#D97A6C', fontSize: 11, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.error}</span>}
+                  {!r.ok && <span style={{ color: 'var(--danger)', fontSize: 11, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.error}</span>}
                 </div>
               ))}
             </div>
@@ -558,7 +558,7 @@ export function ExportDialog() {
             </div>
           )}
           {state.exportState === 'error' && state.exportResults.length === 0 && (
-            <div style={{ padding: '8px 10px', borderRadius: 'var(--rs)', background: 'rgba(217,122,108,.12)', color: '#D97A6C', fontSize: 12 }}>{L.ex_error}{state.exportError ? `: ${state.exportError}` : ''}</div>
+            <div style={{ padding: '8px 10px', borderRadius: 'var(--rs)', background: 'rgba(255,107,107,.12)', color: 'var(--danger)', fontSize: 12 }}>{L.ex_error}{state.exportError ? `: ${state.exportError}` : ''}</div>
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto' }}>
@@ -600,7 +600,7 @@ export function ExportDialog() {
             )}
             {state.exportState === 'done' && (
               <>
-                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>✓ {L.ex_done}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accentText)' }}>✓ {L.ex_done}</span>
                 <button
                   onClick={async () => {
                     const first = state.exportedPaths[0];

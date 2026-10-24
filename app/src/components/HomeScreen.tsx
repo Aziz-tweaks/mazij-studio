@@ -113,7 +113,7 @@ function MediumBadge({ kind, label }: { kind: 'still' | 'timed'; label: string }
         flex: 'none',
         borderRadius: 999,
         background: timed ? 'var(--accentSoft)' : 'var(--surface2)',
-        color: timed ? 'var(--accent)' : 'var(--muted)',
+        color: timed ? 'var(--accentText)' : 'var(--muted)',
         fontSize: 10.5,
         fontWeight: 600,
       }}
@@ -415,7 +415,7 @@ export function HomeScreen() {
             }}
           >
             <span style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 }}>
-              <span style={{ width: 52, height: 52, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: '50%', background: 'var(--accentSoft)', color: 'var(--accent)' }}>
+              <span style={{ width: 52, height: 52, flex: 'none', display: 'grid', placeItems: 'center', borderRadius: '50%', background: 'var(--accentSoft)', color: 'var(--accentText)' }}>
                 <Icon size={24} strokeWidth={2} path="M10 4v12M4 10h12" />
               </span>
               <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -583,7 +583,7 @@ export function HomeScreen() {
                         padding: '0 16px',
                         border: 0,
                         borderRadius: 'calc(var(--rs) - 2px)',
-                        background: on ? 'var(--surface)' : 'transparent',
+                        background: on ? 'var(--seg)' : 'transparent',
                         color: on ? 'var(--text)' : 'var(--muted)',
                         fontSize: 12.5,
                         fontWeight: on ? 700 : 500,

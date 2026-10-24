@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { Icon } from '../Icon';
 import { EASING_IDS, DEFAULT_BEZIER, applyEasing, type EasingId } from '../../lib/easing';
 import { useStudio } from '../../state/StudioContext';
-import { ISLAND_THEME } from '../../theme/theme';
+import { THEME } from '../../theme/theme';
 import { BezierEditor } from './BezierEditor';
 
 export const EASE_LABEL_KEY: Record<EasingId, string> = {
@@ -114,7 +114,7 @@ export function EasingMenu() {
               // the themed root div, so CSS custom properties like --accent don't
               // cascade in naturally. Re-applying them here keeps the dropdown and
               // the bezier editor it can contain themed correctly.
-              ...(ISLAND_THEME.vars as CSSProperties),
+              ...(THEME.vars as CSSProperties),
               position: 'fixed',
               left: anchor.left,
               bottom: anchor.bottom,

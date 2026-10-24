@@ -51,10 +51,11 @@ async function docBox(page, id, g) {
 const screenBox = (page, id) => page.locator(`[data-el-id="${id}"]`).boundingBox();
 
 async function setZoom(page, target) {
-  await page.locator('button', { hasText: /^(Fit|ملاءمة)$/ }).first().click();
+  // بمعرّفاتها: الشريط السياقي فوق المحدَّد يحمل «+»/«−» للمقاس كذلك.
+  await page.locator('[data-testid="zoom-fit"]').click();
   await page.waitForTimeout(60);
   const steps = Math.round((target - 100) / 10);
-  const btn = steps > 0 ? page.locator('button', { hasText: '+' }).last() : page.locator('button', { hasText: '−' }).last();
+  const btn = steps > 0 ? page.locator('[data-testid="zoom-in"]') : page.locator('[data-testid="zoom-out"]');
   for (let i = 0; i < Math.abs(steps); i++) {
     await btn.click();
     await page.waitForTimeout(15);
@@ -278,9 +279,13 @@ async function main() {
     }
   }
 
-  // The resize gesture itself stops at 200%: past that the headline's se corner sits
+  // The resize gesture itself stops at 150%: past that the headline's se corner sits
   // outside the (overflow-hidden) stage viewport, so there is nothing there to press.
-  for (const zoom of [50, 100, 200]) {
+  // (It stopped at 200% until 24 October 2026. The approved layout gave the canvas the
+  // room the bottom timeline and the side panel used to take, so "fit" is a larger
+  // scale and the same corner leaves the stage one step earlier — under the add rail
+  // at 200%. The 1:1 claim is unchanged and still measured above 100%.)
+  for (const zoom of [50, 100, 150]) {
     await setZoom(page, zoom);
     const g = await geom(page);
     await selectOnly('head');

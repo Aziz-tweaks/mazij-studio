@@ -174,9 +174,8 @@ function KfValueField({
  *
  * وهذا الملفُّ **لا يَقرأ `state.medium` في شرطٍ ولا يُقارنه**: الجوابُ يصل دعامةً،
  * فلا يصير هذا موضعًا رابعًا يتفرّع عليه ويجوز أن يختلف عن الثلاثة. */
-export function Timeline({ timed }: { timed: boolean }) {
+export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُّ الطبقات تحت المفتش (المستند الساكن) — انظر `Inspector.tsx`. */ docked?: boolean }) {
   const { state, actions, dict: L } = useStudio();
-  const isPro = state.mode === 'pro';
   // **طولُ المستند مشتقّ، ومدى المسطرة أرضيّةٌ عليه.** لا ثابتَ هنا بعد اليوم:
   // `docDuration` ما يُعرَض ويُصدَّر، و`span` ما تُقاس عليه النِّسَب المئويّة —
   // انظر `timelineSpan` لِمَ هما كمّيتان لا واحدة.
@@ -424,26 +423,26 @@ export function Timeline({ timed }: { timed: boolean }) {
 
   return (
     <div
+      data-testid={docked ? 'layers-dock' : 'timeline-panel'}
       style={{
         flex: 'none',
-        height: state.tlOpen ? 232 : 40,
+        height: docked ? (state.layersOpen ? 'min(46%, 340px)' : 40) : state.tlOpen ? 248 : 40,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         background: 'var(--surface)',
-        border: '1px solid var(--line)',
-        borderTopWidth: 'calc(1px + 0px)',
-        borderRadius: 'var(--r)',
-        boxShadow: 'var(--shadow)',
+        borderTop: '1px solid var(--line)',
         transition: 'height .25s ease',
       }}
     >
       <div style={{ height: 40, flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '0 10px', borderBottom: '1px solid var(--line)' }}>
         <button
-          onClick={actions.toggleTimeline}
+          onClick={docked ? actions.toggleLayers : actions.toggleTimeline}
+          title={L.collapse}
+          aria-label={L.collapse}
           style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)' }}
         >
-          <Icon size={16} path="M5 8l5 5 5-5" style={{ transform: state.tlOpen ? 'none' : 'rotate(180deg)', transition: 'transform .25s' }} />
+          <Icon size={16} path="M5 8l5 5 5-5" style={{ transform: (docked ? state.layersOpen : state.tlOpen) ? 'none' : 'rotate(180deg)', transition: 'transform .25s' }} />
         </button>
         <span style={{ fontWeight: 600, fontSize: 12 }}>{timed ? L.timeline : L.layers}</span>
         <span
@@ -461,7 +460,7 @@ export function Timeline({ timed }: { timed: boolean }) {
             flex: 'none',
             borderRadius: 999,
             background: timed ? 'var(--accentSoft)' : 'var(--surface2)',
-            color: timed ? 'var(--accent)' : 'var(--muted)',
+            color: timed ? 'var(--accentText)' : 'var(--muted)',
             fontSize: 10.5,
             fontWeight: 600,
           }}
@@ -530,12 +529,14 @@ export function Timeline({ timed }: { timed: boolean }) {
             مفاتيحها بعد ذلك. وهي مربوطة بالتحديد لا بالوضع، مثل `EasingMenu` بجانبها. */}
         {/* حركةُ الدخول والمنحنى سطحانِ زمنيّان: لا يُعرَضان على مستندٍ ساكن. */}
         {timed && <AnimPresetMenu />}
-        {timed && isPro && <EasingMenu />}
+        {timed && <EasingMenu />}
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-        <div style={{ width: timed ? 150 : '100%', flex: timed ? 'none' : 1, borderInlineEnd: timed ? '1px solid var(--line)' : 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-          <div style={{ height: RULER_H, flex: 'none', display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: 11, color: 'var(--muted)', borderBottom: '1px solid var(--line)' }}>{L.layers}</div>
+        <div style={{ width: timed ? 200 : '100%', flex: timed ? 'none' : 1, borderInlineEnd: timed ? '1px solid var(--line)' : 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+          {/* صفٌّ بارتفاع المسطرة يحاذي الطبقات بمساراتها — ولا مسطرة لمستندٍ ساكن،
+              والعنوان «الطبقات» مكتوبٌ فوقه أصلًا. */}
+          {timed && <div style={{ height: RULER_H, flex: 'none', display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: 11, color: 'var(--muted)', borderBottom: '1px solid var(--line)' }}>{L.layers}</div>}
           {layers.map((el) => {
             const selected = state.selectedIds.includes(el.id);
             const color = colorForLayer(el.id);
@@ -547,10 +548,13 @@ export function Timeline({ timed }: { timed: boolean }) {
                   // التحديدُ مقروءٌ لا مُستنتَجًا من لونِ خلفيّة: المعيار B6 يسأل
                   // «أيُّ النصفين محدَّد بعد التقسيم؟» وهو سؤالٌ عن حالةٍ لا عن لون.
                   data-selected={selected ? 'true' : 'false'}
-                  draggable={isPro}
+                  // صفٌّ قابلٌ للسحب (إعادة الترتيب) إلا أثناء تسميته: سحبةٌ داخل حقل الاسم
+                  // يجب أن تُحدِّد نصّه، لا أن تحمل الصفّ كلّه. كان السحبُ احترافيًّا وحده
+                  // فلم يلتقِ بالحقل في الوضع الافتراضي؛ صار للجميع (٢٤ أكتوبر ٢٠٢٦).
+                  draggable={renamingId !== el.id}
                   onDragStart={() => setDragId(el.id)}
-                  onDragOver={(e) => isPro && e.preventDefault()}
-                  onDrop={(e) => isPro && onDrop(e, el.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => onDrop(e, el.id)}
                   style={{ display: 'flex', alignItems: 'stretch', height: CLIP_ROW_H, borderBottom: '1px solid var(--line)', background: selected ? 'var(--accentSoft)' : 'transparent' }}
                 >
                   {/* العين والقفل في **الوضعين**، لا في الاحترافي وحده. كان الإخفاء
@@ -579,7 +583,7 @@ export function Timeline({ timed }: { timed: boolean }) {
                     title={el.locked ? L.unlock_layer : L.lock_layer}
                     aria-label={el.locked ? L.unlock_layer : L.lock_layer}
                     aria-pressed={el.locked}
-                    style={{ width: 22, flex: 'none', border: 0, background: 'transparent', color: el.locked ? 'var(--accent)' : 'var(--line)', display: 'grid', placeItems: 'center' }}
+                    style={{ width: 22, flex: 'none', border: 0, background: 'transparent', color: el.locked ? 'var(--accentText)' : 'var(--line)', display: 'grid', placeItems: 'center' }}
                   >
                     <Icon size={13} path={el.locked ? 'M5 9V6.5a5 5 0 0 1 10 0V9M4 9h12v8H4z' : 'M5 9V6.5a5 5 0 0 1 9.6-2M4 9h12v8H4z'} />
                   </button>
@@ -635,10 +639,10 @@ export function Timeline({ timed }: { timed: boolean }) {
                         {el.trimIn.toFixed(1)}–{el.trimOut.toFixed(1)}s
                       </span>
                     )}
-                    {isPro && <Icon size={13} path="M10 17a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM10 8v3l2 1M8 3h4" style={{ color: hasCustomAnimation(el.anim.tracks) ? 'var(--accent)' : 'var(--muted)' }} />}
+                    {timed && <Icon size={13} path="M10 17a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM10 8v3l2 1M8 3h4" style={{ color: hasCustomAnimation(el.anim.tracks) ? 'var(--accentText)' : 'var(--muted)' }} />}
                   </button>
                   )}
-                  {isPro && (
+                  {timed && (
                     <button
                       data-testid={`expand-${el.id}`}
                       onClick={(e) => {
@@ -726,7 +730,7 @@ export function Timeline({ timed }: { timed: boolean }) {
                 لا ماساتَ فيه ولا صفوفَ خصائصَ ولا زرَّ «مفتاح عند المؤشّر» —
                 وطريقُه إلى الحركة حركةُ الدخول، كما كان. انظر ترويسة `Clip`. */}
             {layers.map((el) => (
-              <Clip key={el.id} el={el} color={colorForLayer(el.id)} expanded={expandedIds.has(el.id)} pro={isPro} selectedKf={selectedKf} onSelectKf={setSelectedKf} />
+              <Clip key={el.id} el={el} color={colorForLayer(el.id)} expanded={expandedIds.has(el.id)} pro selectedKf={selectedKf} onSelectKf={setSelectedKf} />
             ))}
           </div>
           <div
@@ -751,7 +755,7 @@ export function Timeline({ timed }: { timed: boolean }) {
             </div>
           </div>
 
-          {isPro &&
+          {timed &&
             selectedKf &&
             selectedKfData &&
             selectedKfEl &&

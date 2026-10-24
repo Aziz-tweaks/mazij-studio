@@ -190,7 +190,7 @@ async function main() {
   await page.waitForTimeout(150);
 
   // ===================== 3. Real keyframes: clip move/resize =====================
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(150);
   await page.locator('[data-layer-id="head"] button', { hasText: 'العنوان' }).click();
   await page.waitForTimeout(100);
@@ -319,7 +319,7 @@ async function main() {
   await page.reload({ waitUntil: 'networkidle' });
   await resumeAfterReload(page); // reload now lands on the start screen; re-enter through the resume card
   await page.waitForSelector('[data-testid="artboard"]');
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(150);
   abBox = await page.locator('[data-testid="artboard"]').boundingBox();
   assert(Math.abs(abBox.width / abBox.height - 720 / 1280) < 0.1 || Math.abs(abBox.width / abBox.height - 1080 / 1080) < 0.1, 'persist: artboard size survives reload (custom was reset to ig in step 2, both are valid depending on timing)');

@@ -166,9 +166,9 @@ async function main() {
   assert(svgResult.hasShadowFilter, 'svg export: an outer shadow layer emits a real multi-primitive SVG filter, referenced via filter="url(#shadow-...)"');
 
   // --- 4. Sidebar layer editor drives the live DOM preview ------------------------
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(100);
-  await page.locator('button', { hasText: 'أشكال' }).click();
+  await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(80);
   const box = await page.locator('[data-testid="artboard"]').boundingBox();
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.3);
@@ -176,7 +176,7 @@ async function main() {
   await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.6, { steps: 6 });
   await page.mouse.up();
   await page.waitForTimeout(100);
-  await page.locator('button', { hasText: 'تحديد' }).click();
+  await page.locator('[data-tool="select"]').click();
   await page.waitForTimeout(100);
 
   const newShapes = await page.locator('[data-el-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-el-id')));

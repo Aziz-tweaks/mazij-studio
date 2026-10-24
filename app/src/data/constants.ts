@@ -115,6 +115,18 @@ export const MEDIUM_CHIP: Record<SizeMedium, { icon: string; labelKey: 'h_still'
   timed: { icon: 'video', labelKey: 'h_timed', showsDuration: true },
 };
 
+/** **ما يعرضه كلُّ مستندٍ من أسطح الحركة — «المستند يقرّر الشاشة».**
+ *
+ * القاعدة ٣ في التصوّر المعتمد (٢٤ أكتوبر ٢٠٢٦): بوست ← لوحة، ريل ← خطٌّ زمنيّ. ومعها
+ * صار للحركة أسطحٌ صغيرةٌ أخرى تتبع الطبيعة: رفُّ الطبقات تحت المفتش (للساكن — في
+ * المُوقَّت الطبقاتُ مساراتُ الخطّ)، وأقسامُ الحركة في المفتش (حركة الدخول، التتابع،
+ * مفاتيح الخصائص). وهي **قراءةٌ للجواب لا تفرّعٌ جديدٌ في السلوك**، فتُكتب جدولًا كـ
+ * `MEDIUM_CHIP` أعلاه، لا شروطًا مبعثرة يحرسها A8: طبيعةٌ ثالثةٌ تصير خطأَ ترجمةٍ هنا. */
+export const MEDIUM_SURFACES: Record<SizeMedium, { layersDock: boolean; motionProps: boolean }> = {
+  still: { layersDock: true, motionProps: false },
+  timed: { layersDock: false, motionProps: true },
+};
+
 export function sizeAt(sizeIdx: number, customW: number, customH: number): SizePreset {
   // مقاس مخصّص لا طبيعةَ له: المستخدم كتب رقمين ولم يسمِّ وجهة. نردّه `still` لأنها
   // الحالة الأرخص (لا نفترض مدةً لم يطلبها)، وليس هذا حصرًا عليه: الخط الزمني متاح
@@ -228,27 +240,55 @@ export const ICONS: Record<string, string> = {
   pause: 'M6 4v12M14 4v12',
   timeline: 'M3 5h14M3 10h9M3 15h12',
   home: 'M3 10l7-6 7 6v7h-4v-5H7v5H3z',
+  // التحديد المباشر (A في أداة المتّجهات): السهمُ نفسُه ومربّعُ نقطةٍ عند ذيله — يحدّد
+  // النقاط لا الشكل كلَّه.
+  direct: 'M5 3l10 6.5-4.8 1.3L7.8 15.5zM13.5 13.5h3.5v3.5h-3.5z',
+  // اليد (H): تحريكُ المنظر لا العناصر.
+  hand: 'M7 10.5V5.2a1.2 1.2 0 0 1 2.4 0V9.5M9.4 9V4.2a1.2 1.2 0 0 1 2.4 0V9.5M11.8 9.5V5.4a1.2 1.2 0 0 1 2.4 0v5.8c0 3.3-2.3 5.8-5.4 5.8-2.1 0-3.5-1-4.5-2.7L2.9 11.6a1.25 1.25 0 0 1 2.1-1.3L7 12.6',
+  templates: 'M3 3h6v8H3zM11 3h6v4h-6zM11 9h6v8h-6zM3 13h6v4H3z',
+  upload: 'M10 13V3M6 7l4-4 4 4M4 17h12',
+  brand: 'M10 3l2.2 4.6 5 .7-3.6 3.5.9 5L10 14.4 5.5 16.8l.9-5L2.8 8.3l5-.7z',
+  sticker: 'M4 4h8l4 4v8H4zM12 4v4h4M7.5 12.5c1.4 1.3 3.6 1.3 5 0',
+  layers: 'M10 3l7 4-7 4-7-4zM3 11l7 4 7-4M3 14.5l7 4 7-4',
+  keyboard: 'M2.5 5.5h15v9h-15zM5.5 8.5h.01M8.5 8.5h.01M11.5 8.5h.01M14.5 8.5h.01M6.5 11.5h7',
 };
 
-export type ToolId = 'select' | 'text' | 'shape' | 'pen' | 'image' | 'lottie' | 'video' | 'audio' | 'fx';
+export type ToolId = 'select' | 'direct' | 'hand' | 'text' | 'shape' | 'pen' | 'image' | 'lottie' | 'video' | 'audio' | 'fx';
 
 export interface ToolDef {
   id: ToolId;
+  /** الحرف المعروض على الزرّ وفي تلميحه — وهو نفسه ما يُسلِّح الأداة. فارغٌ = بلا حرف. */
   key: string;
-  pro?: boolean;
+  /** حروفٌ أخرى تُسلِّح الأداة نفسها (R للمستطيل كما في فيغما، بجانب M أداة المتّجهات). */
+  alt?: string[];
 }
 
+/** **الحروف من خرائط البرامج الثلاثة، لا من اختيارنا.**
+ *
+ * المالك اعتمد (٢٤ أكتوبر ٢٠٢٦) قاعدة «V A P M T تشتغل دائمًا»: المصمّم القادم
+ * من أداة المتّجهات يضغط الحرف قبل أن يقرأ شيئًا، فالحرف يجب أن يعني هنا ما يعنيه هناك.
+ * فـA صار التحديدَ المباشر (كان «صوت»)، وM المستطيل (كان «فيديو»)، وL الدائرة (كان
+ * «لوتي»)، وH اليد. والصوت والفيديو والملصقات إدراجُ ملفّات لا أدواتُ رسم، فلا حرف
+ * لها — وهي في شريط الإضافة.
+ *
+ * ولا «احترافي» بعد اليوم: كانت أداتا القلم والصوت تختفيان في «بسيط». المالك:
+ * «العمق يُطلب ولا يُفرض» — الأداة حاضرة دائمًا، وسطحها يظهر حين تُستعمَل. */
 export const TOOLS: ToolDef[] = [
   { id: 'select', key: 'V' },
+  { id: 'direct', key: 'A' },
+  { id: 'pen', key: 'P' },
   { id: 'text', key: 'T' },
-  { id: 'shape', key: 'R' },
-  { id: 'pen', key: 'P', pro: true },
+  { id: 'shape', key: 'M', alt: ['R'] },
+  { id: 'hand', key: 'H' },
   { id: 'image', key: 'I' },
-  { id: 'lottie', key: 'L' },
-  { id: 'video', key: 'M' },
-  { id: 'audio', key: 'A', pro: true },
-  { id: 'fx', key: 'E' },
+  { id: 'lottie', key: '' },
+  { id: 'video', key: '' },
+  { id: 'audio', key: '' },
+  { id: 'fx', key: '' },
 ];
+
+/** الأدوات التي تُعرَض في حبّة الأدوات العائمة أسفل اللوحة، بترتيبها. */
+export const PILL_TOOLS: ToolId[] = ['select', 'direct', 'pen', 'text', 'shape', 'hand'];
 
 /** `KeyboardEvent.code` ← معرّف الأداة، مُشتقّ من `TOOLS` نفسه.
  *
@@ -256,7 +296,7 @@ export const TOOLS: ToolDef[] = [
  * الاختصار الذي يعمل فعلًا يجب أن يكونا الشيء نفسه بحكم البناء — فإضافة أداة
  * جديدة إلى `TOOLS` تحمل اختصارها معها، ولا يبقى تلميحٌ يَعِد بما لا يُنفَّذ. */
 export const TOOL_BY_CODE: Record<string, ToolId> = Object.fromEntries(
-  TOOLS.map((t) => [`Key${t.key}`, t.id]),
+  TOOLS.flatMap((t) => [t.key, ...(t.alt ?? [])].filter(Boolean).map((k) => [`Key${k}`, t.id] as const)),
 );
 
 /** حالة لوح المحتوى الذي يفتحه كل زرّ في شريط الأدوات.
@@ -283,13 +323,17 @@ export type ToolLibraryStatus = 'ready' | 'soon' | 'none';
 
 export const TOOL_LIBRARY: Record<ToolId, ToolLibraryStatus> = {
   select: 'none',
+  direct: 'none',
+  hand: 'none',
   shape: 'ready',
   // «قريبًا» تخصّ الأدوات **الصامتة فعلًا** — التي لا يظهر لها اليوم أي سطح محتوى
   // ولا أي مجموعة أدوات خاصّة بها في لوح «التصميم». والمكتبة المنتظرة لكلٍّ منها
   // واضحة ومقيسة: قوالب نصّ لـ«نص» (تبويب `Text` المستقل في محرّر فيديو شائع §2.8، وهو
   // يستحقّ تبويبًا أعلى لأنه يحمل قدرات لا يحملها غيره)، ومؤثّرات لـ«تأثيرات»،
   // ومقاطع صوتيّة لـ«صوت».
-  text: 'soon',
+  // «نصوص» صارت مكتبةً حقيقيّة (٢٤ أكتوبر ٢٠٢٦): عنوان، عنوان فرعي، نص، وأنماط
+  // عربيّة جاهزة — `TextLibrary` في `left-panel/LibraryTab.tsx`.
+  text: 'ready',
   audio: 'soon',
   fx: 'soon',
   // أمّا هذه فليست صامتة، فلا تأخذ لوحًا يحجب ما تعرضه فعلًا:
@@ -332,13 +376,13 @@ export interface CommandDef {
   en: string;
   k: string;
   icon: string;
-  run: (ctx: { mode: 'simple' | 'pro'; tlOpen: boolean }) => Record<string, unknown>;
+  run: (ctx: { tlOpen: boolean }) => Record<string, unknown>;
 }
 
 export const CMDS: CommandDef[] = [
   { ar: 'إضافة نص', en: 'Add text', k: 'T', icon: 'text', run: () => ({ tool: 'text', panel: 'props' }) },
   { ar: 'تصدير…', en: 'Export…', k: '⌘E', icon: 'export', run: () => ({ exportOpen: true }) },
-  { ar: 'تبديل الوضع الاحترافي', en: 'Toggle Pro mode', k: '⌘.', icon: 'sliders', run: (s) => ({ mode: s.mode === 'pro' ? 'simple' : 'pro' }) },
+  { ar: 'الاختصارات', en: 'Keyboard shortcuts', k: '?', icon: 'keyboard', run: () => ({ shortcutsOpen: true }) },
   { ar: 'فتح المكتبة', en: 'Open library', k: '⌘L', icon: 'folder', run: () => ({ panel: 'assets' }) },
   { ar: 'استدعاء مِزو', en: 'Ask Mizo', k: '⌘J', icon: 'fx', run: () => ({ panel: 'ai' }) },
   { ar: 'تغيير المقاس إلى تيك توك', en: 'Resize to TikTok', k: '', icon: 'resize', run: () => ({ sizeIdx: 2 }) },
@@ -375,7 +419,7 @@ export interface Segmented {
 
 export const seg = (on: boolean): Segmented =>
   on
-    ? { bg: 'var(--surface)', fg: 'var(--text)', sh: '0 1px 2px rgba(0,0,0,.10)' }
+    ? { bg: 'var(--seg)', fg: 'var(--text)', sh: '0 1px 2px rgba(0,0,0,.18)' }
     : { bg: 'transparent', fg: 'var(--muted)', sh: 'none' };
 
 export const glyphStyle = (z: { w: number; h: number }, m: number): CSSProperties => {

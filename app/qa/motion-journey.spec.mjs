@@ -213,7 +213,7 @@ async function main() {
   // 3. The second line is timed to follow it
   // ============================================================
   console.log('\n3. سطر ثانٍ يظهر بعده');
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(250);
   const line2 = await placeText(page, 0.5, 0.42, 'حتى ٧٠٪ على كل المجموعات');
   await page.locator('[data-testid="anim-preset-fade"]').click();
@@ -478,7 +478,9 @@ async function main() {
   assert(scale2.disabled === true, 'the 1×/2×/3× multiplier is disabled for video — at its 2× default a project whose card reads 1080 × 1920 was writing a 2160 × 3840 file');
   assert(Number(scale1Bg) >= 600, `and 1× is shown as the active one instead (font-weight ${scale1Bg}), so the dialog and the file agree`);
   const lockReason = await page.locator('[data-testid="export-scale-2"]').evaluate((e) => e.closest('div').title);
-  assert(/دقّة اللوحة نفسها/.test(lockReason), `with the reason stated on hover: «${lockReason}»`);
+  // النصّ صار مختصرًا بلهجةٍ خليجيّة (طلب المالك، ٢٤ أكتوبر ٢٠٢٦: «الاختصار واجب»)؛ والسبب
+  // نفسه مكتوب: الفيديو بدقّة اللوحة.
+  assert(/بدقة اللوحة/.test(lockReason), `with the reason stated on hover: «${lockReason}»`);
 
   await page.getByRole('button', { name: 'PNG', exact: true }).click();
   await page.waitForTimeout(200);

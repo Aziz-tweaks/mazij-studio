@@ -248,9 +248,9 @@ async function main() {
   await testExportReuse(page);
 
   // --- 3. Real UI: draw two overlapping rects, union them, undo -----------------
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(80);
-  await page.locator('button', { hasText: 'أشكال' }).click();
+  await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(80);
 
   const abBox = await page.locator('[data-testid="artboard"]').boundingBox();
@@ -268,7 +268,7 @@ async function main() {
 
   const idsBefore0 = await page.locator('[data-el-id]').evaluateAll((els) => els.map((e) => e.getAttribute('data-el-id')));
   await draw(0.3, 0.01, 0.55, 0.075);
-  await page.locator('button', { hasText: 'أشكال' }).click(); // re-arm the shape tool for a second draw
+  await page.locator('[data-tool="shape"]').click(); // re-arm the shape tool for a second draw
   await page.waitForTimeout(80);
   // Start the second drag from a corner clear of the first rect (a pointerdown that
   // lands *on* the first shape would start a move-drag instead of a new shape-draw)
@@ -280,7 +280,7 @@ async function main() {
   const newIds = idsAfter.filter((id) => !idsBefore0.includes(id));
   assert(newIds.length === 2, `setup: drawing two overlapping rectangles created two new shape elements (got ${newIds.length})`);
 
-  await page.locator('button', { hasText: 'تحديد' }).click(); // select tool
+  await page.locator('[data-tool="select"]').click(); // select tool
   await page.waitForTimeout(80);
   await page.locator(`[data-el-id="${newIds[0]}"]`).click({ force: true });
   await page.locator(`[data-el-id="${newIds[1]}"]`).click({ force: true, modifiers: ['Shift'] });

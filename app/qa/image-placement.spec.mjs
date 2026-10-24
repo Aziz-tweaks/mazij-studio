@@ -84,7 +84,7 @@ async function main() {
   page.on('pageerror', (e) => pageErrors.push(e.message));
 
   await bootBlank(page, BASE_URL, 'ig-portrait');
-  await page.locator('button', { hasText: /^احترافي$/ }).first().click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(260);
 
   console.log('\n١. النقرة تضع الصورة عندها');

@@ -51,7 +51,7 @@ export function AiTab() {
                   padding: '0 10px',
                   border: 0,
                   borderRadius: 'calc(var(--rs) - 2px)',
-                  background: on ? 'var(--surface)' : 'transparent',
+                  background: on ? 'var(--seg)' : 'transparent',
                   boxShadow: on ? '0 1px 2px rgba(0,0,0,.12)' : 'none',
                   color: !e.available ? 'var(--muted2, var(--muted))' : on ? 'var(--text)' : 'var(--muted)',
                   fontWeight: on ? 700 : 500,

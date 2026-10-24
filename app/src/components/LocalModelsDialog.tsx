@@ -90,21 +90,21 @@ export function LocalModelsDialog() {
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>{L.local_models_non_commercial}</div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 11, color: isDown ? 'var(--accent)' : 'var(--muted)' }}>{isDown ? L.local_models_downloaded : L.local_models_not_downloaded}</span>
+                    <span style={{ fontSize: 11, color: isDown ? 'var(--accentText)' : 'var(--muted)' }}>{isDown ? L.local_models_downloaded : L.local_models_not_downloaded}</span>
                     <div style={{ flex: 1 }} />
                     {isDown ? (
                       <button data-testid={`delete-model-${model.id}`} onClick={() => onDelete(model)} style={{ height: 28, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', fontSize: 11.5 }}>
                         {L.local_models_delete}
                       </button>
                     ) : (
-                      <button data-testid={`download-model-${model.id}`} disabled={isBusy} onClick={() => onDownload(model)} style={{ height: 28, padding: '0 10px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 11.5, fontWeight: 600 }}>
+                      <button data-testid={`download-model-${model.id}`} disabled={isBusy} onClick={() => onDownload(model)} style={{ height: 28, padding: '0 10px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 11.5, fontWeight: 600 }}>
                         {isBusy ? `${pct}%` : L.local_models_download}
                       </button>
                     )}
                   </div>
                 )}
                 {error[model.id] && (
-                  <div data-testid={`model-error-${model.id}`} style={{ fontSize: 11, color: '#e5484d' }}>
+                  <div data-testid={`model-error-${model.id}`} style={{ fontSize: 11, color: 'var(--danger)' }}>
                     {error[model.id]}
                   </div>
                 )}

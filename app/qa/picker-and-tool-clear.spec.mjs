@@ -129,7 +129,8 @@ const armedTool = (page) =>
   });
 
 async function placeTile(page, tile) {
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(320);
   await page.locator(`[data-shape-tile="${tile}"]`).click();
   await page.waitForTimeout(520);
@@ -247,9 +248,13 @@ async function main() {
   // فهو الذي كان يكشف انفصالَ الحقل القديم عن الطبقة التي تَرسم.
   const rect = await placeTile(page, 'rect');
 
+  // كان هنا: «الوضعُ الافتراضيّ: محرّرُ كومة المظهر غائبٌ عن الـDOM» — حجّةً لوجود
+  // هذا الصفّ. ألغى المالك الوضعين في ٢٤ أكتوبر ٢٠٢٦ فصار المحرّر حاضرًا للجميع؛
+  // والحجّة باقية بصيغةٍ أخرى: الصفّ هو **الطريق السريع** إلى لونٍ حرّ (نقرةٌ واحدة)،
+  // والمحرّر طريقُ الطبقات. فالمقيس الآن أنّ الاثنين حاضران، والصفُّ لم يُنزَع لأجل المحرّر.
   assert(
-    (await page.locator(`[data-testid="appearance-add-fill-${rect}"]`).count()) === 0,
-    'الوضعُ الافتراضيّ: محرّرُ كومة المظهر غائبٌ عن الـDOM — فهو ليس طريقَ المالك إلى لونٍ حرّ، وهذا سببُ عدم إغناء البند ١٧ عن هذا الصفّ',
+    (await page.locator(`[data-testid="appearance-add-fill-${rect}"]`).count()) === 1,
+    'بلا وضعين: محرّرُ كومة المظهر حاضرٌ لكلّ مصمّم — والصفّ السريع أدناه باقٍ بجانبه لا بديلًا عنه',
   );
 
   // **الطريقُ السريعُ لم يُنزَع ليُضاف البطيء** — والشاهدُ ليس وجودَ أزرارٍ بل
@@ -533,7 +538,7 @@ async function main() {
   console.log('\n٥. مسودّةُ القلم تُثبَّت لا تُلقى');
   await page.evaluate((k) => window.localStorage.removeItem(k), AUTOSAVE_KEY);
   await bootBlank(page, BASE_URL, 'ig-portrait');
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(300);
 
   const penBoard = await page.locator('[data-testid="artboard"]').boundingBox();

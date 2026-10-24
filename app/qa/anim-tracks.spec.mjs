@@ -127,7 +127,7 @@ async function main() {
   await testExportParity(page);
 
   // --- 2. Timeline UI: per-property add/move/delete/easing on an expanded row ---
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(150);
   await page.locator('[data-layer-id="head"] button', { hasText: 'العنوان' }).click();
   await page.waitForTimeout(100);
@@ -214,7 +214,7 @@ async function main() {
   await page.reload();
   await resumeAfterReload(page); // reload now lands on the start screen; re-enter through the resume card
   await page.waitForSelector('[data-testid="artboard"]');
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(150);
   await page.locator('[data-layer-id="head"] button', { hasText: 'العنوان' }).click();
   await page.waitForTimeout(100);
@@ -285,7 +285,7 @@ async function main() {
 
   // Scrub to the clip's end and confirm it settles fully opaque with no residual
   // offset — same end-state the old single-progress-curve formula produced.
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(150);
   const ruler = page.locator('[data-testid="timeline-ruler"]');
   const rb = await ruler.boundingBox();

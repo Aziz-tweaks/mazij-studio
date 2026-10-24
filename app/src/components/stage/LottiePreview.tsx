@@ -79,7 +79,7 @@ export function LottiePreview({ data, loop, time }: LottiePreviewProps) {
 
   if (!meta) {
     return (
-      <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: 'rgba(217,122,108,.12)', color: '#D97A6C', fontSize: '2.6cqw', textAlign: 'center', padding: '4%' }}>
+      <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', background: 'rgba(255,107,107,.12)', color: 'var(--danger)', fontSize: '2.6cqw', textAlign: 'center', padding: '4%' }}>
         ملف Lottie غير صالح
       </div>
     );

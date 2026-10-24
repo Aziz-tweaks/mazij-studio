@@ -201,7 +201,8 @@ async function main() {
   // 3. File-picker import via the "Lottie" tool
   // ============================================================
   const countBeforePicker = await page.locator('[data-el-id]').count();
-  await page.locator('button', { hasText: 'Lottie' }).first().click();
+  // زرّ لوتي صار «ملصقات» في شريط الإضافة (٢٤ أكتوبر ٢٠٢٦) — يُطلب بمعرّف أداته.
+  await page.locator('[data-tool="lottie"]').click();
   await page.waitForTimeout(80);
   // Selecting the tool only arms it — same as the "image" tool, the actual file
   // dialog opens on the next click on the empty artboard background.

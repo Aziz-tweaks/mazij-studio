@@ -139,9 +139,9 @@ async function main() {
   assert(pageErrors.length === 0, `no console/page errors after exercising shapeTextOnCurve: ${JSON.stringify(pageErrors)}`);
 
   // --- 3. Real live UI: draw a pen path, pair-select, attach, verify, detach ------
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(80);
-  await page.locator('button[title="P"]').click(); // pen tool
+  await page.locator('[data-tool="pen"]').click(); // pen tool
   await page.waitForTimeout(80);
 
   const abBox = await page.locator('[data-testid="artboard"]').boundingBox();

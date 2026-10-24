@@ -42,6 +42,8 @@ import { LIVE_PHOTO_DEFAULT_DURATION } from '../lib/livePhotoExport';
 import { computeBooleanOp, isBooleanEligible, type BooleanOp } from '../lib/pathBoolean';
 import { insertAnchorOnSegment } from '../lib/pathSmoothing';
 import { magicResizeElements, placeDesignInFrame } from '../lib/magicResize';
+import { cloneElements, insertAbove, withDependencies } from '../lib/clipboard';
+import { TEXT_PRESETS, type TextPreset } from '../lib/textPresets';
 import { saveExportedFile } from '../lib/saveExport';
 import { effectiveExportScale } from '../lib/exportEstimate';
 import { pickImageFile, readImageFile, type LoadedImage } from '../lib/imageFile';
@@ -290,6 +292,13 @@ function visibleCmds(query: string) {
  * مربوط بالتحديد (`re-capcut-flows.md` §3.7، §5.4). */
 function leaveInsertLibrary(s: StudioState): { panel?: PanelId } {
   return s.panel === 'library' ? { panel: 'props' } : {};
+}
+
+/** مستندٌ رجع ساكنًا بالتراجع (تراجعٌ عن «حرّك» مثلًا) لا يبقى يُشغَّل، ولا يبقى عند
+ * لحظةٍ قبل اكتمال الدخول — الساكن يُعرض ويُصدَّر عند لحظة الاستقرار دائمًا. */
+function stillSettled(doc: DocSnapshot): Partial<StudioState> {
+  if (doc.medium === 'timed') return {};
+  return { playing: false, t: settledTime(doc.elements, doc.fps ?? DEFAULT_DOC_FPS) };
 }
 
 function docOf(s: StudioState): DocSnapshot {
@@ -648,8 +657,6 @@ export interface StudioActions {
    * كله: ألّا يُجبَر العائد على المرور بالمُنتقي ليصل إلى عمله. */
   resumeOpenProject: () => void;
   toggleLang: () => void;
-  setSimple: () => void;
-  setPro: () => void;
   /** `keepSelection` للمسارات التي تُعيد الأداةَ إلى «تحديد» **بعد إنشاء عنصر**،
    * فالعنصرُ الجديدُ محدَّدٌ لتوّه ونزعُه عنه يُفقِد قدرةً. انظر `armTool`. */
   setTool: (tool: StudioState['tool'], opts?: { keepSelection?: boolean }) => void;
@@ -661,6 +668,29 @@ export interface StudioActions {
   runSelectedCmd: () => void;
   runCommand: (c: CommandDef) => void;
   setPanel: (panel: PanelId) => void;
+  /** يفتح لوح «العناصر» على مكتبة أداةٍ **بلا تسليحها** — باب شريط الإضافة: من يتصفّح
+   * الأشكال أو أنماط النصوص لم يطلب أن تصير نقرتُه التالية على اللوحة رسمًا. */
+  openLibrary: (tool: StudioState['tool']) => void;
+  /** نقرة ثانية على البند نفسه في شريط الإضافة تُغلق لوحه (الأداة الشائعة). */
+  toggleRailPanel: (panel: Exclude<PanelId, 'props' | null>, opts?: { libraryTool?: StudioState['tool']; assetsTab?: StudioState['assetsTab'] }) => void;
+  toggleInspector: () => void;
+  toggleLayers: () => void;
+  toggleShortcuts: () => void;
+  closeShortcuts: () => void;
+  /** ⌘D — نسخةٌ من المحدَّد فوقه مباشرةً بإزاحةٍ صغيرة، والنسخة هي المحدَّدة. */
+  duplicateSelected: () => void;
+  /** ⌘C / ⌘X / ⌘V — حافظةٌ داخليّة للعناصر (بقناعها ومسارها إن وُجدا). */
+  copySelected: () => void;
+  cutSelected: () => void;
+  pasteClipboard: () => void;
+  /** ⌘A — كلّ العناصر الظاهرة غير المقفلة. */
+  selectAllElements: () => void;
+  /** يضع نصًّا جاهزًا في وسط اللوحة محدَّدًا — بطاقات لوح «نصوص». */
+  addTextPreset: (preset: TextPreset) => void;
+  /** «حرّك» من الشريط السياقي: يطبّق نمط دخول على العنصر — وإن كان المستند ساكنًا
+   * يصير مُوقَّتًا في الخطوة نفسها فيطلع الخطّ الزمنيّ ويشتغل («أي تصميم يصير مشهد»).
+   * خطوة تراجع واحدة تُرجع الاثنين. */
+  animateElement: (id: ElementId, preset: AnimPreset) => void;
   setAssetsTab: (tab: StudioState['assetsTab']) => void;
   toggleTimeline: () => void;
   togglePlay: () => void;
@@ -1011,6 +1041,12 @@ const StudioContext = createContext<StudioContextValue | null>(null);
 
 export function StudioProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<StudioState>(initialStudioState);
+  /** حافظة العناصر (⌘C/⌘X/⌘V). خارج الحالة عمدًا: ليست مستندًا ولا واجهة، ولا يُعاد
+   * الرسم لأجلها. `pastes` يعدّ اللصقات منذ آخر نسخ فتتدرّج الإزاحة ولا تتكدّس. */
+  const clipboardRef = useRef<{ elements: DocElement[]; pastes: number } | null>(null);
+  /** الحالة الحاضرة لأفعالٍ تقرأ ولا تكتب (النسخ) — كي لا يُعاد بناء الأفعال كلّها لأجلها. */
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const patch = useCallback((p: Partial<StudioState> | ((s: StudioState) => Partial<StudioState>)) => {
     setState((s) => ({ ...s, ...(typeof p === 'function' ? p(s) : p) }));
   }, []);
@@ -1665,6 +1701,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       return {
         ...s,
         ...prev,
+        ...stillSettled(prev),
         historyPast: s.historyPast.slice(0, -1),
         historyLabels: s.historyLabels.slice(0, -1),
         historyFuture: [docOf(s), ...s.historyFuture],
@@ -1682,6 +1719,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       return {
         ...s,
         ...next,
+        ...stillSettled(next),
         historyPast: [...s.historyPast, docOf(s)],
         historyLabels: [...s.historyLabels, label],
         historyFuture: rest,
@@ -2081,14 +2119,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           ...(s.medium !== 'timed' ? { t: settledTime(s.elements, s.fps ?? DEFAULT_DOC_FPS) } : {}),
         })),
       toggleLang: () => patch((s) => ({ lang: s.lang === 'ar' ? 'en' : 'ar' })),
-      // الرجوعُ إلى الوضع البسيط يَنزع أدواتَ الوضع الاحترافيّ من اليد، **فهو
-      // بابٌ ثالثٌ تُغادَر منه أداةُ القلم** — ولم يكن يَعبُر المُوَدِّع. وأثرُه
-      // أسوأُ من المسح: الأداةُ تصير «تحديد» و`penDraft` يبقى بنقاطه، وهي بعينها
-      // «المسودّةُ المهجورة» التي يُحذِّر منها تعليقُ `setTool` أدناه. فيَعبُر
-      // `armTool` كغيره، فيُثبَّت ما رُسِم. ومن بقي على أداةٍ بسيطة لا يتغيّر
-      // عنده شيء: `armTool` بالأداة نفسِها لا تُثبِّت ولا تَهدم.
-      setSimple: () => patch((s) => ({ ...armTool(s, ['pen', 'audio'].includes(s.tool) ? 'select' : s.tool), mode: 'simple' })),
-      setPro: () => patch({ mode: 'pro' }),
       // مغادرةُ أداة القلم **تُثبِّت** المسودّةَ الجارية ولا تُلقيها، ولا تتركها
       // معلّقةً في الحالة كذلك. والعلّةُ التي من أجلها كانت تُمسَح باقيةٌ على
       // صحّتها: معاينةُ المسودّة مشروطةٌ بـ`tool === 'pen'`، فمسودّةٌ مهجورةٌ تختفي
@@ -2155,6 +2185,136 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       },
       runCommand: runCmd,
       setPanel: (panel) => patch({ panel }),
+      openLibrary: (tool) => patch({ panel: 'library', libraryTool: tool }),
+      toggleRailPanel: (panel, opts) =>
+        patch((s) => {
+          const same =
+            s.panel === panel &&
+            (opts?.libraryTool === undefined || s.libraryTool === opts.libraryTool) &&
+            (opts?.assetsTab === undefined || s.assetsTab === opts.assetsTab);
+          if (same) return { panel: 'props' };
+          return {
+            panel,
+            ...(opts?.libraryTool !== undefined ? { libraryTool: opts.libraryTool } : {}),
+            ...(opts?.assetsTab !== undefined ? { assetsTab: opts.assetsTab } : {}),
+          };
+        }),
+      toggleInspector: () => patch((s) => ({ inspectorOpen: !s.inspectorOpen })),
+      toggleLayers: () => patch((s) => ({ layersOpen: !s.layersOpen })),
+      toggleShortcuts: () => patch((s) => ({ shortcutsOpen: !s.shortcutsOpen })),
+      closeShortcuts: () => patch({ shortcutsOpen: false }),
+      duplicateSelected: () =>
+        setState((s) => {
+          const ids = new Set(s.selectedIds);
+          if (!ids.size) return s;
+          const size = sizeAt(s.sizeIdx, s.customW, s.customH);
+          const sources = withDependencies(ids, s.elements);
+          const clones = cloneElements(sources, 24 / size.w, 24 / size.h);
+          const cloneSel = clones.filter((_, i) => ids.has(sources[i].id)).map((e) => e.id);
+          return {
+            ...s,
+            elements: insertAbove(s.elements, sources, clones),
+            selectedIds: cloneSel,
+            sel: cloneSel[cloneSel.length - 1] ?? null,
+            ...pushHistory(s, 'تكرار'),
+          };
+        }),
+      copySelected: () => {
+        const s = stateRef.current;
+        const ids = new Set(s.selectedIds);
+        if (!ids.size) return;
+        const sources = withDependencies(ids, s.elements);
+        clipboardRef.current = { elements: sources.map((e) => ({ ...e, ...(ids.has(e.id) ? {} : { __dep: true }) }) as DocElement), pastes: 0 };
+      },
+      cutSelected: () => {
+        const s = stateRef.current;
+        const ids = new Set(s.selectedIds);
+        if (!ids.size) return;
+        const sources = withDependencies(ids, s.elements);
+        clipboardRef.current = { elements: sources.map((e) => ({ ...e, ...(ids.has(e.id) ? {} : { __dep: true }) }) as DocElement), pastes: -1 };
+        const gone = new Set(sources.map((e) => e.id));
+        setState((cur) => ({
+          ...cur,
+          elements: cur.elements.filter((e) => !gone.has(e.id)),
+          selectedIds: [],
+          sel: null,
+          ...pushHistory(cur, 'قص'),
+        }));
+      },
+      pasteClipboard: () => {
+        const clip = clipboardRef.current;
+        if (!clip || !clip.elements.length) return;
+        clip.pastes += 1;
+        const n = clip.pastes;
+        setState((s) => {
+          const size = sizeAt(s.sizeIdx, s.customW, s.customH);
+          const raw = clip.elements.map((e) => {
+            const { __dep: _dep, ...rest } = e as DocElement & { __dep?: boolean };
+            return rest as DocElement;
+          });
+          const clones = cloneElements(raw, (24 * n) / size.w, (24 * n) / size.h);
+          const picked = clones.filter((_, i) => !(clip.elements[i] as DocElement & { __dep?: boolean }).__dep).map((e) => e.id);
+          return {
+            ...s,
+            elements: [...s.elements, ...clones],
+            selectedIds: picked,
+            sel: picked[picked.length - 1] ?? null,
+            tool: 'select',
+            ...pushHistory(s, 'لصق'),
+          };
+        });
+      },
+      selectAllElements: () =>
+        patch((s) => {
+          const ids = s.elements.filter((e) => e.visible && !e.locked && e.id !== BACKGROUND_ID).map((e) => e.id);
+          return { selectedIds: ids, sel: ids[ids.length - 1] ?? null, tool: 'select' };
+        }),
+      animateElement: (id, preset) =>
+        patch((s) => {
+          const elements = s.elements.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e));
+          const after = elements.find((e) => e.id === id);
+          if (!after) return {};
+          const label = (s.lang === 'ar' ? AR : EN).ctx_animate;
+          if (s.medium !== 'timed') {
+            // ساكنٌ يصير مشهدًا: الخطّ يطلع من تحت ويشتغل من البداية، فيرى المصمّم
+            // الحركة التي طلبها لحظةَ طلبها — لا مؤشّرًا واقفًا بعد نهايتها.
+            return { elements, medium: 'timed', tlOpen: true, t: 0, playing: preset !== 'none', ...pushHistory(s, label) };
+          }
+          const vanished = rendersNothingAt(after.anim, s.t);
+          return { elements, ...pushHistory(s, label), t: vanished ? Math.max(s.t, after.anim.start + after.anim.duration) : s.t };
+        }),
+      addTextPreset: (preset: TextPreset) =>
+        setState((s) => {
+          const def = TEXT_PRESETS[preset];
+          const id = newElementId('text');
+          const el: DocElement = {
+            id,
+            type: 'text',
+            visible: true,
+            locked: false,
+            opacity: 100,
+            maskId: null,
+            geo: { x: (1 - def.w) / 2, y: (1 - def.h) / 2, w: def.w, h: def.h, rotation: 0 },
+            text: def.text,
+            fontFamily: def.fontFamily,
+            fontSize: def.fontSize,
+            ...(def.tracking ? { tracking: def.tracking } : {}),
+            weight: def.weight,
+            color: null,
+            halign: def.halign,
+            valign: 'top',
+            anim: defaultAnim('none', 0, 0.6),
+            textAnim: defaultTextStagger(),
+            pathId: null,
+          };
+          return {
+            ...armTool(s, 'select'),
+            elements: [...s.elements, el],
+            selectedIds: [id],
+            sel: id,
+            ...pushHistory(s, 'نص'),
+          };
+        }),
       setAssetsTab: (assetsTab) => patch({ assetsTab }),
       toggleTimeline: () => patch((s) => ({ tlOpen: !s.tlOpen })),
       togglePlay,
@@ -3492,6 +3652,158 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       get: (_t, prop) => (mcpActionsRef.current as unknown as Record<string | symbol, unknown>)[prop],
     }),
   );
+
+  // --- اختصارات عامّة: النسخ واللصق والتكرار، التصدير ومِزو، الاختصارات، Esc، Space ---
+  //
+  // المالك (٢٤ أكتوبر ٢٠٢٦): «أهمّ شي الاختصار». هذه هي التي يضغطها كلّ مصمّم في أوّل
+  // دقيقة — ⌘D وC وV وA في البرامج الثلاثة كلّها — ولم يكن أيٌّ منها يعمل. وكلّها على
+  // `e.code` لا `e.key`، فتعمل والكيبورد عربي (السبب مشروحٌ عند اختصارات `Stage.tsx`).
+  //
+  // **وEsc سُلّمٌ يرجّعك للسطح:** المحرّرات (نصّ، قصّ، نقاط، قلم) والحوارات والقوائم
+  // لها Escape الخاصّ بها وتأخذه أوّلًا — وهذا لا يتدخّل ما دام أيٌّ منها مفتوحًا. فإن
+  // لم يبقَ شيء: يُلغي التحديد، ثم يرجع إلى أداة التحديد، ثم يُغلق لوح الإضافة.
+  //
+  // **وSpace نقرةٌ للتشغيل، ضغطٌ وسحبٌ للتحريك** (كما في أفتر إفكتس): على المستند
+  // المُوقَّت، Space تُطلَق بلا سحبٍ بينهما = شغّل/أوقف؛ ومع سحبٍ = تحريك اللوحة كما كان.
+  useEffect(() => {
+    const editable = (t: EventTarget | null) =>
+      t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+    const isButton = (t: EventTarget | null) => t instanceof HTMLElement && !!t.closest('button, [role="button"], a');
+    const overlayOpen = (st: StudioState) =>
+      st.cmdOpen || st.exportOpen || st.templatesOpen || st.artboardsOpen || st.localModelsOpen || st.refVideoOpen || st.mcpOpen || st.cmdInterpreterOpen || st.aiGenOpen || st.shortcutsOpen;
+    const menuOpen = () => !!document.querySelector('[role="menu"], [role="listbox"], [data-testid="easing-menu"]');
+    const textSelected = () => (window.getSelection()?.toString() ?? '').length > 0;
+    let spaceTap = false;
+    let pendingPaste = false;
+
+    const onDown = (e: KeyboardEvent) => {
+      const st = mcpStateRef.current;
+      const a = mcpActionsRef.current;
+      if (st.screen !== 'editor') return;
+      if (e.code === 'Space') return; // يُقرأ في مرحلة الفقاعة — انظر `onSpaceDown`.
+      if (editable(e.target)) return;
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (st.shortcutsOpen && (e.key === 'Escape' || (e.code === 'Slash' && (e.shiftKey || mod)))) {
+        e.preventDefault();
+        a.closeShortcuts();
+        return;
+      }
+      if ((e.code === 'Slash' && e.shiftKey && !mod) || (e.code === 'Slash' && mod)) {
+        if (overlayOpen(st)) return;
+        e.preventDefault();
+        a.toggleShortcuts();
+        return;
+      }
+      if (overlayOpen(st)) return;
+
+      if (mod && !e.altKey) {
+        if (e.code === 'KeyD' && !e.shiftKey) {
+          if (!st.selectedIds.length) return;
+          e.preventDefault();
+          a.duplicateSelected();
+        } else if (e.code === 'KeyC' && !e.shiftKey) {
+          if (!st.selectedIds.length || textSelected()) return;
+          e.preventDefault();
+          a.copySelected();
+        } else if (e.code === 'KeyX' && !e.shiftKey) {
+          if (!st.selectedIds.length || textSelected()) return;
+          e.preventDefault();
+          a.cutSelected();
+        } else if (e.code === 'KeyV' && !e.shiftKey) {
+          // لا `preventDefault`: إن كانت في حافظة النظام صورة، فحدث `paste` أدناه يأخذها،
+          // ويُلغي لصق العناصر قبل أن يقع (`pendingPaste`).
+          pendingPaste = true;
+          window.setTimeout(() => {
+            if (pendingPaste) mcpActionsRef.current.pasteClipboard();
+            pendingPaste = false;
+          }, 0);
+        } else if (e.code === 'KeyA' && !e.shiftKey) {
+          e.preventDefault();
+          a.selectAllElements();
+        } else if (e.code === 'KeyE' && !e.shiftKey) {
+          e.preventDefault();
+          a.openExport();
+        } else if (e.code === 'KeyJ' && !e.shiftKey) {
+          e.preventDefault();
+          a.toggleRailPanel('ai');
+        } else if (e.code === 'Backslash') {
+          // ⌘\ — اللوحة وحدها (فيغما): يطوي المفتش ولوح الإضافة، وضغطةٌ ثانية ترجع المفتش.
+          e.preventDefault();
+          const anyOpen = st.inspectorOpen || st.panel === 'library' || st.panel === 'assets' || st.panel === 'ai';
+          patch(anyOpen ? { inspectorOpen: false, panel: 'props' } : { inspectorOpen: true });
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !isButton(e.target)) {
+        // Enter على المحدَّد = ادخل تحريره (الأداة الشائعة وفيغما): النصّ يُكتب، والمسار تُحرَّر نقاطه.
+        if (st.editingTextId || st.penDraft.length || st.selectedIds.length !== 1) return;
+        const el = st.elements.find((x) => x.id === st.selectedIds[0]);
+        if (!el || el.locked) return;
+        if (el.type === 'text') {
+          e.preventDefault();
+          a.startTextEdit(el.id);
+        } else if (el.type === 'shape' && el.shape === 'path' && (el.points?.length ?? 0) >= 2 && !el.outline?.length && !el.subpaths?.length && st.nodeEditId !== el.id) {
+          e.preventDefault();
+          a.startNodeEdit(el.id);
+        }
+        return;
+      }
+
+      if (e.key === 'Escape' && !e.shiftKey && !mod) {
+        if (menuOpen() || st.editingTextId || st.cropEditingId || st.nodeEditId || st.penDraft.length || st.pendingEditSnapshot) return;
+        if (st.selectedIds.length) a.selectNone();
+        else if (st.tool !== 'select') a.setTool('select');
+        else if (st.panel === 'library' || st.panel === 'assets' || st.panel === 'ai') a.setPanel('props');
+      }
+    };
+    // Space في **مرحلة الفقاعة** لا الالتقاط: مسارُ الخطّ الزمنيّ المركَّز يأخذ Space
+    // بنفسه ويوقف انتشاره، فلا يصل هنا — وإلا شغّل هو وأوقفنا نحن في الضغطة نفسها.
+    const onSpaceDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      spaceTap = mcpStateRef.current.screen === 'editor' && !editable(e.target) && !isButton(e.target);
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const tap = spaceTap;
+      spaceTap = false;
+      const st = mcpStateRef.current;
+      if (!tap || st.screen !== 'editor' || st.medium !== 'timed' || editable(e.target) || overlayOpen(st)) return;
+      e.preventDefault();
+      mcpActionsRef.current.togglePlay();
+    };
+    // ضغطٌ بالفأرة وSpace مضغوطة = سحبُ تحريك، لا نقرةُ تشغيل.
+    const onPointer = () => {
+      spaceTap = false;
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      const st = mcpStateRef.current;
+      if (st.screen !== 'editor' || editable(e.target) || overlayOpen(st)) return;
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
+      if (!file) return;
+      pendingPaste = false;
+      e.preventDefault();
+      const size = sizeAt(st.sizeIdx, st.customW, st.customH);
+      void mcpActionsRef.current.insertImageFromFile(file, { x: size.w / 2, y: size.h / 2 });
+    };
+    // **مرحلة الالتقاط، قبل كلّ مُستمعٍ آخر.** يحتاج السُّلّم أن يرى الحالة **قبل** أن
+    // يأخذ أحدٌ المفتاح: مُستمع Esc الذي يُغلق حوار التصدير يكتب الحالة، ويُفرَغ
+    // التحديثُ في نقطة المهامّ الدقيقة بين مُستمعٍ وآخر — فكان هذا يرى الحوارَ مغلقًا
+    // فيُلغي التحديد في الضغطة نفسها (قيسَ في `qa/rotation-sign.spec.mjs`).
+    window.addEventListener('keydown', onDown, true);
+    window.addEventListener('keydown', onSpaceDown);
+    window.addEventListener('keyup', onUp);
+    window.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('keydown', onDown, true);
+      window.removeEventListener('keydown', onSpaceDown);
+      window.removeEventListener('keyup', onUp);
+      window.removeEventListener('pointerdown', onPointer, true);
+      window.removeEventListener('paste', onPaste);
+    };
+  }, [patch]);
 
   useEffect(() => {
     // Only touch the bridge at all once the user has actually opted in — the

@@ -202,7 +202,9 @@ const previewDecor = (page) =>
 
 /** يفتح لوح «المكتبة ← الألوان» حيث يعيش مفتاح الزخرفة. */
 async function openColorsPane(page) {
-  await page.locator('button', { hasText: /^المكتبة$/ }).first().click();
+  // الألوان في «علامتي» بشريط الإضافة (كانت تبويب «المكتبة»). والبند يُغلق لوحه إن
+  // ضُغط وهو مفتوح، فلا يُضغط إلا إن لم يكن ظاهرًا.
+  if (!(await page.locator('[data-testid="decor-accent-toggle"]').count())) await page.locator('[data-rail="brand"]').click();
   await page.waitForTimeout(200);
   await page.locator('button', { hasText: /^الألوان$/ }).first().click();
   await page.waitForTimeout(220);
@@ -210,7 +212,8 @@ async function openColorsPane(page) {
 
 /** يضع شكلًا من المكتبة — أبسط «عنصر حقيقي وضعه المستخدم بيده». */
 async function placeShape(page, tile) {
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(300);
   await page.locator(`[data-shape-tile="${tile}"]`).click();
   await page.waitForTimeout(500);
@@ -333,7 +336,7 @@ async function main() {
   // صندوقٍ عرضه ٧٦٠. عرضها الطبيعي ٧٦١٫٠٧ — فتنكسر سطرين بلا تتبُّع، وسطرًا واحدًا
   // بتتبُّع ‑١٪ (= `letter-spacing: -0.01em` في المرجع).
   await bootBlank(page, BASE_URL, 'ig');
-  await page.locator('button', { hasText: /^احترافي$/ }).first().click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(220);
   const headId = await addText(page, 'مذاق السدرة');
   const sizeField = page.locator('label').filter({ has: page.locator('span:text-is("px")') }).locator('input[type="number"]');

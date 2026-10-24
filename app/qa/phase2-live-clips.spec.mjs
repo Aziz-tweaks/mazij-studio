@@ -75,7 +75,7 @@ const sha = (buf) => createHash('sha256').update(buf).digest('hex');
 async function openFormat(page, formatId, { pro = true } = {}) {
   await bootBlank(page, BASE_URL, formatId);
   if (pro) {
-    await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+    // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
     await page.waitForTimeout(200);
   }
 }
@@ -623,7 +623,10 @@ async function main() {
   const sBefore = await animOf(page, sEl);
   assert((await page.locator(`[data-testid="clip-${sEl}"]`).count()) === 1, 'simple mode renders a real clip for the element, not a static bar at opacity .35');
   assert((await page.locator(`[data-testid^="kf-${sEl}-"]`).count()) === 0, 'and **no** keyframe diamonds — keys stay a pro surface, so the gate came off the clip and not off the model');
-  assert((await page.locator(`[data-testid="clip-${sEl}-add-kf"]`).count()) === 0, 'and no «keyframe at the playhead» button either');
+  // كان: «ولا زرّ "مفتاح عند المؤشّر" كذلك» — المفاتيحُ سطحٌ احترافيّ. ألغى المالك
+  // الوضعين في ٢٤ أكتوبر ٢٠٢٦، فالزرّ حاضرٌ لكلّ مصمّم على المستند المُوقَّت؛ والبوّابةُ
+  // التي يحرسها هذا القسم — المقطعُ حيٌّ بلا شرطٍ احترافيّ — باقيةٌ كما هي أعلاه.
+  assert((await page.locator(`[data-testid="clip-${sEl}-add-kf"]`).count()) === 1, 'and the «keyframe at the playhead» button is there for everyone — no mode hides it any more');
   const sBody = await page.locator(`[data-testid="clip-${sEl}"]`).boundingBox();
   await dragBy(page, sBody.x + sBody.width * 0.5, sBody.y + sBody.height / 2, (1.0 * sTracks.width) / sSpan, 14);
   const sMoved = await animOf(page, sEl);
@@ -715,7 +718,8 @@ async function main() {
   assert((gBefore.tracks.rotation || []).length === 2, `a hand-built rotation track exists (${(gBefore.tracks.rotation || []).length} keys) — a track no preset ever writes`);
   const presetState = await page.locator('[data-testid="anim-preset-pop"]').evaluate((e) => ({ disabled: e.disabled, title: e.getAttribute('title') }));
   assert(
-    presetState.disabled && /سيَمحوها/.test(presetState.title || ''),
+    // السبب مكتوبٌ بالخليجيّة المختصرة (٢٤ أكتوبر ٢٠٢٦) وما زال يقول ما سيقع: «بتمسح».
+    presetState.disabled && /بتمسح/.test(presetState.title || ''),
     `and the entrance-preset buttons are **refused with a written reason** rather than silently destroying it: «${(presetState.title || '').slice(0, 60)}…»`,
   );
   const gModel = await page.evaluate(

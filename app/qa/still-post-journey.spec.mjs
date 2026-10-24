@@ -211,27 +211,44 @@ async function main() {
   await bootBlank(page, BASE_URL, 'ig');
   assert((await armedTool(page)) === 'select', 'a new blank document starts on the select tool');
 
-  for (const [key, tool] of [['KeyT', 'text'], ['KeyR', 'shape'], ['KeyI', 'image'], ['KeyE', 'fx'], ['KeyV', 'select']]) {
+  // الحروف حروف أداة المتّجهات بمعانيها منذ ٢٤ أكتوبر ٢٠٢٦ (المالك: «V A P M T تشتغل
+  // دائمًا»): E لم يعد «تأثيرات» — التأثيرات إدراجٌ في شريط الإضافة لا أداة رسم —
+  // وصار للمستطيل M بجانب R، وللدائرة L، ولليد H، وللتحديد المباشر A.
+  for (const [key, tool] of [['KeyT', 'text'], ['KeyR', 'shape'], ['KeyM', 'shape'], ['KeyL', 'shape'], ['KeyI', 'image'], ['KeyH', 'hand'], ['KeyA', 'direct'], ['KeyP', 'pen'], ['KeyV', 'select']]) {
     await page.keyboard.press(key);
     await page.waitForTimeout(140);
     assert((await armedTool(page)) === tool, `pressing ${key} arms the "${tool}" tool the rail's own tooltip promises`);
   }
 
   // The tooltip letter and the working key are the same letter, by construction.
-  const railPromises = await page.locator('[data-tool]').evaluateAll((els) => els.map((e) => ({ tool: e.getAttribute('data-tool'), key: e.getAttribute('title') })));
+  //
+  // كان التلميح الحرفَ وحده («V»). صار «الاسم (الحرف)» — «تحديد (V)» — لأنّ حبّة
+  // الأدوات بلا تسميات تحت الأيقونات، فالتلميح يحمل الاسم والحرف معًا. والعقد نفسه:
+  // كلُّ أداة رسمٍ في الحبّة تُعلن حرفًا، والحرف المعلَن هو الذي يُسلِّحها (أدناه).
+  const railPromises = await page.locator('[data-testid="tool-pill"] [data-tool]').evaluateAll((els) => els.map((e) => ({ tool: e.getAttribute('data-tool'), key: ((e.getAttribute('title') || '').match(/\(([A-Z])\)$/) || [])[1] })));
   assert(
-    railPromises.every((t) => /^[A-Z]$/.test(t.key || '')),
-    `every visible rail button still advertises a single-letter shortcut (${railPromises.map((t) => `${t.tool}:${t.key}`).join(' ')})`,
+    railPromises.length >= 6 && railPromises.every((t) => /^[A-Z]$/.test(t.key || '')),
+    `every tool in the pill advertises a single-letter shortcut (${railPromises.map((t) => `${t.tool}:${t.key}`).join(' ')})`,
   );
+  for (const t of railPromises) {
+    await page.keyboard.press(`Key${t.key}`);
+    await page.waitForTimeout(90);
+    assert((await armedTool(page)) === t.tool, `the advertised letter ${t.key} really arms «${t.tool}»`);
+  }
+  await page.keyboard.press('KeyV');
+  await page.waitForTimeout(90);
 
-  // Pro-only tools are hidden in simple mode, so their letters must stay inert —
-  // a shortcut that arms a tool with no button leaves the designer somewhere they
-  // cannot see why they are.
+  // كان هنا: «في الوضع البسيط لا يُسلِّح KeyP القلم، لأنّ الشريط يُخفيه». والقاعدة
+  // التي يحرسها باقية — اختصارٌ لا يُسلِّح أداةً بلا زرّ — لكنّ المالك ألغى الوضعين
+  // (٢٤ أكتوبر ٢٠٢٦: «العمق يُطلب ولا يُفرض»)، فالقلم له زرٌّ دائمًا، فحرفه يعمل دائمًا.
   await page.keyboard.press('KeyV');
   await page.waitForTimeout(100);
   await page.keyboard.press('KeyP');
   await page.waitForTimeout(140);
-  assert((await armedTool(page)) === 'select', 'in simple mode KeyP does NOT arm the pen — the rail hides it, so the shortcut hides too');
+  assert((await armedTool(page)) === 'pen', 'KeyP arms the pen from the first moment — there is no mode that hides it any more');
+  assert((await page.locator('[data-testid="tool-pill"] [data-tool="pen"]').count()) === 1, '…and the pen it arms has its visible button in the tool pill');
+  await page.keyboard.press('KeyV');
+  await page.waitForTimeout(100);
 
   // And a shortcut must never fire while the designer is typing a value.
   await page.keyboard.press('KeyT');
@@ -356,6 +373,8 @@ async function main() {
   // A bare CLICK (no drag) with the shape tool armed still means "select this" —
   // the shape tool creates by dragging, so a click is free to carry its usual
   // meaning, and qa/shapes-library.spec.mjs requires the insert library to give way.
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(250);
   assert((await page.locator('[data-shape-tile]').count()) > 0, 'setup: the shapes library is open');
@@ -390,7 +409,8 @@ async function main() {
   // 5. لون الشكل: الشريحة تُلوّن ما وُضع من المكتبة، لا الحالة وحدها
   // ============================================================
   await bootBlank(page, BASE_URL, 'ig');
-  await page.locator('button', { hasText: /^المكتبة$/ }).first().click();
+  // اللوحات اللونيّة في «علامتي» بشريط الإضافة (كانت تبويب «المكتبة»).
+  await page.locator('[data-rail="brand"]').click();
   await page.waitForTimeout(250);
   await page.locator('button', { hasText: /^الألوان$/ }).first().click();
   await page.waitForTimeout(300);
@@ -405,7 +425,8 @@ async function main() {
       return inner ? getComputedStyle(inner).backgroundColor : null;
     });
 
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(400);
   await page.locator('[data-shape-tile="ellipse"]').click();
   await page.waitForTimeout(700);
@@ -419,7 +440,8 @@ async function main() {
 
   // An open shape (a line) carries its colour on the stroke layer, not a fill —
   // colouring it must follow that, or the line stays grey.
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(400);
   await page.locator('[data-shape-tile="line"]').click();
   await page.waitForTimeout(700);

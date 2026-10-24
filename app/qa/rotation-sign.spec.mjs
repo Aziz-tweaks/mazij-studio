@@ -62,7 +62,8 @@ async function typeInto(locator, page, value) {
   await sleep(page, 140);
 }
 async function addShape(page, tile) {
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await sleep(page, 320);
   await page.locator(`[data-shape-tile="${tile}"]`).click();
   await sleep(page, 520);
@@ -156,7 +157,7 @@ async function main() {
   });
 
   await bootBlank(page, BASE_URL, 'ig-portrait');
-  await page.locator('button', { hasText: /^احترافي$/ }).first().click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await sleep(page, 280);
 
   const bg = await addShape(page, 'rect');

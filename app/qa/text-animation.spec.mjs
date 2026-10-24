@@ -13,7 +13,7 @@
 //
 // Run: node qa/text-animation.spec.mjs   (dev server must be running on :1420)
 import { chromium } from 'playwright';
-import { bootDemo, resumeAfterReload } from './helpers/boot.mjs';
+import { bootDemoTimed, resumeAfterReload, switchToTimed } from './helpers/boot.mjs';
 
 const BASE_URL = 'http://localhost:1420';
 let pass = 0;
@@ -39,7 +39,9 @@ async function main() {
     if (m.type() === 'error') pageErrors.push(m.text());
   });
 
-  await bootDemo(page, BASE_URL);
+  // التتابعُ حركةٌ، وأسطحُ الحركة تظهر لمستندٍ له زمن (٢٤ أكتوبر ٢٠٢٦: «المستند يقرّر
+  // الشاشة» — `MEDIUM_SURFACES`). فالبوستر نفسه على وجهةٍ مُوقَّتة.
+  await bootDemoTimed(page, BASE_URL);
 
   // --- 1. Arabic grapheme segmentation: tashkeel never torn from its base letter ---
   // "مُحَمَّد" (Muhammad with full diacritics) has 4 *base* letters but 7 UTF-16 code
@@ -199,6 +201,9 @@ async function main() {
   await page.reload();
   await resumeAfterReload(page); // reload now lands on the start screen; re-enter through the resume card
   await page.waitForSelector('[data-el-id="legacy-text"]');
+  // المستند القديم مربّعٌ ساكن، وأدوات التتابع سطحُ حركة (`MEDIUM_SURFACES`) — فيُنقَل إلى
+  // وجهةٍ مُوقَّتة بقائمة المقاس نفسها، ويبقى الملفّ المحفوظ كما هو حرفيًّا.
+  await switchToTimed(page);
   await page.waitForTimeout(100);
 
   const legacyRenderedText = await page.locator('[data-el-id="legacy-text"]').innerText();

@@ -74,7 +74,8 @@ async function main() {
 
   // --- Switching the active palette alone must NOT touch the manual overrides, but
   // must still re-color anything still tracking the palette (e.g. 'discount' text).
-  await page.getByRole('button', { name: 'المكتبة' }).click();
+  // اللوحات اللونيّة في «علامتي» بشريط الإضافة (كانت تبويب «المكتبة»).
+  await page.locator('[data-rail="brand"]').click();
   await page.waitForTimeout(100);
   await page.getByRole('button', { name: 'الألوان' }).click();
   await page.waitForTimeout(100);

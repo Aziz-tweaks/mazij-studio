@@ -279,20 +279,36 @@ async function main() {
 
   assert((await page.locator('[data-testid="timeline-tracks"]').count()) === 0, 'بوسترٌ ساكن: لا مساراتِ خطٍّ زمنيّ في الـDOM');
   assert((await page.locator('[data-testid="timeline-ruler"]').count()) === 0, 'ولا مسطرة — فلا سطحَ يُحرّك الزمن');
+  // كان هنا: «ومع ذلك فقائمةُ حركة الدخول معروضةٌ في لوح الخصائص — وهذا هو التناقضُ
+  // الذي يَجعل العطلَ بلا مَخرج». والتناقضُ رُفع من جذره في ٢٤ أكتوبر ٢٠٢٦ (التصوّر
+  // المعتمد: «المستند يقرّر الشاشة»): لا قائمةَ دخولٍ في مفتش بوسترٍ ساكن، وبابُ
+  // الحركة عليه «حرّك» في الشريط السياقي — وهو يجعل التصميمَ مشهدًا **أوّلًا**، فلا
+  // تُطبَّق حركةٌ أبدًا على مستندٍ لا زمنَ له يُرى فيه.
   assert(
-    (await page.locator('[data-testid="props-anim-presets"]').count()) === 1,
-    'ومع ذلك فقائمةُ حركة الدخول معروضةٌ في لوح الخصائص — وهذا هو التناقضُ الذي يَجعل العطلَ بلا مَخرج',
+    (await page.locator('[data-testid="props-anim-presets"]').count()) === 0,
+    'ولا قائمةَ حركةِ دخولٍ في مفتش الساكن — التناقضُ الذي جعل العطلَ بلا مَخرج لم يعد ممكنًا',
   );
 
+  await page.locator(`[data-el-id="${sText}"]`).click({ force: true });
+  await page.waitForTimeout(200);
   for (const [id, label] of PRESETS) {
-    await page.locator(`[data-testid="props-anim-preset-${id}"]`).click();
-    await page.waitForTimeout(460);
+    await page.locator('[data-testid="ctx-animate"]').click();
+    await page.waitForTimeout(120);
+    await page.locator(`[data-testid="ctx-anim-${id}"]`).click();
+    // المشهدُ المُحوَّل يُشغِّل دخولَه مرّةً من البداية؛ يُنتظَر حتى ينتهي.
+    await page.waitForTimeout(1500);
     const p = await painted(page, sText);
     assert(
-      p.opacity > 0.99 && p.w === sBefore.w && p.h === sBefore.h,
-      `**«${label}» على بوسترٍ ساكن: العنصرُ باقٍ** (شفافيّة ${p.opacity}، ${p.w}×${p.h}) — و\`renderArtboardPng\` تُصدِّر هذا المستندَ عند لحظة الاستقرار، فاللوحةُ والملفُّ يقولان الشيءَ نفسَه الآن`,
+      p.opacity > 0.99 && p.w > 0 && p.h > 0,
+      `**«${label}» بـ«حرّك» على بوسترٍ ساكن: العنصرُ ظاهرٌ بعد دخوله** (شفافيّة ${p.opacity}، ${p.w}×${p.h}) — لا يُخفيه شيءٌ عند الراحة`,
     );
   }
+  assert(
+    (await page.locator('[data-testid="artboard-medium"]').getAttribute('data-medium')) === 'timed' &&
+      (await page.locator('[data-testid="timeline-ruler"]').count()) === 1,
+    '«حرّك» جعل البوستر مشهدًا: المسطرةُ حاضرة — فالحركةُ لها زمنٌ تُرى فيه ومؤشّرٌ يُرجَع به',
+  );
+  void sBefore;
 
   // ═══════════════════════════════════════════════════════════════════════
   // ٣. الطريقُ الثاني إلى الحالة نفسِها: تبديلُ الوجهة من مُوقَّتٍ إلى ساكن
@@ -338,7 +354,8 @@ async function main() {
   console.log('\n٤. معاينةُ التصدير: التصميمُ المفتوح لا تصميمٌ آخر');
   await page.evaluate((k) => window.localStorage.removeItem(k), AUTOSAVE_KEY);
   await bootBlank(page, BASE_URL, 'ig-reel');
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(340);
   await page.locator('[data-shape-tile="rect"]').click();
   await page.waitForTimeout(540);

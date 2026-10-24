@@ -275,7 +275,7 @@ async function testRealUi(page) {
   console.log('\n3. الواجهة الحقيقيّة — قلمٌ وقائمةٌ منسدلة وأحداثٌ حقيقيّة');
 
   await bootBlank(page, BASE_URL, 'ig-portrait');
-  await page.locator('button', { hasText: /^احترافي$/ }).first().click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(220);
 
   const ab = await page.locator('[data-testid="artboard"]').boundingBox();

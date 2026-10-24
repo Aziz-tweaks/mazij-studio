@@ -63,7 +63,7 @@ export function CommandInterpreterDialog() {
             data-testid="cmd-interpreter-run-btn"
             onClick={run}
             disabled={busy || !text.trim()}
-            style={{ height: 38, padding: '0 16px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 13, fontWeight: 600, opacity: busy ? 0.7 : 1 }}
+            style={{ height: 38, padding: '0 16px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 13, fontWeight: 600, opacity: busy ? 0.7 : 1 }}
           >
             {L.nl_cmd_run}
           </button>
@@ -72,7 +72,7 @@ export function CommandInterpreterDialog() {
         {outcome && (
           <div
             data-testid={outcome.ok ? 'cmd-interpreter-success' : 'cmd-interpreter-failure'}
-            style={{ fontSize: 12.5, color: outcome.ok ? 'var(--accent)' : '#e5484d', padding: '8px 10px', border: '1px dashed var(--line)', borderRadius: 'var(--rs)', lineHeight: 1.6 }}
+            style={{ fontSize: 12.5, color: outcome.ok ? 'var(--accentText)' : 'var(--danger)', padding: '8px 10px', border: '1px dashed var(--line)', borderRadius: 'var(--rs)', lineHeight: 1.6 }}
           >
             {outcome.message}
           </div>

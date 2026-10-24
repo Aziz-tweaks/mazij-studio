@@ -198,9 +198,8 @@ async function main() {
   await page.keyboard.press('Meta+Alt+2');
   await page.waitForTimeout(250);
 
-  // زرّ القفل في سطر الطبقة يعمل في الوضع البسيط.
-  const isSimple = await page.evaluate(() => !!document.querySelector('[data-tool="pen"]') === false);
-  assert(isSimple, 'these assertions run in simple mode (the default), not pro');
+  // زرّ القفل في سطر الطبقة يعمل في الوضع الافتراضي. (كان هنا تأكيدُ أنّ الاختبار
+  // يجري في «بسيط» — ألغى المالك الوضعين في ٢٤ أكتوبر ٢٠٢٦، فالافتراضيّ هو الوحيد.)
   await page.locator('[data-testid^="layer-lock-"]').first().click();
   await page.waitForTimeout(250);
   assert((await lockedCount()) === 1, 'the per-row lock button works in simple mode');

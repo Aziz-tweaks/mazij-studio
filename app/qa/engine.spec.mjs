@@ -223,7 +223,7 @@ async function main() {
   await page.waitForTimeout(80);
 
   // --- PRO MODE: z-order (bring forward / send backward) + undo ---
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(100);
   await badge.click({ force: true });
   await page.waitForTimeout(80);
@@ -265,11 +265,13 @@ async function main() {
 
   // --- SELECTION / DRAG MAPPING AT A NON-DEFAULT ZOOM ---
   // Zoom in several steps so the artboard renders noticeably larger than "fit".
+  // أزرار التكبير بمعرّفاتها: صارت في حبّة الأدوات، وفي الشريط السياقي فوق العنوان
+  // المحدَّد زرّا «+»/«−» للمقاس — فالبحث بالنصّ «+» يجد غيرها.
   for (let i = 0; i < 6; i++) {
-    await page.locator('button', { hasText: '+' }).first().click();
+    await page.locator('[data-testid="zoom-in"]').click();
   }
   await page.waitForTimeout(150);
-  const zoomLabel = await page.locator('span').filter({ hasText: '%' }).first().innerText();
+  const zoomLabel = await page.locator('[data-testid="zoom-label"]').innerText();
   assert(parseInt(zoomLabel, 10) > 100, `zoom: zoom-in controls increased the zoom level past 100% (now ${zoomLabel})`);
 
   await head.click({ force: true });
@@ -311,7 +313,7 @@ async function main() {
 }
 
 async function actionsResetZoom(page) {
-  await page.locator('button', { hasText: 'ملاءمة' }).click().catch(() => {});
+  await page.locator('[data-testid="zoom-fit"]').click().catch(() => {});
 }
 
 main().catch((err) => {

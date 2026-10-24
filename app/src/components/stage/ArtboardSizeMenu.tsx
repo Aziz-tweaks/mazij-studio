@@ -71,7 +71,7 @@ export function ArtboardSizeMenu() {
   };
 
   return (
-    <div ref={rootRef} style={{ position: 'absolute', top: 12, insetInlineStart: 12, zIndex: 3 }} onKeyDown={onKeyDown}>
+    <div ref={rootRef} style={{ position: 'relative' }} onKeyDown={onKeyDown}>
       <button
         data-testid="size-menu-button"
         aria-expanded={open}
@@ -121,7 +121,7 @@ export function ArtboardSizeMenu() {
             padding: '0 6px',
             borderRadius: 999,
             background: chip.showsDuration ? 'var(--accentSoft)' : 'var(--surface2)',
-            color: chip.showsDuration ? 'var(--accent)' : 'var(--muted)',
+            color: chip.showsDuration ? 'var(--accentText)' : 'var(--muted)',
             fontSize: 10,
             fontWeight: 600,
           }}
@@ -169,7 +169,7 @@ export function ArtboardSizeMenu() {
               border: `1px solid ${state.magicResizeOn ? 'var(--accent)' : 'var(--line)'}`,
               borderRadius: 'var(--rs)',
               background: state.magicResizeOn ? 'var(--accentSoft)' : 'transparent',
-              color: state.magicResizeOn ? 'var(--accent)' : 'var(--muted)',
+              color: state.magicResizeOn ? 'var(--accentText)' : 'var(--muted)',
               fontSize: 11.5,
               fontWeight: 600,
             }}

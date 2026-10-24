@@ -110,7 +110,8 @@ const lastElId = (page) =>
 /** يضع شكلًا من المكتبة بنقرتين حقيقيّتين: الأداة ثم البطاقة. وشكلُ المكتبة هو
  * الحالةُ الحرجة — يُولَد بكومةِ مظهرٍ مخزّنة (`libraryAppearance`). */
 async function placeTile(page, tile) {
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(320);
   await page.locator(`[data-shape-tile="${tile}"]`).click();
   await page.waitForTimeout(520);
@@ -199,11 +200,13 @@ async function main() {
 
   const rect = await placeTile(page, 'rect');
 
-  // الوضعُ هو الافتراضيّ: لم يُضغَط «احترافي» في هذا القسم كلِّه. والشاهدُ أن
-  // محرّرَ الطبقات غائبٌ عن الـDOM أصلًا.
+  // كان هنا: «الوضعُ الافتراضيّ: محرّرُ كومة المظهر غائبٌ عن الـDOM» — حجّةً لِمَ يحتاج
+  // صفُّ «الحدود» السريع لونًا حرًّا. ألغى المالك الوضعين (٢٤ أكتوبر ٢٠٢٦) فصار المحرّر
+  // حاضرًا للجميع، وتبقى الحجّة: الصفّ السريع هو طريق اللون بنقرة. المقيس الآن أنّ
+  // الاثنين حاضران، والصفّ لم يُنزَع لأجل المحرّر.
   assert(
-    (await page.locator(`[data-testid="appearance-add-stroke-${rect}"]`).count()) === 0,
-    'الوضعُ الافتراضيّ: محرّرُ كومة المظهر غائبٌ عن الـDOM — فهو ليس طريقَ المالك إلى لون الحدّ، وهذا سببُ بقاء العطل بعد البند ١٧',
+    (await page.locator(`[data-testid="appearance-add-stroke-${rect}"]`).count()) === 1,
+    'بلا وضعين: محرّرُ كومة المظهر حاضرٌ لكلّ مصمّم — وصفّ «الحدود» السريع باقٍ بجانبه (أدناه)',
   );
 
   const toggle = page.locator(`[data-testid="shape-stroke-toggle-${rect}"]`);
@@ -316,7 +319,7 @@ async function main() {
   );
 
   // ─── كومةٌ واحدة لا نظامان: ما كُتب في الصفّ البسيط يراه محرّرُ الطبقات ───
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(260);
   // يُحدَّد من سطر طبقته لا بنقرةٍ على اللوحة: الخطُّ وُضع بعده فهو فوقه في
   // الترتيب، ونقرةٌ على موضع المستطيل كانت ستُصيب الخطّ.

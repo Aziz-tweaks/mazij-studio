@@ -53,7 +53,7 @@ export function McpServerDialog() {
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 'var(--rs)' }}>
           <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{L.mcp_enable}</span>
-          <span data-testid="mcp-status" style={{ fontSize: 11.5, color: state.mcpServerEnabled ? 'var(--accent)' : 'var(--muted)' }}>
+          <span data-testid="mcp-status" style={{ fontSize: 11.5, color: state.mcpServerEnabled ? 'var(--accentText)' : 'var(--muted)' }}>
             {state.mcpServerEnabled ? L.mcp_status_on : L.mcp_status_off}
           </span>
           <button
@@ -90,7 +90,7 @@ export function McpServerDialog() {
             open right now*, which is the thing the old copy got wrong. */}
         <div
           data-testid="mcp-listen-state"
-          style={{ fontSize: 11.5, color: listening ? 'var(--accent)' : 'var(--muted)', lineHeight: 1.6 }}
+          style={{ fontSize: 11.5, color: listening ? 'var(--accentText)' : 'var(--muted)', lineHeight: 1.6 }}
         >
           {listening ? L.mcp_listening : L.mcp_not_listening}
         </div>
@@ -100,7 +100,7 @@ export function McpServerDialog() {
         </div>
 
         {state.mcpError && (
-          <div data-testid="mcp-error" style={{ fontSize: 11.5, color: 'var(--danger, #e5484d)', lineHeight: 1.6 }}>
+          <div data-testid="mcp-error" style={{ fontSize: 11.5, color: 'var(--danger)', lineHeight: 1.6 }}>
             {L.mcp_error_label}: {state.mcpError}
           </div>
         )}

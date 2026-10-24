@@ -331,9 +331,9 @@ async function main() {
   await testExplicitHandles(page);
 
   // --- 4. Real UI: draw a closed pen path, smooth it, toggle a corner, undo, reload --
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(80);
-  await page.locator('button[title="P"]').click(); // pen tool
+  await page.locator('[data-tool="pen"]').click(); // pen tool
   await page.waitForTimeout(80);
   await page.locator('[data-testid="pen-close-path-toggle"]').click(); // close the path on finish
   await page.waitForTimeout(80);
@@ -426,7 +426,7 @@ async function main() {
     }
   };
   const pickPen = async () => {
-    await page.locator('button[title="P"]').click();
+    await page.locator('[data-tool="pen"]').click();
     await page.waitForTimeout(80);
   };
   const newIdAfter = async (before) => {
@@ -450,7 +450,7 @@ async function main() {
     return newIdAfter(before);
   };
 
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(100);
   // `penClosePath` is UI state, not document state, so the real reload at the end of
   // section 4 already reset it to its default (off) — which is exactly what (b) needs,
@@ -659,7 +659,7 @@ async function main() {
     await page.mouse.up();
     await page.waitForTimeout(50);
   }
-  await page.locator('button[title="V"]').click();
+  await page.locator('[data-tool="select"]').click();
   await page.waitForTimeout(200);
   await pickPen();
   assert((await page.locator('[data-testid="artboard"] svg circle').count()) === 0, `tool switch: the abandoned draft is discarded, not resurrected on returning to the pen (${await page.locator('[data-testid="artboard"] svg circle').count()} stale dots; 3 before this pass)`);

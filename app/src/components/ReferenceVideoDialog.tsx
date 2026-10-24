@@ -151,7 +151,7 @@ export function ReferenceVideoDialog() {
 
         {status === 'analyzing' && <div data-testid="refvideo-status" style={{ fontSize: 13, color: 'var(--muted)' }}>{L.refvideo_analyzing}</div>}
 
-        {status === 'error' && <div data-testid="refvideo-error" style={{ fontSize: 13, color: 'var(--danger, #e5484d)' }}>{error}</div>}
+        {status === 'error' && <div data-testid="refvideo-error" style={{ fontSize: 13, color: 'var(--danger)' }}>{error}</div>}
 
         {status === 'ready' && structure && (
           <div data-testid="refvideo-structure" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>

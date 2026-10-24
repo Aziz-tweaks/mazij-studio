@@ -209,7 +209,7 @@ async function main() {
   assert(headAfterUndo === originalHead, `UI: one single undo restores the headline to its pre-fill text (got ${JSON.stringify(headAfterUndo)})`);
 
   // --- 4. "Apply motion only" replays the saved montage structure -------------
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(150);
   await page.locator('[data-el-id="head"]').click();
   await page.waitForTimeout(100);

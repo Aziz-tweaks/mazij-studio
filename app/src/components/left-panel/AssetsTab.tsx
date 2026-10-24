@@ -1,57 +1,98 @@
+import { useRef, useState } from 'react';
 import { Icon } from '../Icon';
-import { BRAND, FILES, PALETTES, SIZES, dimsOf, glyphStyle, nameOf } from '../../data/constants';
+import { BRAND, PALETTES, sizeAt } from '../../data/constants';
 import type { AssetsTab as AssetsTabId } from '../../state/types';
 import { firstSelectedElement, useStudio } from '../../state/StudioContext';
 
-const TABS: AssetsTabId[] = ['files', 'fonts', 'colors', 'templates'];
+/** لوح «علامتي» و«ملفاتي» — بابان في شريط الإضافة على لوحٍ واحد.
+ *
+ * **علامتي** (الألوان والخطوط): ما يجعل التصميم يشبه صاحبه. **ملفاتي**: رفعٌ حقيقيّ —
+ * صورة أو فيديو أو ملصق لوتي ينزل في وسط اللوحة. كان «الملفات» شبكةَ ملفّاتٍ وهميّة
+ * (`product-01.png`، `hero.mp4`) بوسم «قريبًا»: واجهةٌ تَعِد بما لا تفعل، وهي من «الأشياء
+ * الغريبة» التي شكا منها المالك. وتبويب «المقاسات» كان نسخةً ثانيةً من قائمة المقاس
+ * فوق اللوحة، فرُفع. */
+const BRAND_TABS: AssetsTabId[] = ['colors', 'fonts'];
 
 export function AssetsTab() {
   const { state, actions, dict: L } = useStudio();
+  const brand = state.assetsTab === 'colors' || state.assetsTab === 'fonts';
 
   return (
     <>
-      <div style={{ display: 'flex', gap: 2, padding: '6px 12px 0', borderBottom: '1px solid var(--line)', flex: 'none' }}>
-        {TABS.map((id) => {
-          const active = state.assetsTab === id;
-          return (
-            <button
-              key={id}
-              onClick={() => actions.setAssetsTab(id)}
-              style={{ height: 32, padding: '0 10px', border: 0, borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`, background: 'transparent', color: active ? 'var(--text)' : 'var(--muted)', fontSize: 12, fontWeight: 600, marginBottom: -1 }}
-            >
-              {L[`tab_${id}` as const]}
-            </button>
-          );
-        })}
-      </div>
+      {brand && (
+        <div style={{ display: 'flex', gap: 2, padding: '6px 12px 0', borderBottom: '1px solid var(--line)', flex: 'none' }}>
+          {BRAND_TABS.map((id) => {
+            const active = state.assetsTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => actions.setAssetsTab(id)}
+                style={{ height: 32, padding: '0 10px', border: 0, borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`, background: 'transparent', color: active ? 'var(--text)' : 'var(--muted)', fontSize: 12, fontWeight: 600, marginBottom: -1 }}
+              >
+                {L[`tab_${id}` as const]}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {state.assetsTab === 'files' && <FilesPane />}
+        {!brand && <FilesPane />}
         {state.assetsTab === 'fonts' && <FontsPane />}
         {state.assetsTab === 'colors' && <ColorsPane />}
-        {state.assetsTab === 'templates' && <TemplatesPane />}
       </div>
     </>
   );
 }
 
 function FilesPane() {
-  const { dict: L } = useStudio();
+  const { state, actions, dict: L } = useStudio();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const place = (files: FileList | File[] | null) => {
+    if (!files) return;
+    const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+    const p = { x: size.w / 2, y: size.h / 2 };
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith('image/')) void actions.insertImageFromFile(file, p);
+      else if (/\.(json|lottie)$/i.test(file.name)) void actions.insertLottieFromFile(file, p);
+      else if (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)) void actions.insertVideoFromFile(file, p);
+    }
+  };
   return (
     <>
-      <div title="قريبًا — استيراد الملفات والصور في المرحلة القادمة" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: 18, border: '1.5px dashed var(--line)', borderRadius: 'var(--rs)', color: 'var(--muted)', fontSize: 12, textAlign: 'center', opacity: 0.55 }}>
-        <Icon size={22} strokeWidth={1.5} path="M10 13V4M6 8l4-4 4 4M4 16h12" />
-        <span>{L.drop} <span style={{ color: 'var(--muted)', fontWeight: 600 }}>{L.browse}</span> <span style={{ fontWeight: 700 }}>· قريبًا</span></span>
+      <div
+        data-testid="upload-drop"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setOver(false);
+          place(e.dataTransfer.files);
+        }}
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '22px 14px', border: `1.5px dashed ${over ? 'var(--accent)' : 'var(--lineStrong)'}`, borderRadius: 12, background: over ? 'var(--accentSoft)' : 'transparent', color: 'var(--muted)', fontSize: 12, textAlign: 'center' }}
+      >
+        <Icon size={24} strokeWidth={1.5} path="M10 13V4M6 8l4-4 4 4M4 16h12" />
+        <span>{L.up_drop}</span>
+        <button data-testid="upload-pick" onClick={() => inputRef.current?.click()} style={{ height: 34, padding: '0 16px', border: 0, borderRadius: 9, background: 'var(--accent)', color: 'var(--onAccent)', fontSize: 12.5, fontWeight: 600 }}>
+          {L.up_pick}
+        </button>
+        <input
+          ref={inputRef}
+          data-testid="upload-input"
+          type="file"
+          multiple
+          accept="image/*,video/*,.json,.lottie"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            place(e.target.files);
+            e.target.value = '';
+          }}
+        />
       </div>
-      <div title="عناصر توضيحية ثابتة" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, opacity: 0.6 }}>
-        {FILES.map((f) => (
-          <div key={f.name} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ aspectRatio: '1', borderRadius: 'var(--rs)', background: f.bg, display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,.7)' }}>
-              <Icon size={18} strokeWidth={1.5} path={f.d} />
-            </div>
-            <span dir="ltr" style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'start', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
-          </div>
-        ))}
-      </div>
+      <p style={{ margin: 0, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.6 }}>{L.up_note}</p>
     </>
   );
 }
@@ -97,7 +138,7 @@ function FontsPane() {
                 <span style={{ fontSize: 17, lineHeight: 1.2, fontFamily: f.family, opacity: f.status === 'ready' ? 1 : 0.5 }}>{L.sample}</span>
                 <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'start', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
                 {f.status === 'error' && f.error && (
-                  <span style={{ fontSize: 10, color: '#D97A6C', textAlign: 'start' }}>{f.error}</span>
+                  <span style={{ fontSize: 10, color: 'var(--danger)', textAlign: 'start' }}>{f.error}</span>
                 )}
               </span>
               {f.custom && (
@@ -107,8 +148,8 @@ function FontsPane() {
                     borderRadius: 999,
                     fontSize: 10,
                     fontWeight: 600,
-                    background: f.status === 'ready' ? 'var(--accentSoft)' : f.status === 'error' ? 'rgba(217,122,108,.15)' : 'var(--surface2)',
-                    color: f.status === 'ready' ? 'var(--accent)' : f.status === 'error' ? '#D97A6C' : 'var(--muted)',
+                    background: f.status === 'ready' ? 'var(--accentSoft)' : f.status === 'error' ? 'rgba(255,107,107,.14)' : 'var(--surface2)',
+                    color: f.status === 'ready' ? 'var(--accentText)' : f.status === 'error' ? 'var(--danger)' : 'var(--muted)',
                   }}
                 >
                   {f.status === 'ready' ? L.ready : f.status === 'error' ? L.font_error : L.loading}
@@ -126,6 +167,13 @@ function ColorsPane() {
   const { state, actions, dict: L } = useStudio();
   const pal = PALETTES[state.postPalette];
   const swatches = Array.from(new Set([pal.fg, pal.ac, pal.bg, ...(pal.ac2 ? [pal.ac2] : [])]));
+  const target = firstSelectedElement(state);
+  const paintable = !!target && (target.type === 'text' || target.type === 'shape');
+  const paint = (hex: string) => {
+    if (!target) return;
+    if (target.type === 'text') actions.setElementColor(target.id, hex);
+    else if (target.type === 'shape') actions.setShapeFill(target.id, hex);
+  };
   return (
     <>
       <div className="mz-label">{L.post_palettes}</div>
@@ -156,7 +204,7 @@ function ColorsPane() {
         data-testid="apply-palette-all"
         onClick={() => actions.applyPaletteToAll()}
         title={L.apply_palette_hint}
-        style={{ height: 32, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}
+        style={{ height: 32, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 12, fontWeight: 600 }}
       >
         {L.apply_palette_all}
       </button>
@@ -178,47 +226,24 @@ function ColorsPane() {
       </label>
       <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.decor_hint}</p>
 
+      {/* الألوان هنا **تُطبَّق**: نقرةٌ على لونٍ تلوّن المحدَّد (نصًّا أو شكلًا). كانت
+          مربّعاتٍ للعرض وحده — والمصمّم ينقر اللون الذي يراه. */}
       <div className="mz-label">{L.project_colors}</div>
       <div style={{ display: 'flex', gap: 8 }}>
         {swatches.map((hex) => (
-          <div key={hex} style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            <span style={{ width: 44, height: 44, borderRadius: 'var(--rs)', background: hex, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)', display: 'block' }} />
+          <button key={hex} data-testid={`project-color-${hex.replace('#', '')}`} onClick={() => paint(hex)} disabled={!paintable} title={hex} style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', border: 0, padding: 0, background: 'transparent', cursor: paintable ? 'pointer' : 'default' }}>
+            <span style={{ width: 44, height: 44, borderRadius: 'var(--rs)', background: hex, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1)', display: 'block' }} />
             <span dir="ltr" style={{ fontSize: 10, color: 'var(--muted)' }}>{hex}</span>
-          </div>
+          </button>
         ))}
       </div>
       <div className="mz-label">{L.brand}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>
         {BRAND.map((hex) => (
-          <span key={hex} style={{ aspectRatio: '1', borderRadius: 'var(--rs)', background: hex, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.08)', display: 'block' }} />
+          <button key={hex} data-testid={`brand-color-${hex.replace('#', '')}`} onClick={() => paint(hex)} disabled={!paintable} title={hex} style={{ aspectRatio: '1', border: 0, borderRadius: 'var(--rs)', background: hex, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.1)', cursor: paintable ? 'pointer' : 'default' }} />
         ))}
       </div>
-    </>
-  );
-}
-
-function TemplatesPane() {
-  const { state, actions } = useStudio();
-  return (
-    <>
-      {SIZES.map((z, i) => {
-        const active = state.sizeIdx === i;
-        return (
-          <button
-            key={z.id}
-            onClick={() => actions.setSizeIdx(i)}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, height: 56, padding: '0 12px', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: active ? 'var(--accentSoft)' : 'var(--surface2)', textAlign: 'start' }}
-          >
-            <span style={{ width: 40, height: 40, display: 'grid', placeItems: 'center' }}>
-              <span style={glyphStyle(z, 30)} />
-            </span>
-            <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontWeight: 600, fontSize: 12.5 }}>{nameOf(z, state.lang)}</span>
-              <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'start' }}>{dimsOf(z)}</span>
-            </span>
-          </button>
-        );
-      })}
+      {!paintable && <p style={{ margin: 0, fontSize: 11, color: 'var(--faint)' }}>{L.brand_pick_hint}</p>}
     </>
   );
 }

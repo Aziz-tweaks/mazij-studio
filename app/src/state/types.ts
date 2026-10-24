@@ -12,7 +12,6 @@ import type { AgentInfo, AiEngine } from '../lib/agentClient';
 import { loadAiPrefs } from '../lib/agentClient';
 
 export type Screen = 'editor' | 'home';
-export type Mode = 'simple' | 'pro';
 /** `'library'` هو لوح محتوى الأداة المختارة — انظر `TOOL_LIBRARY` في
  * `src/data/constants.ts`. أُضيف لأن أهمّ نتيجة في تحليل محرّر فيديو شائع بنيويّة لا شكليّة:
  * «زرّ في شريط الأدوات يجب أن يبدّل **لوح محتوى**، لا وضع أداة صامتًا»
@@ -176,17 +175,26 @@ export interface Viewport {
 export interface StudioState {
   screen: Screen;
   lang: Lang;
-  mode: Mode;
   tool: ToolId;
   shapeDrawKind: ShapeDrawKind;
   /** عدد أضلاع المضلّع أو رؤوس النجمة المسلَّحة للرسم. يُضبَط من بطاقة المكتبة،
    * ويتغيّر حيًّا بمفتاحي ↑/↓ أثناء السحب — قاعدة أداة المتّجهات الواحدة: «السهم أثناء
    * السحب يغيّر المُعامل المُعرِّف للشكل» (`re-illustrator-flows.md` §2.4). */
   shapeDrawN: number;
+  /** لوح الإضافة بجانب شريط الإضافة. `'props'` و`null` كلاهما «مغلق» — خصائص
+   * المحدَّد تعيش في المفتش (`Inspector.tsx`) دائمًا، لا في هذا اللوح. وبقيت
+   * `'props'` قيمةً لأنّ كلّ مسارٍ قائم يكتبها حين «انتهى الإدراج» (انظر
+   * `leaveInsertLibrary`)، ومعناها لم يتغيّر: ارجع إلى خصائص ما حدّدته. */
   panel: PanelId;
   /** الأداة التي يعرض `panel: 'library'` مكتبتها. */
   libraryTool: ToolId;
   assetsTab: AssetsTab;
+  /** المفتش (خصائص المحدَّد) على الحافّة الأخرى — يُطوى إلى شريطٍ رفيع. */
+  inspectorOpen: boolean;
+  /** رفُّ الطبقات أسفل المفتش، للمستند الساكن (المُوقَّت طبقاتُه مساراتُ الخطّ). */
+  layersOpen: boolean;
+  /** لوحة الاختصارات (`?`). */
+  shortcutsOpen: boolean;
   tlOpen: boolean;
   exportOpen: boolean;
   exportFormat: ExportFormat;
@@ -411,13 +419,15 @@ export const initialStudioState: StudioState = {
   // الجاهز — ولم يكن إليها طريق إلا نقر الشعار، وهي إيماءة لا يخمّنها أحد.
   screen: 'home',
   lang: 'ar',
-  mode: 'simple',
   tool: 'select',
   shapeDrawKind: 'rect',
   shapeDrawN: DEFAULT_POLYGON_N,
   panel: 'props',
   libraryTool: 'shape',
   assetsTab: 'fonts',
+  inspectorOpen: true,
+  layersOpen: true,
+  shortcutsOpen: false,
   tlOpen: true,
   exportOpen: false,
   exportFormat: 'png',

@@ -67,7 +67,7 @@ async function openFormat(page, formatId, { pro = true } = {}) {
   await page.locator(`[data-testid="format-row-${formatId}"]`).click();
   await page.waitForSelector('[data-testid="artboard"]');
   if (pro) {
-    await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+    // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
     await page.waitForTimeout(200);
   }
 }
@@ -465,7 +465,7 @@ async function main() {
   await page.reload({ waitUntil: 'networkidle' });
   await page.locator('[data-testid="resume-project"]').click();
   await page.waitForSelector('[data-testid="artboard"]');
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(250);
   await parkPlayhead(page, 0);
   await page.locator('[data-testid="timeline-tracks"]').focus();
@@ -572,7 +572,8 @@ async function main() {
   const beyond = await page.locator('[data-testid="timeline-beyond-doc"]').count();
   const beyondTitle = beyond ? await page.locator('[data-testid="timeline-beyond-doc"]').getAttribute('title') : '';
   assert(
-    beyond === 1 && /لا يدخل الملفّ المُصدَّر/.test(beyondTitle),
+    // «ما يدخل التصدير» — النصّ المختصر بالخليجيّة (٢٤ أكتوبر ٢٠٢٦)، والسبب هو هو.
+    beyond === 1 && /ما يدخل التصدير/.test(beyondTitle),
     `the ruler's range past the end of the document is shaded and says why («${beyondTitle.slice(0, 48)}…») — the ruler keeps a 5s floor so there is somewhere to drag a clip to, and that floor would otherwise be a silent screen-vs-file difference`,
   );
 
@@ -695,7 +696,12 @@ async function main() {
   walk(new URL('../src', import.meta.url).pathname);
   hits.sort();
   modelHits.sort();
-  const expectedHits = ['src/App.tsx', 'src/components/ExportDialog.tsx', 'src/components/ToolRail.tsx'];
+  // `ToolRail.tsx` لم يعد موجودًا: انقسم في ٢٤ أكتوبر ٢٠٢٦ (التخطيط المعتمد) إلى حبّة
+  // أدواتٍ لا تقرأ الطبيعة وشريط إضافةٍ يقرؤها — والسطحُ نفسُه («أيّ بنودٍ يعرضها الشريط
+  // لهذا المستند») انتقل بشرطه إلى `AddRail.tsx`. فالعدّ ثلاثة كما كان والأسطح هي هي؛
+  // تغيّر اسم الملف وحده. وما أُضيف للطبيعة بعدها (رفُّ الطبقات، أقسامُ الحركة) جدولٌ
+  // (`MEDIUM_SURFACES`) لا شروط، على اصطلاح `MEDIUM_CHIP`.
+  const expectedHits = ['src/App.tsx', 'src/components/AddRail.tsx', 'src/components/ExportDialog.tsx'];
   assert(
     hits.length <= 3,
     `a UI branch on \`medium\` (\`===\` **or** \`!==\`) appears in ${hits.length} files outside src/state/ (at most 3 allowed): ${hits.join(', ')}`,

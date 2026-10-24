@@ -265,7 +265,7 @@ try {
   await bootBlank(page, BASE_URL, 'ig-reel');
   // قسمُ التأثيرات في الوضع الاحترافيّ، كما كان القسمُ الميتُ قبله — فالسطحُ حلّ
   // محلَّ سطحٍ ولم يُنقَل إلى مكانٍ آخر. والتبديلُ بالزرّ الذي يَضغطه الإنسان.
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(220);
   const rect = await drawRect(page);
   assert(!!rect, `رُسِم شكلٌ بالسحب (${rect}) — بأحداث مؤشّرٍ حقيقيّة`);
@@ -525,7 +525,7 @@ try {
   console.log('\n٧. الخصيصةُ الثامنةُ على الخطّ الزمنيّ');
   // التحميلُ أعلاه أعاد الوضعَ إلى البسيط، والخطُّ الزمنيُّ وصفوفُه احترافيّة —
   // فيُعاد الضغطُ على الزرّ نفسِه الذي يَضغطه الإنسان.
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(260);
   await page.locator(`[data-el-id="${rect}"]`).click();
   await page.waitForTimeout(260);

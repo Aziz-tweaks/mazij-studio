@@ -130,7 +130,7 @@ export function AiGenerateDialog() {
               <div style={{ fontSize: 11, color: 'var(--muted)' }}>{selected.keyHint}</div>
               {hasKey ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ flex: 1, fontSize: 11.5, color: 'var(--accent)' }}>تم حفظ المفتاح محليًا على جهازك</span>
+                  <span style={{ flex: 1, fontSize: 11.5, color: 'var(--accentText)' }}>تم حفظ المفتاح محليًا على جهازك</span>
                   <button data-testid="ai-key-clear-btn" onClick={onClearKey} style={{ height: 28, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', fontSize: 11.5 }}>
                     حذف المفتاح
                   </button>
@@ -145,7 +145,7 @@ export function AiGenerateDialog() {
                     placeholder="الصق مفتاحك هنا"
                     style={{ flex: 1, minWidth: 0, height: 32, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', outline: 0 }}
                   />
-                  <button data-testid="ai-key-save-btn" disabled={!keyInput.trim() || keyBusy} onClick={onSaveKey} style={{ height: 32, padding: '0 12px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}>
+                  <button data-testid="ai-key-save-btn" disabled={!keyInput.trim() || keyBusy} onClick={onSaveKey} style={{ height: 32, padding: '0 12px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 12, fontWeight: 600 }}>
                     حفظ
                   </button>
                 </div>
@@ -181,7 +181,7 @@ export function AiGenerateDialog() {
             </div>
 
             {state.aiGenError && (
-              <div data-testid="ai-gen-error" style={{ fontSize: 12, color: '#e5484d', padding: '8px 10px', border: '1px solid #e5484d', borderRadius: 'var(--rs)' }}>
+              <div data-testid="ai-gen-error" style={{ fontSize: 12, color: 'var(--danger)', padding: '8px 10px', border: '1px solid var(--danger)', borderRadius: 'var(--rs)' }}>
                 {state.aiGenError}
               </div>
             )}
@@ -204,7 +204,7 @@ export function AiGenerateDialog() {
               )}
             </div>
 
-            {state.aiGenStatus === 'done' && <div data-testid="ai-gen-done" style={{ fontSize: 12, color: 'var(--accent)' }}>تمّت الإضافة إلى اللوحة النشِطة</div>}
+            {state.aiGenStatus === 'done' && <div data-testid="ai-gen-done" style={{ fontSize: 12, color: 'var(--accentText)' }}>تمّت الإضافة إلى اللوحة النشِطة</div>}
           </>
         )}
       </div>

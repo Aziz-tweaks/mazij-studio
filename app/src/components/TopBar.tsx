@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Icon } from './Icon';
-import { nameOf, seg, sizeAt } from '../data/constants';
+import { nameOf, sizeAt } from '../data/constants';
 import { useStudio } from '../state/StudioContext';
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
@@ -42,9 +42,9 @@ export function TopBar() {
   const isEditor = state.screen === 'editor';
   const undoLabel = state.historyLabels[state.historyPast.length - 1] ?? '';
   const redoLabel = state.historyFutureLabels[0] ?? '';
-  const mSimple = seg(state.mode !== 'pro');
-  const mPro = seg(state.mode === 'pro');
   const cmdKeyLabel = isMac ? '⌘K' : 'Ctrl K';
+  const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+  const mizoOn = state.panel === 'ai';
 
   return (
     <div
@@ -56,7 +56,7 @@ export function TopBar() {
         flex: 'none',
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
         // Window-chrome padding is physical (left/right), not logical: the traffic
         // lights / window buttons sit at a fixed screen edge regardless of language.
         //
@@ -66,7 +66,8 @@ export function TopBar() {
         // اتّجاه النظام بثقة، فتُحجَز المساحةُ على الحافّتين معًا.
         paddingLeft: isMac ? 84 : 12,
         paddingRight: isMac ? 84 : 150,
-        borderBottom: '0px solid var(--line)',
+        background: 'var(--bg)',
+        borderBottom: isEditor ? '1px solid var(--line)' : '0px solid var(--line)',
       }}
     >
       {/* On macOS the system draws the real traffic lights over this bar (titleBarStyle:
@@ -90,90 +91,104 @@ export function TopBar() {
         // التلميح وحده يحمل الوظيفة الإضافية.
         title={L.home}
         className="mz-btn"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 14, flex: 'none', whiteSpace: 'nowrap' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontWeight: 700, fontSize: 14, flex: 'none', whiteSpace: 'nowrap' }}
       >
-        <span style={{ width: 20, height: 20, borderRadius: 6, background: 'var(--accent)', display: 'grid', placeItems: 'center' }}>
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--onAccent)', display: 'block', transform: 'rotate(45deg)' }} />
-        </span>
+        <MixMark />
         <span>{L.app}</span>
       </button>
 
       {isEditor && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)', flex: 'none', whiteSpace: 'nowrap' }}>
-          <span style={{ opacity: 0.5 }}>/</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)', flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap' }}>
+          <span style={{ opacity: 0.4 }}>/</span>
           {/* اسم المستند = وجهته المختارة، لا نصٌّ ثابت. كان مكتوبًا `L.project`
               أي «بوست العروض» — اسم البوستر التجريبي — فكان كل مشروع، مهما
               كان، يُسمّى باسم المستند الذي كان يُفتح افتراضيًا. مشروع ريل فارغ
               ليس «بوست العروض». */}
-          <button data-testid="project-name" onClick={actions.goHome} style={{ border: 0, background: 'transparent', padding: 0, color: 'var(--text)', fontWeight: 500, cursor: 'pointer' }}>
-            {nameOf(sizeAt(state.sizeIdx, state.customW, state.customH), state.lang)}
+          <button data-testid="project-name" onClick={actions.goHome} style={{ border: 0, background: 'transparent', padding: 0, color: 'var(--text)', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+            {nameOf(size, state.lang)}
           </button>
-          <span style={{ padding: '2px 8px', borderRadius: 999, background: 'var(--surface2)', fontSize: 11 }}>
-            {state.saveState === 'saving' ? L.saving : state.saveState === 'error' ? L.save_error : L.saved}
+          <span dir="ltr" style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--faint)' }}>{size.w}×{size.h}</span>
+          <span data-testid="save-state" data-save-state={state.saveState} style={{ color: state.saveState === 'error' ? 'var(--danger)' : 'var(--faint)' }}>
+            · {state.saveState === 'saving' ? L.saving : state.saveState === 'error' ? L.save_error : L.saved}
           </span>
+        </div>
+      )}
+
+      {isEditor && (
+        // **خطوةُ التراجع تَحمل اسمَها.** القاعدةُ مكتوبةٌ عند `pushHistory`
+        // في `StudioContext.tsx`: التنقّلُ والتحديدُ والمؤشّرُ لا تُسجَّل، وكلُّ
+        // ما يُغيّر المستند خطوةٌ واحدةٌ مُسمّاة. وخطوةٌ من موضعٍ لم يُسمِّ
+        // نفسَه بعد تعود إلى «تراجع» العامّة — لا اسمٌ مُختلَق.
+        <div style={{ display: 'flex', gap: 2, flex: 'none', marginInlineStart: 4 }}>
+          <button
+            data-testid="undo-btn"
+            data-undo-label={undoLabel}
+            // عددُ الخطوات مقروءٌ على الزرّ، كما يُقرأ الزمنُ على الساعة
+            // (`data-t`) والمدى على المسطرة (`data-span`). والمعيار B5 يسأل
+            // «أبقي سجلُّ التراجع كما هو؟» وهو سؤالٌ لا يُجاب بالعين.
+            data-history-past={state.historyPast.length}
+            title={undoLabel ? `${L.undo}: ${undoLabel}` : L.undo}
+            className="mz-btn"
+            disabled={!state.historyPast.length}
+            onClick={actions.undo}
+            style={{ ...iconBtnStyle, opacity: state.historyPast.length ? 1 : 0.35 }}
+          >
+            <Icon size={18} path="M8 5L4 9l4 4M4 9h8a4 4 0 0 1 0 8h-1" />
+          </button>
+          <button
+            data-testid="redo-btn"
+            data-redo-label={redoLabel}
+            data-history-future={state.historyFuture.length}
+            title={redoLabel ? `${L.redo}: ${redoLabel}` : L.redo}
+            className="mz-btn"
+            disabled={!state.historyFuture.length}
+            onClick={actions.redo}
+            style={{ ...iconBtnStyle, opacity: state.historyFuture.length ? 1 : 0.35 }}
+          >
+            <Icon size={18} path="M12 5l4 4-4 4M16 9H8a4 4 0 0 0 0 8h1" />
+          </button>
         </div>
       )}
 
       <div style={{ flex: 1 }} />
 
-      {isEditor && (
-        <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2, flex: 'none', whiteSpace: 'nowrap' }}>
-          <button onClick={actions.setSimple} style={segBtnStyle(mSimple)}>{L.simple}</button>
-          <button onClick={actions.setPro} style={segBtnStyle(mPro)}>{L.pro}</button>
-        </div>
-      )}
-
       <button
         onClick={actions.openCmd}
         className="mz-search"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, flex: '0 1 250px', minWidth: 120, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', color: 'var(--muted)', fontSize: 12 }}
+        title={L.search}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, flex: isEditor ? '0 1 220px' : '0 1 300px', minWidth: 110, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', color: 'var(--muted)', fontSize: 12 }}
       >
         <Icon path="M9 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM13.5 13.5L17 17" />
         <span style={{ flex: 1, minWidth: 0, textAlign: 'start', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{L.search}</span>
         <kbd dir="ltr" style={{ fontFamily: 'inherit', fontSize: 11, padding: '1px 6px', borderRadius: 5, background: 'var(--surface2)', color: 'var(--muted)', whiteSpace: 'nowrap', flex: 'none' }}>{cmdKeyLabel}</kbd>
       </button>
 
-      <div style={{ flex: 1 }} />
+      {!isEditor && <div style={{ flex: 1 }} />}
+
+      {isEditor && state.mcpServerEnabled && (
+        <span
+          data-testid="mcp-active-badge"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 10px', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 11.5, fontWeight: 600, flex: 'none', whiteSpace: 'nowrap' }}
+        >
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
+          {L.mcp_badge}
+        </span>
+      )}
 
       {isEditor && (
-        <>
-          {state.mode === 'pro' && (
-            <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{L.duration}</span>
-          )}
-          {/* **خطوةُ التراجع تَحمل اسمَها.** القاعدةُ مكتوبةٌ عند `pushHistory`
-              في `StudioContext.tsx`: التنقّلُ والتحديدُ والمؤشّرُ لا تُسجَّل، وكلُّ
-              ما يُغيّر المستند خطوةٌ واحدةٌ مُسمّاة. وخطوةٌ من موضعٍ لم يُسمِّ
-              نفسَه بعد تعود إلى «تراجع» العامّة — لا اسمٌ مُختلَق. */}
-          <div style={{ display: 'flex', gap: 2 }}>
-            <button
-              data-testid="undo-btn"
-              data-undo-label={undoLabel}
-              // عددُ الخطوات مقروءٌ على الزرّ، كما يُقرأ الزمنُ على الساعة
-              // (`data-t`) والمدى على المسطرة (`data-span`). والمعيار B5 يسأل
-              // «أبقي سجلُّ التراجع كما هو؟» وهو سؤالٌ لا يُجاب بالعين.
-              data-history-past={state.historyPast.length}
-              title={undoLabel ? `${L.undo}: ${undoLabel}` : L.undo}
-              className="mz-btn"
-              disabled={!state.historyPast.length}
-              onClick={actions.undo}
-              style={{ ...iconBtnStyle, opacity: state.historyPast.length ? 1 : 0.35 }}
-            >
-              <Icon size={18} path="M8 5L4 9l4 4M4 9h8a4 4 0 0 1 0 8h-1" />
-            </button>
-            <button
-              data-testid="redo-btn"
-              data-redo-label={redoLabel}
-              data-history-future={state.historyFuture.length}
-              title={redoLabel ? `${L.redo}: ${redoLabel}` : L.redo}
-              className="mz-btn"
-              disabled={!state.historyFuture.length}
-              onClick={actions.redo}
-              style={{ ...iconBtnStyle, opacity: state.historyFuture.length ? 1 : 0.35 }}
-            >
-              <Icon size={18} path="M12 5l4 4-4 4M16 9H8a4 4 0 0 0 0 8h1" />
-            </button>
-          </div>
-        </>
+        // مِزو على الشريط العلوي كما في التصوّر المعتمد: مساعدٌ يُستدعى من أيّ عمق،
+        // لا تبويبٌ بين ألواح المحتوى. ⌘J يفعل الشيء نفسه.
+        <button
+          data-panel-tab="ai"
+          aria-pressed={mizoOn}
+          onClick={() => actions.toggleRailPanel('ai')}
+          title={`${L.ai_name} (${isMac ? '⌘J' : 'Ctrl J'})`}
+          className="mz-btn"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 12px', border: `1px solid ${mizoOn ? 'var(--accent)' : 'var(--lineStrong)'}`, borderRadius: 'var(--rs)', background: mizoOn ? 'var(--accentSoft)' : 'transparent', color: 'var(--text)', fontWeight: 600, fontSize: 13, flex: 'none', whiteSpace: 'nowrap' }}
+        >
+          <Icon size={15} path="M10 3l1.6 4.4L16 9l-4.4 1.6L10 15l-1.6-4.4L4 9l4.4-1.6z" style={{ color: 'var(--accentText)' }} />
+          {L.ai_name}
+        </button>
       )}
 
       <button
@@ -184,60 +199,30 @@ export function TopBar() {
         {L.lang_btn}
       </button>
 
-      {isEditor && (
-        <button
-          data-testid="open-templates-btn"
-          onClick={actions.openTemplates}
-          className="mz-btn"
-          style={{ height: 32, padding: '0 14px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontWeight: 600, fontSize: 13, flex: 'none', whiteSpace: 'nowrap' }}
-        >
-          {L.templates_btn}
-        </button>
-      )}
-
-      {isEditor && (
-        <button
-          data-testid="open-artboards-btn"
-          onClick={actions.openArtboards}
-          className="mz-btn"
-          style={{ height: 32, padding: '0 14px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontWeight: 600, fontSize: 13, flex: 'none', whiteSpace: 'nowrap' }}
-        >
-          {L.artboards_btn}
-        </button>
-      )}
-
       {isEditor && <MoreToolsMenu />}
 
-      {isEditor && state.mcpServerEnabled && (
-        <span
-          data-testid="mcp-active-badge"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 32, padding: '0 10px', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 11.5, fontWeight: 600, flex: 'none', whiteSpace: 'nowrap' }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)' }} />
-          {L.mcp_badge}
-        </span>
-      )}
-
       {isEditor && (
         <button
-          data-testid="open-ai-gen-btn"
-          onClick={actions.openAiGenerate}
-          className="mz-btn"
-          style={{ height: 32, padding: '0 14px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontWeight: 600, fontSize: 13, flex: 'none', whiteSpace: 'nowrap' }}
-        >
-          {L.ai_gen_btn}
-        </button>
-      )}
-
-      {isEditor && (
-        <button
+          data-testid="open-export-btn"
           onClick={actions.openExport}
+          title={`${L.export} (${isMac ? '⌘E' : 'Ctrl E'})`}
           style={{ height: 32, padding: '0 16px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', fontWeight: 600, fontSize: 13, flex: 'none', whiteSpace: 'nowrap' }}
         >
           {L.export}
         </button>
       )}
     </div>
+  );
+}
+
+/** علامة مزيج: ثلاث دوائر تتداخل — السطح والدقّة والزمن، بألوان أعماقها الثلاثة. */
+function MixMark() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true" style={{ flex: 'none' }}>
+      <circle cx="10" cy="11" r="7.5" fill="var(--vector)" opacity="0.92" />
+      <circle cx="18" cy="11" r="7.5" fill="var(--accentText)" opacity="0.88" />
+      <circle cx="14" cy="18" r="7.5" fill="var(--motion)" opacity="0.88" />
+    </svg>
   );
 }
 
@@ -253,8 +238,12 @@ export function TopBar() {
  *
  * Nothing is removed and nothing is hidden conditionally: each tool keeps its
  * action and its test id, one level down. What changes is the claim the bar makes
- * about what matters. What stays out front is what a designer touches constantly
- * — templates, artboards, AI generate, export.
+ * about what matters.
+ *
+ * 24 October 2026 (the approved «one canvas, three depths» layout): the bar now
+ * carries only مِزو and Export out front, as in the concept. Templates moved to the
+ * add rail, artboards to the stage's size row, and AI generate joined this menu —
+ * with the shortcuts sheet, which is the one entry here a designer *will* open.
  */
 function MoreToolsMenu() {
   const { actions, dict: L } = useStudio();
@@ -315,6 +304,14 @@ function MoreToolsMenu() {
           data-testid="more-tools-menu"
           style={{ position: 'absolute', top: 38, insetInlineEnd: 0, zIndex: 40, minWidth: 210, display: 'flex', flexDirection: 'column', gap: 2, padding: 4, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', boxShadow: 'var(--shadow)' }}
         >
+          <button role="menuitem" data-testid="open-ai-gen-btn" style={item} onClick={() => { setOpen(false); actions.openAiGenerate(); }}>{L.ai_gen_btn}</button>
+          <button role="menuitem" data-testid="open-shortcuts-btn" style={item} onClick={() => { setOpen(false); actions.toggleShortcuts(); }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ flex: 1 }}>{L.sc_open}</span>
+              <kbd dir="ltr" style={{ fontFamily: 'inherit', fontSize: 11, padding: '0 6px', borderRadius: 5, background: 'var(--surface2)', color: 'var(--muted)' }}>?</kbd>
+            </span>
+          </button>
+          <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />
           <button role="menuitem" data-testid="open-refvideo-btn" style={item} onClick={() => { setOpen(false); actions.openRefVideo(); }}>{L.refvideo_btn}</button>
           <button role="menuitem" data-testid="open-local-models-btn" style={item} onClick={() => { setOpen(false); actions.openLocalModels(); }}>{L.local_models_btn}</button>
           <button role="menuitem" data-testid="open-cmd-interpreter-btn" style={item} onClick={() => { setOpen(false); actions.openCmdInterpreter(); }}>{L.nl_cmd_btn}</button>
@@ -324,10 +321,6 @@ function MoreToolsMenu() {
       )}
     </div>
   );
-}
-
-function segBtnStyle(s: { bg: string; fg: string; sh: string }): CSSProperties {
-  return { height: 26, padding: '0 14px', border: 0, borderRadius: 'calc(var(--rs) - 2px)', fontSize: 12, fontWeight: 600, background: s.bg, color: s.fg, boxShadow: s.sh };
 }
 
 const iconBtnStyle: CSSProperties = { width: 30, height: 30, display: 'grid', placeItems: 'center', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)' };

@@ -302,7 +302,7 @@ async function main() {
   console.log('\n٢. عرضٌ ينقص وارتفاعٌ يزيد معًا — مقيسًا على الهندسة المرسومة');
   await page.evaluate((k) => window.localStorage.removeItem(k), AUTOSAVE_KEY);
   await bootBlank(page, BASE_URL, 'ig-reel');
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(300);
 
   const rect = await drawRect(page);
@@ -603,7 +603,7 @@ async function main() {
   console.log('\n٥ب. التحجيمُ الذكيُّ من الواجهة: النِّسبةُ المرسومةُ تَثبُت');
   await page.evaluate((k) => window.localStorage.removeItem(k), AUTOSAVE_KEY);
   await bootBlank(page, BASE_URL, 'ig-reel'); // ١٠٨٠×١٩٢٠، مُوقَّت
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(300);
   const mrRect = await drawRect(page);
   await page.locator(`[data-testid="expand-${mrRect}"]`).click();

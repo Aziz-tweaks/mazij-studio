@@ -151,9 +151,9 @@ async function main() {
   // ============================================================
   // Bug 3 [Minor]: PNG/SVG export ignores UI language for text alignment
   // ============================================================
-  await page.getByRole('button', { name: 'ع' }).click().catch(() => {}); // ensure Arabic baseline first
+  await page.getByRole('button', { name: 'ع', exact: true }).click().catch(() => {}); // ensure Arabic baseline first
   await page.waitForTimeout(80);
-  await page.getByRole('button', { name: 'EN' }).click();
+  await page.getByRole('button', { name: 'EN', exact: true }).click();
   await page.waitForTimeout(100);
 
   const liveDir = await head.evaluate((el) => getComputedStyle(el).direction);
@@ -174,7 +174,7 @@ async function main() {
   assert(Boolean(anchorMatch) && /text-anchor="start"/.test(anchorMatch[1]), 'bug3: the headline (halign "start") exports as text-anchor="start" under ltr — i.e. visually left, matching what English UI shows on the artboard, not mirrored to the right');
 
   await page.keyboard.press('Escape'); // closes the export dialog
-  await page.getByRole('button', { name: 'ع' }).click();
+  await page.getByRole('button', { name: 'ع', exact: true }).click();
   await page.waitForTimeout(80);
 
   // ============================================================

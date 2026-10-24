@@ -214,7 +214,7 @@ async function main() {
   // ============================================================
   // Numeric transform fields + lock aspect ratio
   // ============================================================
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(100);
   await frame.click({ force: true });
   await page.waitForTimeout(80);
@@ -244,9 +244,9 @@ async function main() {
   // ============================================================
   // Clipping mask: apply to a shape, release it
   // ============================================================
-  await page.locator('button', { hasText: 'تحديد' }).click(); // select tool
+  await page.locator('[data-tool="select"]').click(); // select tool
   await page.waitForTimeout(80);
-  await page.locator('button', { hasText: 'أشكال' }).click();
+  await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(80);
   // Draw in a region clear of every default element (and the dropped image, centered
   // on the artboard) — otherwise the mousedown would hit that element instead of the
@@ -292,9 +292,9 @@ async function main() {
   // The pre-generalization build wired maskId only through the image frame, so these
   // assertions fail there — that is the point of covering text and not just an image.
   // ============================================================
-  await page.locator('button', { hasText: 'تحديد' }).click(); // select tool
+  await page.locator('[data-tool="select"]').click(); // select tool
   await page.waitForTimeout(80);
-  await page.locator('button', { hasText: 'أشكال' }).click();
+  await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(80);
   // Same corner as above. The two undos just above reverted the *release* and the
   // *apply*, not the creation, so the first mask shape is still sitting here — and

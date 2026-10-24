@@ -104,21 +104,23 @@ async function drawDrag(page, g, from, to, { shift = false, alt = false, spaceBy
   if (alt) await page.keyboard.up('Alt');
 }
 
-/** Arms the shape tool for a canvas drag. The rail button both arms the tool AND
- * swaps the content panel, which is the whole structural point (§2.1 محرّر فيديو شائع). */
+/** Arms the shape tool for a canvas drag.
+ *
+ * 24 October 2026: the button that arms it now lives in the floating tool pill and
+ * **only arms** — the approved layout split drawing tools (أداة متّجهات letters, the
+ * pill) from what gets added (the أداة تصميم شائعة add rail). A library that opened with M
+ * shoved the canvas 300px sideways at the moment the drag began. The محرّر فيديو شائع rule
+ * («every rail button swaps a panel») still holds, for the add rail — asserted below
+ * through `openLibraryPanel`. */
 const armShapeTool = async (page) => {
   await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(90);
 };
 
-/** Brings the SHAPES grid on screen.
- *
- * Clicks the rail's Shapes button rather than the panel tab, because the panel tab
- * reopens whichever library was last browsed — if that was Text, the tab correctly
- * shows Text's «قريبًا» panel, not shapes. (Deliberate: a tool with no library of
- * its own never overwrites the remembered one.) */
+/** Brings the SHAPES grid on screen — through «عناصر» in the add rail, which opens
+ * the shapes library (and toggles it closed on a second press, hence the guard). */
 const openLibraryPanel = async (page) => {
-  await page.locator('[data-tool="shape"]').click();
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(100);
 };
 
@@ -177,7 +179,7 @@ async function main() {
 
   assert((await page.locator('[data-panel-tab="library"]').count()) === 1, 'the panel shell has a real "العناصر" (Elements) tab — أداة تصميم شائعة\'s own name for the panel that holds Shapes (§2.1)');
 
-  await armShapeTool(page);
+  await openLibraryPanel(page);
   const tileCount = await page.locator('[data-shape-tile]').count();
   assert(tileCount >= 10, `pressing Shapes renders a real browsable grid, not nothing (got ${tileCount} tiles)`);
   const readyCount = await page.locator('[data-shape-status="ready"]').count();
@@ -204,12 +206,21 @@ async function main() {
   //   - a tool that already responds keeps the surface it already has, because
   //     replacing that with a placeholder would HIDE working controls, which is a
   //     regression rather than a fix.
-  for (const tool of ['text', 'fx']) {
-    await page.locator(`[data-tool="${tool}"]`).click();
-    await page.waitForTimeout(90);
-    const shown = await page.locator(`[data-testid="library-soon-${tool}"]`).count();
-    assert(shown === 1, `pressing "${tool}" opens a panel that names the tool and declares «قريبًا» — never silence`);
-  }
+  //
+  // «نص» خرجت من «قريبًا» في ٢٤ أكتوبر ٢٠٢٦: بُنيت مكتبتها (عنوان، فرعي، نص، أنماط
+  // جاهزة) — وهو الطريق الذي كتبه `TOOL_LIBRARY` نفسه: «بدِّل 'soon' إلى 'ready'».
+  // فالعقد نفسه بالدرجة الأعلى: الضغط على «نص» يفتح لوحًا **فيه محتوى**، لا صمت.
+  // وبابُها «نصوص» في شريط الإضافة. أمّا T في حبّة الأدوات فيُسلِّح الكتابة على اللوحة
+  // (أداة المتّجهات) — وأثرها ظاهرٌ كذلك: تلميحٌ يقول «انقر واكتب»، لا صمت.
+  await page.locator('[data-rail="text"]').click();
+  await page.waitForTimeout(90);
+  assert((await page.locator('[data-testid="text-library"]').count()) === 1, 'pressing «نصوص» in the add rail opens the real text library (heading / subheading / body / ready styles) — never silence');
+  assert((await page.locator('[data-testid="library-soon-text"]').count()) === 0, '…and no longer a «قريبًا» placeholder');
+  await page.locator('[data-tool="text"]').click();
+  await page.waitForTimeout(90);
+  assert((await page.locator('[data-testid="tool-hint"]').count()) === 1, 'and the pill\'s T arms text-on-canvas with a visible hint — not silence either');
+  // «تأثيرات» و«صوت» بابان للمستند المُوقَّت في شريط الإضافة (كما في تصوّر «الزمن»)،
+  // فيُقاسان بعد `switchToTimed` أدناه.
 
   // image / lottie / video open a file picker on click — about the most unmistakable
   // response a button can give — so they must NOT be handed a «قريبًا» panel that
@@ -223,6 +234,12 @@ async function main() {
   // simply out of place on a still. The geometry assertions above deliberately ran
   // first, on the default 1080×1080 artboard they are about.
   await switchToTimed(page);
+  for (const tool of ['fx', 'audio']) {
+    await page.locator(`[data-tool="${tool}"]`).click();
+    await page.waitForTimeout(90);
+    const shown = await page.locator(`[data-testid="library-soon-${tool}"]`).count();
+    assert(shown === 1, `pressing "${tool}" opens a panel that names the tool and declares «قريبًا» — never silence`);
+  }
   for (const tool of ['image', 'lottie', 'video']) {
     await page.locator(`[data-tool="${tool}"]`).click();
     await page.waitForTimeout(90);
@@ -244,14 +261,13 @@ async function main() {
   // library hid a built, working toolset — and broke qa/pen-smoothing.spec.mjs,
   // qa/text-on-path.spec.mjs and qa/image-editing.spec.mjs at once. Pinned here so
   // the same mistake cannot return by flipping one table entry.
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(160);
   await page.locator('[data-tool="pen"]').click();
   await page.waitForTimeout(180);
   assert((await page.locator('[data-testid="library-soon-pen"]').count()) === 0, 'the pen is NOT given a «قريبًا» panel');
   assert((await page.locator('[data-testid="pen-close-path-toggle"]').count()) === 1, "the pen's own Design-panel controls stay reachable while the pen is selected — a placeholder library here would hide tools that already work");
-  await page.getByRole('button', { name: 'بسيط' }).click();
-  await page.waitForTimeout(160);
+  // (كان هنا ضغطٌ على «بسيط» للرجوع — لا وضعين بعد ٢٤ أكتوبر ٢٠٢٦.)
   // 'select' is deliberately NOT a library: it has no content to browse, so it
   // returns the panel to Design (the selection's properties). That is a behaviour,
   // not an absence of one — and محرّر فيديو شائع's #4 finding is exactly an inspector bound

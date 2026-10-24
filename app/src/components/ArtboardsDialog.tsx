@@ -38,7 +38,7 @@ export function ArtboardsDialog() {
         <button
           data-testid="add-artboard-btn"
           onClick={actions.addArtboard}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 36, border: '1px dashed var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', color: 'var(--accent)', fontWeight: 600, fontSize: 13 }}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 36, border: '1px dashed var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', color: 'var(--accentText)', fontWeight: 600, fontSize: 13 }}
         >
           <Icon size={14} strokeWidth={2.2} path="M10 4v12M4 10h12" />
           {L.artboards_add}

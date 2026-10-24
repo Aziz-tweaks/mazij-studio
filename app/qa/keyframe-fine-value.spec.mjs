@@ -197,7 +197,7 @@ const savedTrack = (page, elId, property) =>
   );
 
 async function openProTimeline(page) {
-  await page.getByRole('button', { name: 'احترافي', exact: true }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(260);
   await page.locator('[data-layer-id="head"] button', { hasText: 'العنوان' }).click();
   await page.waitForTimeout(160);

@@ -51,7 +51,7 @@ export function AnimPresetMenu() {
                 padding: '0 9px',
                 border: 0,
                 borderRadius: 'calc(var(--rs) - 2px)',
-                background: active ? 'var(--surface)' : 'transparent',
+                background: active ? 'var(--seg)' : 'transparent',
                 color: active ? 'var(--text)' : 'var(--muted)',
                 fontSize: 11,
                 fontWeight: active ? 600 : 500,

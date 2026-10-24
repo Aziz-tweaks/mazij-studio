@@ -174,15 +174,15 @@ async function main() {
   // Give artboard 2 its own distinct custom size, then draw a real shape and
   // color it white — real content that only exists on this artboard.
   await setCustomSize(400, 300);
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(80);
-  await page.locator('button', { hasText: 'أشكال' }).click();
+  await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(80);
   await draw(0.15, 0.15, 0.85, 0.85);
   assert((await page.locator('[data-el-id]').count()) === 1, 'add: drawing a shape on the new (blank) artboard adds exactly one real element to it');
   await page.locator('button[title="#FFFFFF"]').first().click();
   await page.waitForTimeout(80);
-  await page.locator('button', { hasText: 'تحديد' }).click();
+  await page.locator('[data-tool="select"]').click();
   await page.waitForTimeout(80);
 
   // --- 3. Rename/duplicate reflected in the dialog -------------------------------
@@ -332,12 +332,12 @@ async function main() {
   await page.waitForTimeout(80);
   assert((await page.locator('[data-el-id]').count()) === 7, 'undo isolation: artboard 1 still has all 7 elements — unaffected by undoing on artboard 2');
 
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(60);
-  await page.locator('button', { hasText: 'أشكال' }).click();
+  await page.locator('[data-tool="shape"]').click();
   await page.waitForTimeout(80);
   await draw(0.3, 0.01, 0.55, 0.075); // clear top strip, see qa/path-boolean.spec.mjs
-  await page.locator('button', { hasText: 'تحديد' }).click();
+  await page.locator('[data-tool="select"]').click();
   assert((await page.locator('[data-el-id]').count()) === 8, 'undo isolation setup: a new shape on artboard 1 brings it to 8 elements');
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(100);

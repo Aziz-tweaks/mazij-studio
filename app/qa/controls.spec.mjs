@@ -77,14 +77,14 @@ async function main() {
   await page.waitForTimeout(100);
 
   // --- TopBar ---
-  await page.getByRole('button', { name: 'EN' }).click();
+  await page.getByRole('button', { name: 'EN', exact: true }).click();
   await page.waitForTimeout(100);
   assert(await page.getByRole('button', { name: 'Export' }).count() > 0, 'topbar: language toggle switches to English');
-  await page.getByRole('button', { name: 'ع' }).click();
+  await page.getByRole('button', { name: 'ع', exact: true }).click();
   await page.waitForTimeout(100);
   assert(await page.getByRole('button', { name: 'تصدير' }).count() > 0, 'topbar: language toggle switches back to Arabic');
 
-  await page.getByRole('button', { name: 'احترافي' }).click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(100);
   assert(await page.locator('text=التحويل').count() > 0, 'topbar: Pro mode reveals the advanced Transform section');
 
@@ -164,7 +164,10 @@ async function main() {
   assert((await xField.inputValue()) === '40', 'advanced X field accepts and stores a real numeric value');
 
   // --- Font loading from a real URL (CORS-enabled Google Fonts static file) ---
-  await page.getByRole('button', { name: 'المكتبة' }).click();
+  // الخطوط في «علامتي» بشريط الإضافة (كانت تبويب «المكتبة» في اللوح الأيسر).
+  await page.locator('[data-rail="brand"]').click();
+  await page.waitForTimeout(100);
+  await page.getByRole('button', { name: 'الخطوط', exact: true }).click();
   await page.waitForTimeout(100);
   const fontUrlInput = page.locator('input[placeholder="https://example.com/MyFont.ttf"]');
   await fontUrlInput.fill('https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbWmT.ttf');

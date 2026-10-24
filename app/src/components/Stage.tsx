@@ -1,9 +1,12 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArtboardSizeMenu } from './stage/ArtboardSizeMenu';
+import { ToolPill } from './stage/ToolPill';
+import { ArtboardsChip } from './stage/ArtboardsChip';
+import { ContextBar } from './stage/ContextBar';
 import { ElementView } from './stage/ElementView';
 import { Handles, GuideLines } from './stage/Handles';
-import { PALETTES, TOOLS, TOOL_BY_CODE, sizeAt, clamp } from '../data/constants';
+import { PALETTES, TOOL_BY_CODE, sizeAt, clamp } from '../data/constants';
 import { geoToPx, pxToGeo, resizeBox, rotatePoint, computeSnap, boundsOfBoxes, centerOf, screenToLocal, type HandleId, type PxBox, type ResizeHandleId } from '../lib/geometry';
 import { computeImageCropLayout } from '../lib/imageCrop';
 import { commandsToSvgPath, pathElementCommands } from '../lib/pathGeometry';
@@ -19,6 +22,8 @@ import { useStudio } from '../state/StudioContext';
 type ShapeDraft = { x: number; y: number; w: number; h: number; flipX?: boolean; flipY?: boolean };
 
 const HINT_KEYS: Record<string, string> = {
+  direct: 'hint_direct',
+  hand: 'hint_hand',
   text: 'hint_text',
   shape: 'hint_shape',
   pen: 'hint_pen',
@@ -29,7 +34,13 @@ const HINT_KEYS: Record<string, string> = {
   fx: 'hint_fx',
 };
 
-const CURSOR_BY_TOOL: Record<string, string> = { text: 'text', shape: 'crosshair', pen: 'crosshair', image: 'copy', lottie: 'copy', video: 'copy' };
+const CURSOR_BY_TOOL: Record<string, string> = { text: 'text', shape: 'crosshair', pen: 'crosshair', image: 'copy', lottie: 'copy', video: 'copy', hand: 'grab' };
+
+/** مسارٌ نقاطه قابلةٌ للتحرير — الشرطُ نفسه الذي تحمله النقرة المزدوجة. المخطّط المحوَّل
+ * من نصّ ونتيجة العمليات البوليانيّة هندسةٌ مسطّحة لا نقاط لها. */
+function isNodeEditable(el: DocElement): boolean {
+  return el.type === 'shape' && el.shape === 'path' && (el.points?.length ?? 0) >= 2 && !el.outline?.length && !el.subpaths?.length;
+}
 
 type DragKind = 'move' | 'resize' | 'rotate' | 'pan' | 'shape-draw' | 'crop-pan' | 'pen-handle' | 'node-anchor' | 'node-handle';
 
@@ -251,34 +262,45 @@ export function Stage() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // --- اختصارات شريط الأدوات بحرف واحد (V / T / R / P / I / L / M / A / E) ---
+  // --- اختصارات الأدوات بحرف واحد (V A P T M/R L H I) ---
   //
-  // كلّ زرّ في الشريط يعرض حرفه في `title` (`TOOLS[].key` في `data/constants.ts`)،
-  // فالبرنامج **يَعِد** بالاختصار على كل تلميح؛ ولم يكن أحدٌ يربطه. والمصمم القادم
-  // من إلستريتور أو الأداة الشائعة أو فيغما يضغط V/T/R قبل أن يقرأ شيئًا — والثلاثة تحمل
-  // المعاني نفسها هناك — فكان أوّل ما يجرّبه في «مزيج» لا يفعل شيئًا.
+  // كلّ زرّ في حبّة الأدوات يعرض حرفه، فالبرنامج **يَعِد** بالاختصار؛ والمصمّم القادم
+  // من أداة المتّجهات أو فيغما يضغط الحرف قبل أن يقرأ شيئًا. فالحروف هي حروفهم بمعانيها
+  // (`TOOLS` في `data/constants.ts`).
   //
-  // المفتاح `e.code` لا `e.key`، للسبب المشروح في تأثير اختصارات ⌘ أدناه: تحت
-  // لوحة مفاتيح عربيّة يصير `e.key` حرفًا عربيًّا بينما يبقى `e.code` على
-  // `KeyT`/`KeyR` — فالربط بـ`e.key` كان سيشحن اختصارات تعمل بالإنجليزيّة وحدها،
-  // وهذا برنامجٌ عربيّ أوّلًا.
+  // المفتاح `e.code` لا `e.key`: تحت لوحة مفاتيح عربيّة يصير `e.key` حرفًا عربيًّا
+  // بينما يبقى `e.code` على `KeyT`/`KeyM` — والربط بـ`e.key` كان سيشحن اختصارات تعمل
+  // بالإنجليزيّة وحدها، وهذا برنامجٌ عربيّ أوّلًا.
   //
-  // ويُنادى `openToolLibrary` لا `setTool`: الاختصار يجب أن يفعل **ما تفعله
-  // النقرة** بالضبط — تسليح الأداة وتبديل لوح المحتوى معًا — وإلا صار للبرنامج
-  // سلوكان لأمرٍ واحد. والأدوات الاحترافيّة (قلم/صوت) مستثناة خارج الوضع
-  // الاحترافي لأن الشريط نفسه يُخفيها هناك (`TOOLS.filter` في `ToolRail.tsx`)،
-  // فاختصارٌ يُسلِّح أداةً لا زرَّ لها كان سيترك المصمم في حالة لا يرى سببها.
+  // والحرف يفعل **ما تفعله النقرة على زرّه في حبّة الأدوات** بالضبط: يُسلِّح ولا يفتح
+  // لوحًا (`setTool`). ولا استثناء «احترافي» بعد ٢٤ أكتوبر ٢٠٢٦: ألغى المالك الوضعين.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const s = stateRef.current;
       if (s.editingTextId) return;
+      // L الدائرة، وM/R المستطيل — حرفا أداة المتّجهات وفيغما يحدّدان **نوع** الشكل،
+      // لا الأداة وحدها. والضغط على زرّ الشكل في الحبّة يُبقي آخر نوعٍ اختاره المصمّم.
+      if (e.code === 'KeyL' || e.code === 'KeyM' || e.code === 'KeyR') {
+        e.preventDefault();
+        actionsRef.current.setTool('shape');
+        actionsRef.current.setShapeDrawKind(e.code === 'KeyL' ? 'ellipse' : 'rect');
+        return;
+      }
       const tool = TOOL_BY_CODE[e.code];
       if (!tool) return;
-      if (TOOLS.find((t) => t.id === tool)?.pro && s.mode !== 'pro') return;
       e.preventDefault();
-      actionsRef.current.openToolLibrary(tool);
+      // A على مسارٍ محدَّد = حرّر نقاطه الآن (التحديد المباشر في أداة المتّجهات). بلا
+      // مسار محدَّد تُسلَّح الأداة، فالنقرة التالية على مسارٍ تدخل نقاطه.
+      if (tool === 'direct') {
+        const only = s.selectedIds.length === 1 ? s.elements.find((x) => x.id === s.selectedIds[0]) : undefined;
+        if (only && isNodeEditable(only)) {
+          actionsRef.current.startNodeEdit(only.id);
+          return;
+        }
+      }
+      actionsRef.current.setTool(tool);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -524,7 +546,17 @@ export function Stage() {
     // الرسم إلى **سحبٍ للصورة** فيختلّ التنسيق الذي بناه. وعلى تصميمٍ مكتمل
     // تغطّي العناصرُ أغلبَ اللوحة، فتبدو الأداتان معطّلتين أصلًا. ويبقى `select`
     // وحده هو ما يُحدِّد ويسحب، وإليه ترتدّ الأدوات المُنشِئة فور الإنشاء.
-    if (state.tool !== 'select') return;
+    // التحديد المباشر: نقرةٌ على مسارٍ تدخل نقاطه فورًا، وعلى غيره تحدّده كالمعتاد.
+    if (state.tool === 'direct') {
+      const hit = state.elements.find((x) => x.id === id);
+      if (hit && !hit.locked && isNodeEditable(hit)) {
+        e.stopPropagation();
+        e.preventDefault();
+        actions.startNodeEdit(hit.id);
+        return;
+      }
+    }
+    if (state.tool !== 'select' && state.tool !== 'direct') return;
     // والثاني: العنصر المقفل يُمرِّر الحدث ولا يبتلعه. هذا هو الفرق بين «مقفل»
     // و«منطقة ميتة» — ولولاه لمنع القفلُ الإمساكَ بالعنصر *وأيضًا* الرسمَ فوقه
     // وتحديدَ ما تحته، فتخسر الخلفيّةُ المقفلة كلَّ ما قُفلت من أجله. القفل
@@ -674,9 +706,12 @@ export function Stage() {
   };
 
   const onBackgroundPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    // أدوات الواجهة الطافية فوق اللوحة (صفّ المقاس، حبّة الأدوات، الشريط السياقي) ليست
+    // لوحةً: نقرةٌ على زرّ المقاس والنصّ مسلَّح كانت تضع نصًّا جديدًا تحت الزرّ.
+    if ((e.target as HTMLElement).closest('[data-stage-overlay]')) return;
     if (state.editingTextId) commitTextEditFromRef();
     if (state.cropEditingId) actions.endCropEdit();
-    const isPan = spaceDown || e.button === 1;
+    const isPan = spaceDown || e.button === 1 || state.tool === 'hand';
     if (isPan) {
       e.preventDefault();
       dragRef.current = { kind: 'pan', rect: artboardRef.current!.getBoundingClientRect(), scale, startDocX: 0, startDocY: 0, lastClientX: e.clientX, lastClientY: e.clientY };
@@ -710,7 +745,7 @@ export function Stage() {
       setShapeDraft(shapeDraftRef.current);
       return;
     }
-    if (state.tool === 'pen' && state.mode === 'pro') {
+    if (state.tool === 'pen') {
       // نقرة على أول نقطة ربط = «أغلق المسار وأنهِه»، إيماءة الإغلاق المتعارف عليها
       // في كل محرّر متجهي. بدونها كانت النقرة تُضيف نقطة رابعة مكرّرة فوق الأولى
       // (مقطع صفري الطول) ويبقى المسار مفتوحًا — فلا سبيل لإغلاقه إلا بمفتاح في
@@ -800,7 +835,7 @@ export function Stage() {
   };
 
   const onBackgroundDoubleClick = () => {
-    if (state.tool === 'pen' && state.mode === 'pro' && state.penDraft.length >= 2) {
+    if (state.tool === 'pen' && state.penDraft.length >= 2) {
       actions.penFinish();
     }
   };
@@ -858,7 +893,11 @@ export function Stage() {
     background: pal.bg,
     color: pal.fg,
     boxShadow: '0 24px 60px rgba(0,0,0,.28)',
-    overflow: 'hidden',
+    // `clip` لا `hidden`: الصندوق المخفيّ الفائض **قابلٌ للتمرير** برمجيًّا، فكان تركيزُ
+    // عنصرٍ يتجاوز حافّة اللوح (أو `scrollIntoView`) يُزيح المحتوى كلّه عن خلفيّته —
+    // قيسَ: نقرةٌ على «نص الشارة» عند ١٢٨٠×٧٢٠ جعلت `scrollLeft` = ١٤٧. `clip` يقصّ
+    // بلا تمريرٍ أصلًا.
+    overflow: 'clip',
     containerType: 'inline-size',
     fontFamily: 'Alexandria, sans-serif',
     cursor: spaceDown ? 'grab' : 'default',
@@ -877,6 +916,8 @@ export function Stage() {
   const hintKey = HINT_KEYS[state.tool];
   const selected = state.selectedIds;
   const soleSelected = selected.length === 1 ? state.elements.find((e) => e.id === selected[0]) : undefined;
+
+  const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id)) && !state.pendingEditSnapshot && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
 
   // المسودّة كشكل مسار كامل الهيئة، بإحداثيات المستند (لا كسور صندوق) — فالمعاينة
   // تمرّ بنفس مُصيِّر الهندسة الذي سيرسم العنصر النهائي بعد `penFinish`.
@@ -930,14 +971,26 @@ export function Stage() {
         flex: 1,
         minHeight: 0,
         overflow: 'hidden',
-        padding: '54px 24px 60px',
-        background: 'var(--canvas)',
-        border: '1px solid var(--line)',
-        borderRadius: 'var(--r)',
+        padding: '54px 24px 72px',
         cursor: spaceDown ? 'grab' : CURSOR_BY_TOOL[state.tool] || 'default',
       }}
+      className="mz-stage"
     >
-      <ArtboardSizeMenu />
+      {/* صفّ اللوحة العلويّ: المقاس واللوحات على البداية، والشريط السياقي للمحدَّد على
+          النهاية. الصفّ نفسه لا يلتقط النقرات (فراغه لوحة)، وأزراره تلتقطها. */}
+      <div data-stage-overlay style={{ position: 'absolute', top: 12, insetInlineStart: 12, insetInlineEnd: 12, zIndex: 4, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 8, pointerEvents: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto', flex: 'none' }}>
+          <ArtboardSizeMenu />
+          <ArtboardsChip />
+        </div>
+        {/* هامشٌ تلقائيّ لا فاصلٌ مرن: إن ضاق المسرح (لوح الإضافة مفتوح) نزل الشريط سطرًا
+            وبقي على النهاية، بدل أن يخرج من حافّة اللوحة. */}
+        {showContextBar && (
+          <div style={{ marginInlineStart: 'auto', display: 'flex', pointerEvents: 'none' }}>
+            <ContextBar />
+          </div>
+        )}
+      </div>
 
       {/* أبعاد المستند الحقيقية بالبكسل، لا أبعاده على الشاشة: `abStyle` يحمل
           مقاسًا مضروبًا في `zoom`، فقياس العنصر من الشاشة لا يخبر بمقاس المستند.
@@ -1002,7 +1055,7 @@ export function Stage() {
 
         {shapeDraft && <ShapeDraftPreview draft={shapeDraft} kind={state.shapeDrawKind} n={state.shapeDrawN} size={size} />}
 
-        {state.tool === 'pen' && state.mode === 'pro' && state.penDraft.length > 0 && (
+        {state.tool === 'pen' && state.penDraft.length > 0 && (
           <svg viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
             {/* معاينة المسودّة تُرسَم بنفس `pathElementCommands` التي ستُصيِّر العنصر
                 النهائي، لا بـ`<polyline>` منفصل — وإلا فالمنحنى الذي يسحبه المصمم
@@ -1026,21 +1079,30 @@ export function Stage() {
         {nodeEditEl && <NodeEditOverlay el={nodeEditEl} size={size} sel={state.nodeEditSel} onNodeDown={onNodeDown} onSegmentDoubleClick={onSegmentDoubleClick} />}
       </div>
 
+      {/* تلميح الأداة فوق حبّة الأدوات لا أعلى اللوحة: أعلاها صفّ المقاس واللوحات،
+          وكان التلميح المتمركز يغطّي زرّ المقاس كلّما ضاق المسرح (لوح الإضافة مفتوح).
+          ولا يلتقط النقرات أبدًا — تلميحٌ لا زرّ. */}
       {hintKey && !state.penDraft.length && (
         <div
+          data-testid="tool-hint"
           style={{
             position: 'absolute',
-            top: 14,
+            bottom: 70,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 3,
             padding: '6px 12px',
             borderRadius: 999,
-            background: 'var(--text)',
-            color: 'var(--bg)',
+            background: 'var(--float)',
+            border: '1px solid var(--lineStrong)',
+            color: 'var(--muted)',
             fontSize: 12,
             fontWeight: 500,
             whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            maxWidth: 'calc(100% - 32px)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
           }}
         >
           {L[hintKey as keyof typeof L] as string}
@@ -1053,17 +1115,7 @@ export function Stage() {
           اختيار النوع إلى لوح «العناصر» (`ShapesLibrary.tsx`) حيث يراه الوضع
           البسيط أيضًا. والنوع المسلَّح يظهر في اللوح ببطاقته المُبرَزة. */}
 
-      <div
-        dir="ltr"
-        onPointerDown={(e) => e.stopPropagation()}
-        style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 3, display: 'flex', alignItems: 'center', gap: 2, padding: 3, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', boxShadow: 'var(--shadow)' }}
-      >
-        <button onClick={actions.zoomOut} style={zoomBtnStyle}>−</button>
-        <span style={{ minWidth: 44, textAlign: 'center', fontSize: 12, fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{Math.round(state.zoom)}%</span>
-        <button onClick={actions.zoomIn} style={zoomBtnStyle}>+</button>
-        <span style={{ width: 1, height: 16, background: 'var(--line)', margin: '0 4px' }} />
-        <button onClick={actions.zoomFit} style={{ ...zoomBtnStyle, width: 'auto', padding: '0 10px', fontSize: 12 }}>{L.fit}</button>
-      </div>
+      <ToolPill />
     </div>
   );
 }
@@ -1087,14 +1139,14 @@ function ShapeDraftPreview({ draft, kind, n, size }: { draft: ShapeDraft; kind: 
     pointerEvents: 'none',
   };
   if (g.shape !== 'path') {
-    return <div style={{ ...style, border: '1.5px dashed var(--accent)', background: 'rgba(14,165,233,.12)', borderRadius: g.shape === 'ellipse' ? '50%' : `${g.radius * 100}%` }} />;
+    return <div style={{ ...style, border: '1.5px dashed var(--accent)', background: 'var(--accentSoft)', borderRadius: g.shape === 'ellipse' ? '50%' : `${g.radius * 100}%` }} />;
   }
   const cmds = pathElementCommands({ points: g.points, closed: g.closed });
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ ...style, overflow: 'visible' }}>
       <path
         d={commandsToSvgPath(cmds.cmds, 100, 100)}
-        fill={g.closed ? 'rgba(14,165,233,.12)' : 'none'}
+        fill={g.closed ? 'var(--accentSoft)' : 'none'}
         stroke="var(--accent)"
         strokeWidth={1.5}
         strokeDasharray="4 3"
@@ -1293,4 +1345,3 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 }
 
-const zoomBtnStyle: CSSProperties = { width: 26, height: 26, border: 0, borderRadius: 'calc(var(--rs) - 2px)', background: 'transparent', color: 'var(--muted)', fontSize: 15 };

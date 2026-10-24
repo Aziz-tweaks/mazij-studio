@@ -104,7 +104,7 @@ function ShapeTile({ tile, armed, label, soonLabel, onPlace }: ShapeTileProps) {
           stroke={tile.recipe.kind === 'line' ? 'currentColor' : 'none'}
           strokeWidth={tile.recipe.kind === 'line' ? 8 : 0}
           strokeLinecap="round"
-          style={{ color: armed && !soon ? 'var(--accent)' : 'var(--text)' }}
+          style={{ color: armed && !soon ? 'var(--accentText)' : 'var(--text)' }}
         />
       </svg>
       {soon && (

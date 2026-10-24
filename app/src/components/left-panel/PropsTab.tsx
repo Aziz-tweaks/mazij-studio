@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../Icon';
-import { PALETTES, sizeAt, seg } from '../../data/constants';
+import { MEDIUM_SURFACES, PALETTES, sizeAt, seg } from '../../data/constants';
 import type { HAlign, VAlign } from '../../state/types';
 import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
 import { geoToPx } from '../../lib/geometry';
@@ -63,7 +63,6 @@ const OBJECT_ALIGN: Array<{ d: string; edge: 'left' | 'center' | 'right' | 'top'
 export function PropsTab() {
   const { state, actions, dict: L } = useStudio();
   const isPen = state.tool === 'pen';
-  const isPro = state.mode === 'pro';
   const size = sizeAt(state.sizeIdx, state.customW, state.customH);
   const el = firstSelectedElement(state);
 
@@ -119,7 +118,7 @@ export function PropsTab() {
               <p style={{ margin: 0, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.mask_hint}</p>
               <button
                 onClick={() => actions.applyClippingMask(maskCandidate.target.id, maskCandidate.mask.id)}
-                style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}
+                style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 12, fontWeight: 600 }}
               >
                 {L.clip_mask}
               </button>
@@ -143,7 +142,7 @@ export function PropsTab() {
               <button
                 data-testid={`text-on-path-btn-${pathCandidate.text.id}`}
                 onClick={() => actions.setTextPathId(pathCandidate.text.id, pathCandidate.path.id)}
-                style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accent)', fontSize: 12, fontWeight: 600 }}
+                style={{ height: 34, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 12, fontWeight: 600 }}
               >
                 {L.text_on_path_btn}
               </button>
@@ -170,7 +169,9 @@ export function PropsTab() {
 
           <OrganiseSection />
 
-          {isPro && (
+          {/* كانت هذه كلّها خلف «احترافي». ألغى المالك الوضعين (٢٤ أكتوبر ٢٠٢٦):
+              «العمق يُطلب ولا يُفرض» — فالأقسام حاضرة، والمفاتيح الزمنيّة وحدها
+              تنتظر مستندًا له زمن. */}
             <>
               {state.selectedIds.length === 1 && <AppearanceSection el={el} />}
               <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -179,7 +180,7 @@ export function PropsTab() {
                   <button
                     onClick={() => actions.setLockAspect(!state.lockAspect)}
                     title={L.lock_aspect}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, height: 22, padding: '0 8px', border: `1px solid ${state.lockAspect ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.lockAspect ? 'var(--accentSoft)' : 'transparent', color: state.lockAspect ? 'var(--accent)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, height: 22, padding: '0 8px', border: `1px solid ${state.lockAspect ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 999, background: state.lockAspect ? 'var(--accentSoft)' : 'transparent', color: state.lockAspect ? 'var(--accentText)' : 'var(--muted)', fontSize: 10.5, fontWeight: 600 }}
                   >
                     <Icon size={12} path="M6 9V6a4 4 0 1 1 8 0v3M4 9h12v8H4z" />
                     {L.lock_aspect}
@@ -215,7 +216,7 @@ export function PropsTab() {
                     );
                   })}
                 </div>
-                {state.selectedIds.length === 1 && <KeyframeToggleRow el={el} />}
+                {state.selectedIds.length === 1 && MEDIUM_SURFACES[state.medium].motionProps && <KeyframeToggleRow el={el} />}
               </section>
 
               <ArrangeSection />
@@ -238,17 +239,6 @@ export function PropsTab() {
               </section>
               {state.selectedIds.length === 1 && <EffectsSection el={el} />}
             </>
-          )}
-
-          {!isPro && (
-            <button
-              onClick={actions.setPro}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', border: '1px dashed var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', fontSize: 12 }}
-            >
-              <Icon size={14} path="M3 6h14M3 10h14M3 14h14M7 4.5v3M13 8.5v3M9 12.5v3" />
-              <span style={{ flex: 1, textAlign: 'start' }}>{L.more}</span>
-            </button>
-          )}
         </>
       )}
     </div>
@@ -294,7 +284,7 @@ function KeyframeToggleRow({ el }: { el: DocElement }) {
               border: `1px solid ${kf ? 'var(--accent)' : 'var(--line)'}`,
               borderRadius: 999,
               background: kf ? 'var(--accentSoft)' : 'transparent',
-              color: kf ? 'var(--accent)' : 'var(--muted)',
+              color: kf ? 'var(--accentText)' : 'var(--muted)',
               fontSize: 10.5,
               fontWeight: 600,
               opacity: 1,
@@ -489,7 +479,7 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
                     aria-label={label}
                     aria-pressed={active}
                     onClick={() => (kind === 'h' ? actions.setElementHAlign(el.id, value as HAlign) : actions.setElementVAlign(el.id, value as VAlign))}
-                    style={{ height: 30, display: 'grid', placeItems: 'center', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--muted)' }}
+                    style={{ height: 30, display: 'grid', placeItems: 'center', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--muted)' }}
                   >
                     <Icon size={16} path={d} style={{ transform: kind === 'h' && state.lang === 'ar' ? 'scaleX(-1)' : 'none' }} />
                   </button>
@@ -514,6 +504,10 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
           `tracks` كلّها، فمسارٌ بُني باليد كان يُباد بنقرة. والرفضُ معلَنٌ —
           أزرارٌ معطَّلةٌ بتلميحٍ يقول السببَ وما يُزيله — لا صامتٌ ولا زرٌّ ميت.
           موضعانِ لأنّ للنمط مدخلَين، والحرسُ نفسُه في النموذج (`withPreset`). */}
+      {/* الحركة عمقُ الزمن: تظهر لمستندٍ له زمن. وعلى الساكن بابُها «حرّك» في الشريط
+          السياقي، وهو يجعل التصميم مشهدًا أوّلًا (`animateElement`) — فلا تُعرض هنا
+          قائمةُ دخولٍ لا يراها أحدٌ في ملفٍّ ساكن. */}
+      {MEDIUM_SURFACES[state.medium].motionProps && (
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="mz-label">{L.animation}</div>
         <div data-testid="props-anim-presets" data-preset-blocked={presetBlocked ? 'true' : 'false'} style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -526,7 +520,7 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
                 disabled={presetBlocked}
                 title={presetBlocked ? L.preset_blocked : undefined}
                 onClick={() => actions.setElementAnimPreset(el.id, a)}
-                style={{ height: 30, padding: '0 12px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 12, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)', opacity: presetBlocked ? 0.4 : 1, cursor: presetBlocked ? 'not-allowed' : 'pointer' }}
+                style={{ height: 30, padding: '0 12px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 12, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)', opacity: presetBlocked ? 0.4 : 1, cursor: presetBlocked ? 'not-allowed' : 'pointer' }}
               >
                 {L[`anim_${a}` as const]}
               </button>
@@ -534,8 +528,9 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
           })}
         </div>
       </section>
+      )}
 
-      <TextStaggerSection el={el} />
+      {MEDIUM_SURFACES[state.medium].motionProps && <TextStaggerSection el={el} />}
       <TextOutlineSection el={el} />
     </>
   );
@@ -587,7 +582,7 @@ function TextOutlineSection({ el }: { el: TextElement }) {
       </button>
       <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{supported ? L.text_outline_hint : L.text_outline_unsupported_font}</div>
       {error && (
-        <div data-testid={`text-outline-error-${el.id}`} style={{ fontSize: 11, color: '#e5484d' }}>
+        <div data-testid={`text-outline-error-${el.id}`} style={{ fontSize: 11, color: 'var(--danger)' }}>
           {L.text_outline_error}: {error}
         </div>
       )}
@@ -643,7 +638,7 @@ function TextStaggerSection({ el }: { el: TextElement }) {
                   key={d}
                   data-testid={`stagger-dir-${el.id}-${d}`}
                   onClick={() => actions.setTextStagger(el.id, { direction: d })}
-                  style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+                  style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)' }}
                 >
                   {L[`stagger_dir_${d}` as const]}
                 </button>
@@ -659,7 +654,7 @@ function TextStaggerSection({ el }: { el: TextElement }) {
                   key={fx}
                   data-testid={`stagger-effect-${el.id}-${fx}`}
                   onClick={() => actions.setTextStagger(el.id, { effect: fx })}
-                  style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+                  style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)' }}
                 >
                   {L[`stagger_fx_${fx}` as const]}
                 </button>
@@ -707,7 +702,7 @@ function TextStaggerSection({ el }: { el: TextElement }) {
                   key={id}
                   data-testid={`stagger-ease-${el.id}-${id}`}
                   onClick={() => actions.setTextStagger(el.id, { easing: id })}
-                  style={{ height: 26, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', fontSize: 11, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accent)' : 'var(--text)' }}
+                  style={{ height: 26, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', fontSize: 11, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)' }}
                 >
                   {L[EASE_LABEL_KEY[id] as keyof typeof L] as string}
                 </button>
@@ -868,7 +863,7 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
         <button
           data-testid={`shape-stroke-toggle-${el.id}`}
           onClick={() => actions.setShapeStroke(el.id, strokeOn ? null : strokeHex)}
-          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: strokeOn ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: strokeOn ? 'var(--accent)' : 'var(--muted)' }}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: strokeOn ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: strokeOn ? 'var(--accentText)' : 'var(--muted)' }}
         >
           {strokeOn ? L.on_state : L.off_state}
         </button>
@@ -954,7 +949,7 @@ function PathSmoothProps({ el }: { el: DocElement & { type: 'shape' } }) {
           border: `1px solid ${editingNodes ? 'var(--accent)' : 'var(--line)'}`,
           borderRadius: 'var(--rs)',
           background: editingNodes ? 'var(--accentSoft)' : 'var(--surface2)',
-          color: editingNodes ? 'var(--accent)' : 'var(--text)',
+          color: editingNodes ? 'var(--accentText)' : 'var(--text)',
           fontSize: 12,
           fontWeight: 600,
         }}
@@ -980,7 +975,7 @@ function PathSmoothProps({ el }: { el: DocElement & { type: 'shape' } }) {
                     border: `1px solid ${isCorner ? 'var(--accent)' : 'var(--line)'}`,
                     borderRadius: isCorner ? 4 : 999,
                     background: isCorner ? 'var(--accentSoft)' : 'var(--surface2)',
-                    color: isCorner ? 'var(--accent)' : 'var(--muted)',
+                    color: isCorner ? 'var(--accentText)' : 'var(--muted)',
                     fontSize: 10.5,
                     fontWeight: 600,
                   }}
@@ -1039,7 +1034,7 @@ function ImageProps({ el }: { el: DocElement & { type: 'image' } }) {
               <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>{L.crop_frame}</span>
               <button
                 onClick={() => (cropping ? actions.endCropEdit() : actions.startCropEdit(el.id))}
-                style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: cropping ? 'var(--accentSoft)' : 'var(--surface)', fontSize: 11, fontWeight: 600, color: cropping ? 'var(--accent)' : 'var(--text)' }}
+                style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: cropping ? 'var(--accentSoft)' : 'var(--surface)', fontSize: 11, fontWeight: 600, color: cropping ? 'var(--accentText)' : 'var(--text)' }}
               >
                 {cropping ? L.crop_done : L.crop_start}
               </button>
@@ -1069,11 +1064,11 @@ function ImageProps({ el }: { el: DocElement & { type: 'image' } }) {
           </div>
 
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => actions.setImageFlip(el.id, 'h')} style={{ flex: 1, height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.flipH ? 'var(--accentSoft)' : 'var(--surface2)', color: el.flipH ? 'var(--accent)' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <button onClick={() => actions.setImageFlip(el.id, 'h')} style={{ flex: 1, height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.flipH ? 'var(--accentSoft)' : 'var(--surface2)', color: el.flipH ? 'var(--accentText)' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <Icon size={13} path="M10 3v14M5 6l-2 1v6l2 1M15 6l2 1v6l-2 1" />
               {L.flip_h}
             </button>
-            <button onClick={() => actions.setImageFlip(el.id, 'v')} style={{ flex: 1, height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.flipV ? 'var(--accentSoft)' : 'var(--surface2)', color: el.flipV ? 'var(--accent)' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <button onClick={() => actions.setImageFlip(el.id, 'v')} style={{ flex: 1, height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.flipV ? 'var(--accentSoft)' : 'var(--surface2)', color: el.flipV ? 'var(--accentText)' : 'var(--text)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               <Icon size={13} path="M3 10h14M6 5l1-2h6l1 2M6 15l1 2h6l1-2" />
               {L.flip_v}
             </button>
@@ -1125,7 +1120,7 @@ function ImageProps({ el }: { el: DocElement & { type: 'image' } }) {
             <button
               data-testid={`image-stroke-toggle-${el.id}`}
               onClick={() => actions.setImageStroke(el.id, strokeOn ? null : strokeHex)}
-              style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: strokeOn ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: strokeOn ? 'var(--accent)' : 'var(--muted)' }}
+              style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: strokeOn ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: strokeOn ? 'var(--accentText)' : 'var(--muted)' }}
             >
               {strokeOn ? L.on_state : L.off_state}
             </button>
@@ -1181,7 +1176,7 @@ function LottieProps({ el }: { el: DocElement & { type: 'lottie' } }) {
         <span style={{ color: 'var(--muted)', flex: 1 }}>{L.lottie_loop}</span>
         <button
           onClick={() => actions.setLottieLoop(el.id, !el.loop)}
-          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.loop ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.loop ? 'var(--accent)' : 'var(--muted)' }}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.loop ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.loop ? 'var(--accentText)' : 'var(--muted)' }}
         >
           {el.loop ? L.on_state : L.off_state}
         </button>
@@ -1264,7 +1259,7 @@ function VideoProps({ el }: { el: DocElement & { type: 'video' } }) {
         <button
           data-testid={`video-mute-${el.id}`}
           onClick={() => actions.setVideoMuted(el.id, !el.muted)}
-          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.muted ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.muted ? 'var(--accent)' : 'var(--muted)' }}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.muted ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.muted ? 'var(--accentText)' : 'var(--muted)' }}
         >
           {el.muted ? L.on_state : L.off_state}
         </button>
@@ -1275,7 +1270,7 @@ function VideoProps({ el }: { el: DocElement & { type: 'video' } }) {
         <button
           data-testid={`video-loop-${el.id}`}
           onClick={() => actions.setVideoLoop(el.id, !el.loop)}
-          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.loop ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.loop ? 'var(--accent)' : 'var(--muted)' }}
+          style={{ height: 26, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: el.loop ? 'var(--accentSoft)' : 'var(--surface2)', fontSize: 11, color: el.loop ? 'var(--accentText)' : 'var(--muted)' }}
         >
           {el.loop ? L.on_state : L.off_state}
         </button>
@@ -1334,7 +1329,7 @@ function BackgroundRemovalSection({ el }: { el: DocElement & { type: 'image' } }
       </button>
       <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.bg_local_badge}</div>
       {phase === 'error' && error && (
-        <div data-testid="remove-background-error" style={{ fontSize: 11, color: '#e5484d' }}>
+        <div data-testid="remove-background-error" style={{ fontSize: 11, color: 'var(--danger)' }}>
           {error}
         </div>
       )}
@@ -1400,7 +1395,7 @@ function UpscaleSection({ el }: { el: DocElement & { type: 'image' } }) {
       </button>
       <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.upscale_local_badge}</div>
       {phase === 'error' && error && (
-        <div data-testid="upscale-error" style={{ fontSize: 11, color: '#e5484d' }}>
+        <div data-testid="upscale-error" style={{ fontSize: 11, color: 'var(--danger)' }}>
           {error}
         </div>
       )}
@@ -1467,7 +1462,7 @@ function AutoCaptionsSection({ el }: { el: DocElement & { type: 'video' } }) {
       <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>{L.captions_local_badge}</div>
       <p style={{ margin: 0, fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.captions_en_only}</p>
       {phase === 'error' && error && (
-        <div data-testid="auto-captions-error" style={{ fontSize: 11, color: '#e5484d' }}>
+        <div data-testid="auto-captions-error" style={{ fontSize: 11, color: 'var(--danger)' }}>
           {error}
         </div>
       )}
@@ -1675,7 +1670,7 @@ function LayerRowChrome({ visible, onToggleVisible, onUp, onDown, onDuplicate, o
       <button data-testid={`${testId}-duplicate`} onClick={onDuplicate} style={iconBtnStyle} title="تكرار">
         <Icon size={14} path="M5 5h9v9H5zM8 2h9v9" />
       </button>
-      <button data-testid={`${testId}-remove`} onClick={onRemove} style={{ ...iconBtnStyle, color: 'var(--danger, #e05252)' }} title="حذف">
+      <button data-testid={`${testId}-remove`} onClick={onRemove} style={{ ...iconBtnStyle, color: 'var(--danger)' }} title="حذف">
         <Icon size={14} path="M4 5h12M8 5V3h4v2M6 5l1 12h6l1-12" />
       </button>
     </div>
@@ -1849,7 +1844,7 @@ function AppearanceSection({ el }: { el: DocElement }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>{L.appearance_fills}</span>
-          <button data-testid={`appearance-add-fill-${el.id}`} onClick={() => actions.addFillLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>
+          <button data-testid={`appearance-add-fill-${el.id}`} onClick={() => actions.addFillLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accentText)', fontSize: 11, fontWeight: 600 }}>
             {L.appearance_add}
           </button>
         </div>
@@ -1938,7 +1933,7 @@ function AppearanceSection({ el }: { el: DocElement }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>{L.appearance_strokes}</span>
-          <button data-testid={`appearance-add-stroke-${el.id}`} onClick={() => actions.addStrokeLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>
+          <button data-testid={`appearance-add-stroke-${el.id}`} onClick={() => actions.addStrokeLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accentText)', fontSize: 11, fontWeight: 600 }}>
             {L.appearance_add}
           </button>
         </div>
@@ -2006,7 +2001,7 @@ function AppearanceSection({ el }: { el: DocElement }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
           <span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>{L.appearance_shadows}</span>
-          <button data-testid={`appearance-add-shadow-${el.id}`} onClick={() => actions.addShadowLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>
+          <button data-testid={`appearance-add-shadow-${el.id}`} onClick={() => actions.addShadowLayer(el.id)} style={{ height: 22, padding: '0 8px', border: 0, borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--accentText)', fontSize: 11, fontWeight: 600 }}>
             {L.appearance_add}
           </button>
         </div>

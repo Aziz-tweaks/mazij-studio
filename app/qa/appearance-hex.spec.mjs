@@ -77,7 +77,8 @@ async function addText(page, content) {
 }
 
 async function addRect(page) {
-  await page.locator('[data-tool="shape"]').click();
+  // مكتبة الأشكال في «عناصر» بشريط الإضافة؛ زرّ الشكل في حبّة الأدوات يُسلِّح فقط (٢٤ أكتوبر ٢٠٢٦).
+  if (!(await page.locator('[data-shape-tile]').count())) await page.locator('[data-panel-tab="library"]').click();
   await page.waitForTimeout(320);
   await page.locator('[data-shape-tile="rect"]').click();
   await page.waitForTimeout(500);
@@ -120,7 +121,7 @@ async function main() {
   });
 
   await bootBlank(page, BASE_URL, 'ig-portrait');
-  await page.locator('button', { hasText: /^احترافي$/ }).first().click();
+  // لا «بسيط/احترافي» منذ ٢٤ أكتوبر ٢٠٢٦ (قرار المالك: «العمق يُطلب ولا يُفرض») — كلّ الأدوات حاضرة.
   await page.waitForTimeout(250);
 
   // --- ١. قراءة الستّ عشريّ: الصور التي ينسخ بها المصمّم لونه فعلًا ---------------
