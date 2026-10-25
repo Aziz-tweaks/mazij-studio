@@ -267,7 +267,7 @@ export interface StudioState {
   /** **حافظةُ الحركة** («نسخ الحركة» ← «لصق الحركة»): مقطعُ عنصرٍ كاملٌ — مساراته وطوله
    * وقصّه و«يظهر في مقطعه فقط» — وتتابعُ نصّه إن كان نصًّا. حالةُ واجهةٍ لا مستند:
    * لا تُحفظ ولا تُسجَّل، كحافظة العناصر. */
-  animClipboard: { anim: ElementAnim; textAnim: TextStaggerAnim | null; fromType: string } | null;
+  animClipboard: { anim: ElementAnim; textAnim: TextStaggerAnim | null; fromType: string; pivot?: { x: number; y: number } | null } | null;
   /** آخرُ استيرادِ صوتٍ فشل ولماذا — يعرضه لوحُ «صوت» تحت زرّه. */
   audioError: string | null;
   lockAspect: boolean;

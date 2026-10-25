@@ -517,6 +517,51 @@ interface ElementBase {
    * أيّ ترحيلٍ يُجرى على بايتٍ قائم — نفسُ عقد «ترحيل بلا فقد» الذي حمله
    * `appearance` و`groupId` و`widthProfile`. */
   blur?: number;
+  /** **نقطةُ الارتكاز** (٢٥ أكتوبر ٢٠٢٦) — النقطةُ التي **يدور حولها ويتكبّر منها
+   * تحريكُ** العنصر: مسارات `rotation` و`scale` و`scaleX` و`scaleY`. كسرٌ من صندوق
+   * العنصر نفسه (`0,0` ركنُه الأعلى الأيسر، `1,1` الأسفل الأيمن)؛ وغيابُها = المركز.
+   *
+   * **لماذا:** مطرقةٌ تهوي تدور حول طرف مقبضها لا حول وسطها، وسيفٌ يُلوَّح به يدور حول
+   * قبضته، وشريطُ عنوانٍ «يُمسَح» من حافّته يتمدّد منها — والمقطعُ المرجعيّ فيه الثلاثة.
+   * وبلا هذه النقطة لا يُصنع ذلك إلّا بمفاتيح موضعٍ تُلاحق الدوران إطارًا إطارًا.
+   *
+   * **ولا تمسّ الدورانَ الساكن** (`geo.rotation`) ولا الصندوقَ ولا مقابضَ التحديد:
+   * فحقلُ الزاوية يدير العنصر حول مركزه كما كان، والارتكازُ للحركة وحدها — فلا يتحرّك
+   * عنصرٌ ساكنٌ شعرةً حين تُغيَّر نقطتُه، ولا يُرحَّل مستندٌ قائم.
+   *
+   * والصيغةُ واحدةٌ في الرسّامات الثلاث: إزاحةٌ إلى النقطة، ثم المقياس والدوران، ثم
+   * إزاحةٌ عكسيّة — `pivotOffsetFrac` أدناه، و`entranceStyleAt` (المعاينة)،
+   * و`drawElements` (التصدير)، و`elementMatrix` (القناع). */
+  pivot?: { x: number; y: number };
+}
+
+/** تباعدُ الأسطر الافتراضيّ — كان رقمًا مكتوبًا في خمسة مواضع قبل أن يصير حقلًا. */
+export const DEFAULT_LINE_HEIGHT = 1.15;
+
+/** تباعدُ أسطر النصّ الفعليّ (مضاعِفٌ للمقاس)، محصورًا في مدًى يُقرأ. */
+export function lineHeightOf(el: { lineHeight?: number }): number {
+  const v = el.lineHeight;
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(4, Math.max(0.5, v)) : DEFAULT_LINE_HEIGHT;
+}
+
+/** إزاحةُ خطّ قاعدة السطر الأوّل عمّا كانت عليه بالتباعد الافتراضيّ: المتصفّح يقسم الزيادة
+ * نصفين فوق السطر وتحته، فيهبط السطرُ الأوّل نصفَها — والقُماشُ يتبعه بهذه. */
+export function firstBaselineShift(el: { lineHeight?: number }, fontPx: number): number {
+  return ((lineHeightOf(el) - DEFAULT_LINE_HEIGHT) / 2) * fontPx;
+}
+
+/** نقطةُ الارتكاز الفعليّة: المركزُ متى غابت أو فسدت أرقامُها، ومحصورةٌ في الصندوق. */
+export function pivotOf(el: { pivot?: { x: number; y: number } | null }): { x: number; y: number } {
+  const p = el.pivot;
+  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return { x: 0.5, y: 0.5 };
+  return { x: Math.min(1, Math.max(0, p.x)), y: Math.min(1, Math.max(0, p.y)) };
+}
+
+/** بُعدُ نقطة الارتكاز عن مركز الصندوق، كسرًا من ضلعيه (`-0.5..0.5`) — وصفرٌ تامٌّ للمركز،
+ * فلا تُضاف إلى أيّ تحويلٍ قائمٍ إزاحةٌ واحدة. */
+export function pivotOffsetFrac(el: { pivot?: { x: number; y: number } | null }): { dx: number; dy: number } {
+  const p = pivotOf(el);
+  return { dx: p.x - 0.5, dy: p.y - 0.5 };
 }
 
 export interface TextElement extends ElementBase {
@@ -541,6 +586,13 @@ export interface TextElement extends ElementBase {
    * ينكسر سطرين في مزيج بينما هو سطرٌ واحد في الهدف، ولا شيء في الواجهة كلّها
    * يملك إصلاح فرق البكسل الواحد هذا. */
   tracking?: number;
+  /** **تباعدُ الأسطر** (٢٥ أكتوبر ٢٠٢٦) — مضاعِفٌ لمقاس الخطّ كـ`line-height` في CSS؛ وغيابُه =
+   * `1.15` الذي كان ثابتًا في المسارات كلّها. نصوصُ المقطع المرجعيّ سطرانِ بينهما ١٫٥ من
+   * المقاس تقريبًا، فكان لا يُنسخ إلّا بنصّين منفصلين يُكشَف كلٌّ منهما وحده.
+   *
+   * والسطرُ الأوّل يبقى حيث يضعه المتصفّح: نصفُ الزيادة فوقه ونصفُها تحته (`firstBaselineShift`)،
+   * فالمعاينةُ والتصديرُ والتحويلُ إلى مخطّط تقول الشيءَ نفسَه. */
+  lineHeight?: number;
   weight: Weight;
   color: string | null;
   halign: HAlign;

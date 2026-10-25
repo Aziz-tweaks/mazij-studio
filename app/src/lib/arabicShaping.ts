@@ -29,6 +29,7 @@
 import bidiFactory from 'bidi-js';
 import type { PathCmd } from './pathGeometry';
 import type { Geometry, TextElement } from '../state/elements';
+import { firstBaselineShift, lineHeightOf } from '../state/elements';
 import type { Weight } from '../state/types';
 
 const bidi = bidiFactory();
@@ -386,14 +387,15 @@ export async function convertTextElementToOutline(el: TextElement, size: { w: nu
   const bh = el.geo.h * size.h;
   const fontPx = (el.fontSize / 1080) * size.w;
   const lines = el.text.split('\n');
-  const lineHeight = fontPx * 1.15;
+  const lineHeight = fontPx * lineHeightOf(el);
   const totalHeight = lines.length * lineHeight;
+  const shift = firstBaselineShift(el, fontPx);
   const startIsRight = dir === 'rtl';
   const alignX = el.halign === 'start' ? (startIsRight ? bw : 0) : el.halign === 'end' ? (startIsRight ? 0 : bw) : bw / 2;
   let startY: number;
-  if (el.valign === 'top') startY = fontPx * 0.9;
-  else if (el.valign === 'middle') startY = (bh - totalHeight) / 2 + fontPx * 0.9;
-  else startY = bh - totalHeight + fontPx * 0.9;
+  if (el.valign === 'top') startY = fontPx * 0.9 + shift;
+  else if (el.valign === 'middle') startY = (bh - totalHeight) / 2 + fontPx * 0.9 + shift;
+  else startY = bh - totalHeight + fontPx * 0.9 + shift;
   // 'left'/'right'/'center' here mirror exactly what `ctx.textAlign` would have
   // anchored the browser's own `fillText` to for the same halign/dir combination —
   // see the plain-text branch this replaces in exportArtboard.ts.

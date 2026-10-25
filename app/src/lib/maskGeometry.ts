@@ -28,6 +28,7 @@
 // أو بيضة (المستطيلُ نفسُه، والبيضةُ منحنياتٌ حقيقيّة بدل ٤٨ ضلعًا).
 
 import type { DocElement, ShapeElement } from '../state/elements';
+import { pivotOffsetFrac } from '../state/elements';
 import { effectiveScale, resolveAnimAt, type AnimVisual } from './animTimeline';
 import { ellipsePathCmds, pathElementCommands, roundRectPathCmds, type PathCmd } from './pathGeometry';
 
@@ -90,7 +91,7 @@ export function matApply(m: Mat2D, x: number, y: number): { x: number; y: number
  *     T(مركز) · R(geo) · T(إزاحة الحركة) · S(المقياس الفعليّ) · R(دوران الحركة) · T(−نصف الصندوق)
  *
  * و`visual` غائبٌ = الهندسةُ الساكنة وحدها (ما يرسمه SVG، الذي لا يحمل حركة). */
-export function elementMatrix(el: Pick<DocElement, 'geo'>, size: { w: number; h: number }, visual: AnimVisual | null): Mat2D {
+export function elementMatrix(el: Pick<DocElement, 'geo'> & { pivot?: { x: number; y: number } }, size: { w: number; h: number }, visual: AnimVisual | null): Mat2D {
   const bw = el.geo.w * size.w;
   const bh = el.geo.h * size.h;
   const cx = el.geo.x * size.w + bw / 2;
@@ -100,8 +101,13 @@ export function elementMatrix(el: Pick<DocElement, 'geo'>, size: { w: number; h:
     // الإزاحةُ كسرٌ من **عرض** اللوح على المحورين — وحدة `cqw` نفسُها في المعاينة.
     if (visual.x !== 0 || visual.y !== 0) m = matMul(m, translateM(visual.x * size.w, visual.y * size.w));
     const { sx, sy } = effectiveScale(visual);
+    // نقطةُ الارتكاز — الصيغةُ نفسُها في المعاينة والتصدير (`pivotOffsetFrac`).
+    const pv = pivotOffsetFrac(el);
+    const pivoted = (pv.dx !== 0 || pv.dy !== 0) && (sx !== 1 || sy !== 1 || visual.rotation !== 0);
+    if (pivoted) m = matMul(m, translateM(pv.dx * bw, pv.dy * bh));
     if (sx !== 1 || sy !== 1) m = matMul(m, scaleM(sx, sy));
     if (visual.rotation !== 0) m = matMul(m, rotateM(visual.rotation));
+    if (pivoted) m = matMul(m, translateM(-pv.dx * bw, -pv.dy * bh));
   }
   return matMul(m, translateM(-bw / 2, -bh / 2));
 }

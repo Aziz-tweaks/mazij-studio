@@ -231,7 +231,13 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
     const finish = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      window.removeEventListener('keydown', onKey);
+      // **بعلَم الالتقاط نفسِه الذي أُضيف به** — ٢٥ أكتوبر ٢٠٢٦. كان يُزال بلا `true`،
+      // و`removeEventListener` لا يُطابق مستمعًا أُضيف بالتقاطٍ إلّا بالتقاط: فبقي بعد
+      // كلّ نقرةٍ على مقطعٍ أو ماسةٍ مستمعٌ على النافذة يبتلع كلَّ `Escape` بعدها
+      // (`stopPropagation` في طور الالتقاط) ويُنادي `cancelElementEdit` — فلا يُلغي
+      // `Escape` التحديدَ بعد أيّ لمسةٍ للخطّ الزمنيّ، ويُرجِع قيمةً كُتبت للتوّ في
+      // حقلٍ مفتوح. ظهر حين نُسخ مقطعٌ حقيقيٌّ بالأزرار. انظر `qa/kf-popover-placement.spec.mjs` §٦.
+      window.removeEventListener('keydown', onKey, true);
       gestureRef.current = null;
       delete rowEl.dataset.trimApplied;
       delete rowEl.dataset.trimClamped;

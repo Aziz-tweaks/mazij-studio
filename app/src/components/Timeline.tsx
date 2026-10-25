@@ -1,8 +1,8 @@
 import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { useStudio } from '../state/StudioContext';
-import { KF_VALUE_STEP, documentDuration, formatClock, formatDurationSec, formatKfDisplay, kfValueFromDisplay, kfValueToDisplay, quantizeKfValue, tickLadder, timeOfFrame, timelineSpan, timelineTimeOf } from '../lib/animTimeline';
+import { KF_VALUE_STEP, documentDuration, formatClock, formatDurationSec, formatKfDisplay, kfValueFromDisplay, kfValueToDisplay, quantizeKfValue, tickLadder, timeOfFrame, timelineSpan } from '../lib/animTimeline';
 import type { AnimProperty, DocElement } from '../state/elements';
 import { hasCustomAnimation } from '../state/elements';
 import { canSplitAt } from '../lib/timelineEdit';
@@ -13,6 +13,7 @@ import { EASING_IDS, type EasingId } from '../lib/easing';
 import { EasingMenu, EASE_LABEL_KEY } from './timeline/EasingMenu';
 import { AnimPresetMenu } from './timeline/AnimPresetMenu';
 import { BezierEditor } from './timeline/BezierEditor';
+import { AnchoredPopover } from './timeline/AnchoredPopover';
 import { Clip, CLIP_ROW_H, PROP_ROW_H, expandablePropertiesFor, type SelectedKf } from './timeline/Clip';
 import { ICONS, clamp } from '../data/constants';
 
@@ -119,7 +120,14 @@ function sliderRange(property: AnimProperty, el?: DocElement): [number, number] 
  * القيمة الواحدة رقمَين مختلفَين، وهو الافتراقُ الذي عضَّ هذا المستودعَ مرّتين.
  *
  * **ومسوّدةٌ محلّيّةٌ بنمط `NumField`** (`left-panel/PropsTab.tsx`): `«‑»` و`«0.»`
- * و`«»` حالاتٌ وسيطةٌ لا تُلزِم، وإلّا مُحِيَت الإشارةُ من تحت يد الكاتب. */
+ * و`«»` حالاتٌ وسيطةٌ لا تُلزِم، وإلّا مُحِيَت الإشارةُ من تحت يد الكاتب.
+ *
+ * **والمسوّدةُ لمفتاحها وحده — ٢٥ أكتوبر ٢٠٢٦.** رقمٌ مطروقٌ بلا `Enter` ثم نقرةٌ على
+ * ماسةٍ أخرى: نقرةُ الماسة لا تُفقِد الحقلَ تركيزَه، والمكوّنُ نفسُه يبقى للمفتاح
+ * الجديد، فكان يَعرض **مسوّدةَ المفتاح السابق** على المفتاح الجديد — «-1.4055» فوق
+ * مفتاحٍ قيمتُه ٠٫٨٤ — وتبقى إيماءةُ الكتابة مفتوحةً بلا خطوة تراجع. فالحقلُ يُعطى
+ * مفتاحَ React من هويّة المفتاح (حقلٌ لكلّ مفتاح)، وما كُتب حيًّا ولم يُلزَم يُلزَم
+ * عند زواله: خطوةُ تراجعٍ واحدةٌ مسمّاة كما لو ضُغط `Enter`. */
 function KfValueField({
   range,
   display,
@@ -135,6 +143,16 @@ function KfValueField({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const [min, max] = range;
+  // ما كُتب حيًّا ولم يُلزَم بعد — يُلزَم عند الزوال (انتقالٌ إلى مفتاحٍ آخر أو إغلاق).
+  const pending = useRef(false);
+  const commitRef = useRef(onCommit);
+  commitRef.current = onCommit;
+  useEffect(
+    () => () => {
+      if (pending.current) commitRef.current();
+    },
+    [],
+  );
   return (
     <input
       data-testid="kf-value-field"
@@ -150,15 +168,20 @@ function KfValueField({
         setDraft(raw);
         if (raw.trim() === '') return;
         const v = Number(raw);
-        if (Number.isFinite(v)) onLive(v);
+        if (Number.isFinite(v)) {
+          pending.current = true;
+          onLive(v);
+        }
       }}
       onKeyDown={(e) => {
         if (e.key !== 'Enter') return;
         setDraft(null);
+        pending.current = false;
         onCommit();
       }}
       onBlur={() => {
         setDraft(null);
+        pending.current = false;
         onCommit();
       }}
       style={{
@@ -183,6 +206,11 @@ function KfValueField({
  *
  * وهذا الملفُّ **لا يَقرأ `state.medium` في شرطٍ ولا يُقارنه**: الجوابُ يصل دعامةً،
  * فلا يصير هذا موضعًا رابعًا يتفرّع عليه ويجوز أن يختلف عن الثلاثة. */
+/** مدى تكبير الخطّ الزمنيّ: ١ = المستندُ كلُّه في النافذة، و٦٤ = إطارُ ٣٠/ث بعرض عشرات البكسلات
+ * في مقطعٍ دقيقة. */
+const TL_ZOOM_MIN = 1;
+const TL_ZOOM_MAX = 64;
+
 export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُّ الطبقات تحت المفتش (المستند الساكن) — انظر `Inspector.tsx`. */ docked?: boolean }) {
   const { state, actions, dict: L } = useStudio();
   // **طولُ المستند مشتقّ، ومدى المسطرة أرضيّةٌ عليه.** لا ثابتَ هنا بعد اليوم:
@@ -198,6 +226,66 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const trackWrapRef = useRef<HTMLDivElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
+  // **تكبيرُ الخطّ الزمنيّ** (٢٥ أكتوبر ٢٠٢٦). كان المدى كلُّه يُحشَر في عرض اللوح: مقطعٌ من
+  // ٤٤ ثانية = ٢٩ بكسلًا للثانية، فالإطارُ بكسلٌ واحد، والماستان المتجاورتان لا تُمسَكان.
+  // فصار السطحُ الزمنيّ «لوحًا» أعرضَ من نافذته بمضاعِف `tlZoom` يُمرَّر أفقيًّا — وكلُّ ما
+  // فيه بالنِّسَب المئويّة وبمستطيل العنصر تحت المؤشّر، فلا يتغيّر فيه حسابٌ واحد.
+  const [tlZoom, setTlZoom] = useState(1);
+  const zoomRef = useRef(1);
+  zoomRef.current = tlZoom;
+  const zoomTo = (next: number, anchorClientX?: number) => {
+    const wrap = trackWrapRef.current;
+    const z = clamp(next, TL_ZOOM_MIN, TL_ZOOM_MAX);
+    if (!wrap) {
+      setTlZoom(z);
+      return;
+    }
+    const rect = wrap.getBoundingClientRect();
+    const vw = wrap.clientWidth || rect.width || 1;
+    const prev = zoomRef.current;
+    // الثابتُ أثناء التكبير: الزمنُ تحت المرساة (المؤشّرُ الزمنيّ إن كان ظاهرًا، وإلّا وسطُ النافذة).
+    const playX = (state.t / span) * vw * prev - wrap.scrollLeft;
+    const anchorX = anchorClientX !== undefined ? anchorClientX - rect.left : playX >= 0 && playX <= vw ? playX : vw / 2;
+    const timeAtAnchor = ((wrap.scrollLeft + anchorX) / (vw * prev)) * span;
+    zoomRef.current = z;
+    // التمريرُ يُطبَّق **بعد** أن يُرسَم اللوحُ بعرضه الجديد (`useLayoutEffect` أدناه): لو طُبِّق
+    // قبله لَقُصَّ على أقصى تمريرٍ للعرض القديم، فتنزلق المرساةُ إلى نصف زمنها — مقيسٌ.
+    pendingScrollRef.current = { timeAtAnchor, anchorX };
+    setTlZoom(z);
+  };
+  const pendingScrollRef = useRef<{ timeAtAnchor: number; anchorX: number } | null>(null);
+  useLayoutEffect(() => {
+    const wrap = trackWrapRef.current;
+    const p = pendingScrollRef.current;
+    if (!wrap || !p) return;
+    pendingScrollRef.current = null;
+    // ×١ لا تمريرَ فيه أصلًا — والعنصرُ ذو `overflow: hidden` يقبل `scrollLeft` برمجيًّا، فيُصفَّر صراحةً.
+    wrap.scrollLeft = tlZoom <= 1 ? 0 : Math.max(0, (p.timeAtAnchor / span) * wrap.clientWidth * tlZoom - p.anchorX);
+  }, [tlZoom, span]);
+  // ⌘/Ctrl + العجلة تُكبّر حول المؤشّر — مستمعٌ أصليّ لأنّ عجلة React سلبيّةٌ لا تَمنع تكبيرَ الصفحة.
+  useEffect(() => {
+    const wrap = trackWrapRef.current;
+    if (!wrap) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      zoomTo(zoomRef.current * Math.exp(-e.deltaY * 0.01), e.clientX);
+    };
+    wrap.addEventListener('wheel', onWheel, { passive: false });
+    return () => wrap.removeEventListener('wheel', onWheel);
+  });
+  // والمؤشّرُ الزمنيّ لا يغيب عن النافذة: إن خرج منها (تشغيل، أسهم، قفزة) تبعته. **وعلى تغيُّر
+  // الزمن وحده لا التكبير**: التكبيرُ له مرساتُه (`zoomTo`)، ولو تبع المؤشّرَ هنا أيضًا لانتزع
+  // النافذةَ من تحت الفأرة إلى المؤشّر كلّما كُبِّر بالعجلة — مقيسٌ في `qa/timeline-zoom` §٦.
+  useEffect(() => {
+    const wrap = trackWrapRef.current;
+    const z = zoomRef.current;
+    if (!wrap || z <= 1) return;
+    const vw = wrap.clientWidth;
+    const x = (state.t / span) * vw * z;
+    if (x < wrap.scrollLeft + 8 || x > wrap.scrollLeft + vw - 8) wrap.scrollLeft = Math.max(0, x - vw * 0.25);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.t]);
   // عرضُ المسطرة بالبكسل، مقيسًا لا مُقدَّرًا — سُلَّمُ العلامات يَقرِّر خطوتَه
   // بالتباعد على الشاشة، فلا بدّ من العرض الحقيقيّ. و٦٠٠ أرضيّةٌ لأوّل تصيير
   // قبل أن يوجد العنصر، تُستبدَل بالمقيس فورًا عند أوّل تغيير مقاس.
@@ -555,6 +643,12 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
             <Icon size={13} path="M10 2v6M10 12v6M4 10h12M7 7l3 3-3 3" />
             {L.split_clip}
           </button>
+          <div data-testid="tl-zoom" data-zoom={tlZoom} style={{ display: 'inline-flex', alignItems: 'center', gap: 2, height: 24, padding: '0 2px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>
+            <button data-testid="tl-zoom-out" onClick={() => zoomTo(tlZoom / 2)} disabled={tlZoom <= TL_ZOOM_MIN} title={L.tl_zoom_out} aria-label={L.tl_zoom_out} style={{ width: 22, height: 20, border: 0, background: 'transparent', color: 'var(--text)', fontSize: 14, lineHeight: 1, opacity: tlZoom <= TL_ZOOM_MIN ? 0.4 : 1 }}>−</button>
+            <span data-testid="tl-zoom-level" style={{ minWidth: 30, textAlign: 'center', fontSize: 10.5, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>×{Math.round(tlZoom * 10) / 10}</span>
+            <button data-testid="tl-zoom-in" onClick={() => zoomTo(tlZoom * 2)} disabled={tlZoom >= TL_ZOOM_MAX} title={L.tl_zoom_in} aria-label={L.tl_zoom_in} style={{ width: 22, height: 20, border: 0, background: 'transparent', color: 'var(--text)', fontSize: 14, lineHeight: 1, opacity: tlZoom >= TL_ZOOM_MAX ? 0.4 : 1 }}>+</button>
+            <button data-testid="tl-zoom-fit" onClick={() => zoomTo(1)} disabled={tlZoom === 1} title={L.tl_zoom_fit} style={{ height: 20, padding: '0 6px', border: 0, borderInlineStart: '1px solid var(--line)', background: 'transparent', color: 'var(--muted)', fontSize: 10.5, opacity: tlZoom === 1 ? 0.4 : 1 }}>{L.tl_zoom_fit}</button>
+          </div>
         </div>
         )}
         <div style={{ flex: 1 }} />
@@ -719,8 +813,9 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
           dir="ltr"
           tabIndex={0}
           onKeyDown={onTrackKeyDown}
-          style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden', outline: 'none' }}
+          style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column', overflowX: tlZoom > 1 ? 'auto' : 'hidden', overflowY: 'hidden', outline: 'none' }}
         >
+          <div data-testid="timeline-canvas" style={{ position: 'relative', width: `${tlZoom * 100}%`, minWidth: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
           <div ref={rulerRef} data-testid="timeline-ruler" data-span={span} onPointerDown={onRulerPointerDown} style={{ height: RULER_H, flex: 'none', position: 'relative', borderBottom: '1px solid var(--line)', cursor: 'ew-resize', touchAction: 'none' }}>
             {ladder.ticks.map((t) => {
               const isLabel = Math.abs(t / ladder.labelStride - Math.round(t / ladder.labelStride)) < 1e-9;
@@ -804,7 +899,6 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
             (() => {
               const propIdx = selectedKf.property === 'opacity' ? -1 : expandablePropertiesFor(selectedKfEl).indexOf(selectedKf.property);
               const rowTopWithinLayer = propIdx === -1 ? 0 : CLIP_ROW_H + propIdx * PROP_ROW_H;
-              const rowHeight = propIdx === -1 ? CLIP_ROW_H : PROP_ROW_H;
               const rowTop = RULER_H + (layerTop.get(selectedKfEl.id) ?? 0) + rowTopWithinLayer;
               // Anchored to the selected keyframe's own row, offset clear of its lane
               // (above it, or below when there isn't room above — never sitting on top
@@ -839,23 +933,33 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                 actions.liveUpdateTrackKeyframeValue(selectedKf.elId, selectedKf.property, selectedKf.kfId, kfValueFromDisplay(selectedKf.property, clamp(next, min, max)));
               };
               return (
-                <div
-                  data-testid="kf-popover"
+                <AnchoredPopover
+                  testId="kf-popover"
+                  // مُرساةٌ على الماسة نفسها، بالجهة التي كانت تُختار (فوق صفّها، أو تحته
+                  // قرب أعلى اللوح) ما دامت تتّسع في النافذة — انظر ترويسة `AnchoredPopover`.
+                  anchorSelector={`[data-testid="kf-${selectedKfEl.id}-${selectedKf.kfId}"]`}
+                  prefer={placeBelow ? 'below' : 'above'}
                   // **مفاتيحُ الحقلِ تَبقى للحقل.** `onTrackKeyDown` على الحاضن
                   // يَملك `←`/`→` و`Home`/`End` لتنقّلِ الإطارات ويُنادي
                   // `preventDefault` — فبدون هذا السطر لا يَتحرّك مؤشّرُ الكتابة
                   // داخلَ رقمٍ مكتوب، ولا تَصِل المِمسحةَ سهمٌ أفقيّ. والإيقافُ
                   // محدودٌ بما صدر عن مُدخَلٍ داخل المنبثقة، فيبقى للحاضن ما هو
-                  // له متى لم يكن أحدٌ يَكتب.
+                  // له متى لم يكن أحدٌ يَكتب. (أحداثُ React تعبر البوّابة إلى الحاضن.)
+                  //
+                  // **و`Escape` يُغلقها** كما يُغلق كلَّ منبثقةٍ أخرى في البرنامج (`EasingMenu`،
+                  // قائمةُ المقاس، شريطُ السياق). كان يَصِل مُدخَلًا مركَّزًا فيتركه المعالجُ
+                  // العامّ (`editable`) ولا يحدث شيء، فتبقى المنبثقةُ مفتوحةً فوق صفوفٍ
+                  // يُراد نقرُها. وما كُتب حيًّا يُلزَم عند زوال الحقل خطوةً مسمّاة.
                   onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelectedKf(null);
+                      return;
+                    }
                     if ((e.target as HTMLElement).tagName === 'INPUT') e.stopPropagation();
                   }}
                   style={{
-                    position: 'absolute',
-                    left: `calc(${((timelineTimeOf(selectedKfEl.anim, selectedKfData.time) / span) * 100).toFixed(2)}% - 90px)`,
-                    top: placeBelow ? rowTop + rowHeight + 8 : rowTop - 8,
-                    transform: placeBelow ? undefined : 'translateY(-100%)',
-                    zIndex: 6,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 6,
@@ -888,6 +992,8 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                     />
                     {/* الطريقُ الدقيق — انظر ترويسة `KfValueField`. */}
                     <KfValueField
+                      // حقلٌ لكلّ مفتاح — انظر ترويسة `KfValueField` (المسوّدةُ لمفتاحها وحده).
+                      key={`${selectedKf.elId}|${selectedKf.property}|${selectedKf.kfId}`}
                       range={[min, max]}
                       display={display}
                       onLive={writeValue}
@@ -949,9 +1055,10 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                       <BezierEditor elementId={selectedKfEl.id} target={{ property: selectedKf.property, kfId: selectedKf.kfId }} />
                     </div>
                   )}
-                </div>
+                </AnchoredPopover>
               );
             })()}
+          </div>
         </div>
         )}
       </div>

@@ -1,6 +1,6 @@
 import type { Palette, SizePreset } from '../data/constants';
 import type { DocElement, ShapeElement, TextElement } from '../state/elements';
-import { resolveShapeLabelColor, resolveTextColor } from '../state/elements';
+import { firstBaselineShift, lineHeightOf, pivotOffsetFrac, resolveShapeLabelColor, resolveTextColor } from '../state/elements';
 import type { Lang } from '../i18n/strings';
 import type { Weight } from '../state/types';
 import { computeImageCropLayout } from './imageCrop';
@@ -329,16 +329,18 @@ function drawTypedText(ctx: CanvasRenderingContext2D, text: string, visibleLen: 
  * `entranceVisualAt`/`resolveAnimAt` for the element-level `anim.tracks`). */
 function drawStaggeredText(ctx: CanvasRenderingContext2D, el: TextElement, bw: number, bh: number, dir: 'rtl' | 'ltr', fontPx: number, time: number, elementAlpha: number, paint: StaggerPaint) {
   const cfg = el.textAnim;
-  const lineHeight = fontPx * 1.15;
+  const lineHeight = fontPx * lineHeightOf(el);
+  // نصفُ زيادة التباعد فوق السطر الأوّل، كما يضعها المتصفّح — `firstBaselineShift`.
+  const shift = firstBaselineShift(el, fontPx);
   const startIsRight = dir === 'rtl';
   const anchorX = el.halign === 'start' ? (startIsRight ? bw : 0) : el.halign === 'end' ? (startIsRight ? 0 : bw) : bw / 2;
   const effectiveAlign: 'left' | 'right' | 'center' =
     el.halign === 'start' ? (startIsRight ? 'right' : 'left') : el.halign === 'end' ? (startIsRight ? 'left' : 'right') : 'center';
   const startYFor = (lineCount: number) => {
     const totalHeight = lineCount * lineHeight || lineHeight;
-    if (el.valign === 'top') return fontPx * 0.9;
-    if (el.valign === 'middle') return (bh - totalHeight) / 2 + fontPx * 0.9;
-    return bh - totalHeight + fontPx * 0.9;
+    if (el.valign === 'top') return fontPx * 0.9 + shift;
+    if (el.valign === 'middle') return (bh - totalHeight) / 2 + fontPx * 0.9 + shift;
+    return bh - totalHeight + fontPx * 0.9 + shift;
   };
   const tokens = buildStaggerTokens(el.text, cfg, el.id);
   const typed = cfg.effect === 'type';
@@ -455,8 +457,15 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     // ومتى تساوى المحوران ومحايدُهما `1` صارت هذه المكالمةَ القديمةَ نفسَها
     // بوسيطَيها نفسِهما: `ctx.scale(visual.scale, visual.scale)`.
     const { sx, sy } = effectiveScale(visual);
+    // **نقطةُ الارتكاز** — الصيغةُ نفسُها في المعاينة (`entranceStyleAt`) والقناع
+    // (`elementMatrix`): إزاحةٌ إلى النقطة، فالمقياسُ والدوران، فإزاحةٌ عكسيّة. ولا
+    // نداءَ زائدًا على القُماش متى كانت في المركز.
+    const pv = pivotOffsetFrac(el);
+    const pivoted = (pv.dx !== 0 || pv.dy !== 0) && (sx !== 1 || sy !== 1 || visual.rotation !== 0);
+    if (pivoted) ctx.translate(pv.dx * bw, pv.dy * bh);
     if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
     if (visual.rotation !== 0) ctx.rotate((visual.rotation * Math.PI) / 180);
+    if (pivoted) ctx.translate(-pv.dx * bw, -pv.dy * bh);
     ctx.translate(-bw / 2, -bh / 2);
 
     // Generic clipping mask: any element kind clips to its mask shape's **real outline**
@@ -709,12 +718,13 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       } else {
         let lines = wrapLines(ctx, el.text, bw);
         if (el.justify && dir === 'rtl') lines = await justifyCanvasLines(ctx, lines, bw);
-        const lineHeight = fontPx * 1.15;
+        const lineHeight = fontPx * lineHeightOf(el);
         const totalHeight = lines.length * lineHeight;
+        const shift = firstBaselineShift(el, fontPx);
         let startY: number;
-        if (el.valign === 'top') startY = fontPx * 0.9;
-        else if (el.valign === 'middle') startY = (bh - totalHeight) / 2 + fontPx * 0.9;
-        else startY = bh - totalHeight + fontPx * 0.9;
+        if (el.valign === 'top') startY = fontPx * 0.9 + shift;
+        else if (el.valign === 'middle') startY = (bh - totalHeight) / 2 + fontPx * 0.9 + shift;
+        else startY = bh - totalHeight + fontPx * 0.9 + shift;
         const startIsRight = dir === 'rtl';
         const alignX = el.halign === 'start' ? (startIsRight ? bw : 0) : el.halign === 'end' ? (startIsRight ? 0 : bw) : bw / 2;
         ctx.textAlign = el.halign === 'start' ? (startIsRight ? 'right' : 'left') : el.halign === 'end' ? (startIsRight ? 'left' : 'right') : 'center';

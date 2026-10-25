@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { AnimProperty, ElementId } from '../../state/elements';
 import { cascadeEasingToTracks } from '../../state/elements';
 import type { Bezier } from '../../lib/easing';
@@ -73,6 +73,31 @@ export function BezierEditor({ elementId, target }: { elementId: ElementId; targ
     window.addEventListener('pointerup', up);
   };
 
+  // **الأرقامُ الأربعة** (٢٥ أكتوبر ٢٠٢٦): السحبُ يقارب والرقمُ يطابق — منحنى «تسهيل» من
+  // After Effects أو من `cubic-bezier()` يُنقَل بالأرقام نفسها، خطوةَ تراجعٍ واحدة.
+  const applyBezier = (next: Bezier) => {
+    actions.beginElementEdit();
+    actions.liveUpdateElements((els) =>
+      els.map((e2) => {
+        if (e2.id !== elementId) return e2;
+        if (target) {
+          const track = e2.anim.tracks[target.property];
+          if (!track) return e2;
+          return { ...e2, anim: { ...e2.anim, tracks: { ...e2.anim.tracks, [target.property]: track.map((k) => (k.id === target.kfId ? { ...k, bezier: next, easing: 'custom' } : k)) } } };
+        }
+        return { ...e2, anim: { ...e2.anim, bezier: next, easing: 'custom', tracks: cascadeEasingToTracks(e2.anim.tracks, 'custom', next) } };
+      }),
+    );
+    actions.commitElementEdit();
+  };
+  const setComponent = (i: 0 | 1 | 2 | 3, v: number) => {
+    const isX = i === 0 || i === 2;
+    const clamped = isX ? Math.max(0, Math.min(1, v)) : Math.max(Y_MIN, Math.min(Y_MAX, v));
+    const next = [...bezier] as Bezier;
+    next[i] = clamped;
+    applyBezier(next);
+  };
+
   const p0 = toSvg(0, 0);
   const p1 = toSvg(bezier[0], bezier[1]);
   const p2 = toSvg(bezier[2], bezier[3]);
@@ -99,7 +124,42 @@ export function BezierEditor({ elementId, target }: { elementId: ElementId; targ
         <circle data-testid="bezier-handle-0" cx={p1.X} cy={p1.Y} r={6} fill="var(--accent)" style={{ cursor: 'grab' }} onPointerDown={onHandleDown(0)} />
         <circle data-testid="bezier-handle-1" cx={p2.X} cy={p2.Y} r={6} fill="var(--accent)" style={{ cursor: 'grab' }} onPointerDown={onHandleDown(1)} />
       </svg>
+      <div dir="ltr" data-testid="bezier-numbers" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, width: SIZE + PAD * 2 }}>
+        {([0, 1, 2, 3] as const).map((i) => (
+          <BezierNumField key={i} index={i} value={bezier[i]} onCommit={(v) => setComponent(i, v)} />
+        ))}
+      </div>
       <span style={{ fontSize: 10, color: 'var(--muted)' }}>{L.ease_custom}</span>
     </div>
+  );
+}
+
+/** خانةُ رقمٍ واحدٍ من الأربعة — تُلزِم عند Enter أو مغادرة الخانة، لا عند كلّ حرف
+ * (فـ«0.» و«-» حالاتٌ وسيطةٌ لا منحنيات). */
+function BezierNumField({ index, value, onCommit }: { index: 0 | 1 | 2 | 3; value: number; onCommit: (v: number) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = Number(draft);
+    setDraft(null);
+    if (draft.trim() !== '' && Number.isFinite(v)) onCommit(v);
+  };
+  return (
+    <input
+      data-testid={`bezier-num-${index}`}
+      type="number"
+      step={0.01}
+      value={draft ?? String(Number(value.toFixed(3)))}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+        }
+        e.stopPropagation();
+      }}
+      style={{ width: '100%', minWidth: 0, height: 22, padding: '0 3px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', color: 'var(--text)', fontSize: 10.5, fontVariantNumeric: 'tabular-nums' }}
+    />
   );
 }

@@ -80,6 +80,8 @@ export interface Dictionary {
   distribute_h: string; distribute_v: string; no_selection: string; pen_hint: string;
   fit_fill: string; crop_frame: string; crop_start: string; crop_done: string; crop_hint: string;
   crop_reset: string; zoom: string; flip_h: string; flip_v: string; lock_aspect: string;
+  pivot_label: string; pivot_hint: string; pivot_reset: string; line_height: string;
+  tl_zoom_in: string; tl_zoom_out: string; tl_zoom_fit: string;
   sec_mask: string; mask_hint: string; clip_mask: string; release_mask: string;
   sec_appearance: string; appearance_fills: string; appearance_strokes: string; appearance_shadows: string;
   appearance_add: string; appearance_empty: string; stroke_pos_inside: string; stroke_pos_center: string; stroke_pos_outside: string;
@@ -299,6 +301,13 @@ export const AR: Dictionary = {
   crop_hint: 'اسحب الصورة داخل الإطار، وكبّرها من الشريط.',
   crop_reset: 'إعادة ضبط الموضع والتكبير', zoom: 'تكبير', flip_h: 'عكس أفقي', flip_v: 'عكس عمودي',
   lock_aspect: 'قفل النسبة',
+  pivot_label: 'نقطة الارتكاز',
+  pivot_hint: 'يدور حولها التحريك ويكبر منها — الزاوية الثابتة تبقى حول المركز',
+  pivot_reset: 'رجّعها للمركز',
+  line_height: 'تباعد الأسطر',
+  tl_zoom_in: 'كبّر الخط الزمني (⌘ + العجلة)',
+  tl_zoom_out: 'صغّر الخط الزمني',
+  tl_zoom_fit: 'الكل',
   sec_mask: 'قص بالشكل', mask_hint: 'واحد من المحددين شكل: خلّه قالب قص للثاني.',
   clip_mask: 'قص بالشكل', release_mask: 'فك القص', post_palettes: 'لوحات ألوان', palette_emerald: 'زمرّدي وذهبي',
   decor_title: 'زخرفة اللوحة', decor_accent: 'دائرة لونيّة في الزاوية',
@@ -577,6 +586,13 @@ export const EN: Dictionary = {
   crop_hint: 'Drag the image on the canvas to pan it, and use the zoom slider to scale it.',
   crop_reset: 'Reset position & zoom', zoom: 'Zoom', flip_h: 'Flip H', flip_v: 'Flip V',
   lock_aspect: 'Lock aspect',
+  pivot_label: 'Pivot point',
+  pivot_hint: 'Animated rotation and scale pivot here — the static angle stays centred',
+  pivot_reset: 'Back to centre',
+  line_height: 'Line spacing',
+  tl_zoom_in: 'Zoom timeline in (⌘ + wheel)',
+  tl_zoom_out: 'Zoom timeline out',
+  tl_zoom_fit: 'Fit',
   sec_mask: 'Clipping mask', mask_hint: 'One of the two selected elements is a shape — apply it as a clipping mask on the other element (image, text, or shape).',
   clip_mask: 'Clip with shape', release_mask: 'Release mask', post_palettes: 'Color palettes', palette_emerald: 'Emerald & gold',
   decor_title: 'Artboard decoration', decor_accent: 'Accent circle in the corner',

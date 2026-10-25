@@ -575,10 +575,18 @@ export function formatClock(seconds: number): string {
 /** `AnimVisual` turned into a CSS transform/opacity pair for the DOM preview —
  * `ElementView` composes this with the element's own static `geo` rotation and base
  * `opacity`. */
-export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0): { opacity?: number; transform?: string; filter?: string } {
+export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0, pivot?: { x: number; y: number } | null): { opacity?: number; transform?: string; filter?: string } {
   const v = resolveAnimAt(anim, time);
   const transformParts: string[] = [];
   if (v.x !== 0 || v.y !== 0) transformParts.push(`translate(${(v.x * 100).toFixed(2)}cqw, ${(v.y * 100).toFixed(2)}cqw)`);
+  // **نقطةُ الارتكاز** (`ElementBase.pivot`): المقياسُ والدورانُ بين إزاحتين بالنسبة
+  // المئويّة — و`translate(%)` في CSS تُقاس بصندوق العنصر نفسه، فلا يحتاج هذا الموضعُ
+  // أن يعرف مقاسًا. ولا يُنبعث شيءٌ منها متى كانت في المركز أو لم يكن مقياسٌ ولا دوران:
+  // فكلُّ مستندٍ قائمٍ يُنتج النصَّ نفسَه الذي كان يُنتجه — العقدُ نفسُه أدناه.
+  const pv = pivot ? { dx: Math.min(1, Math.max(0, pivot.x)) - 0.5, dy: Math.min(1, Math.max(0, pivot.y)) - 0.5 } : { dx: 0, dy: 0 };
+  const { sx: psx, sy: psy } = effectiveScale(v);
+  const pivoted = (pv.dx !== 0 || pv.dy !== 0) && Number.isFinite(pv.dx) && Number.isFinite(pv.dy) && (psx !== 1 || psy !== 1 || v.rotation !== 0);
+  if (pivoted) transformParts.push(`translate(${(pv.dx * 100).toFixed(3)}%, ${(pv.dy * 100).toFixed(3)}%)`);
   // **مُعامِلٌ واحدٌ متى تساوى المحوران، ومُعامِلان متى اختلفا.** و`scale(S)` و
   // `scale(S, S)` صورةٌ واحدةٌ ونصّانِ مختلفان — فلو أُنبعِث الثاني دائمًا لصار
   // **كلُّ** مستندٍ قائمٍ يُنتج `style.transform` غيرَ الذي كان يُنتجه، وصارت
@@ -588,6 +596,7 @@ export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0)
   const { sx, sy } = effectiveScale(v);
   if (sx !== 1 || sy !== 1) transformParts.push(sx === sy ? `scale(${sx.toFixed(3)})` : `scale(${sx.toFixed(3)}, ${sy.toFixed(3)})`);
   if (v.rotation !== 0) transformParts.push(`rotate(${v.rotation.toFixed(2)}deg)`);
+  if (pivoted) transformParts.push(`translate(${(-pv.dx * 100).toFixed(3)}%, ${(-pv.dy * 100).toFixed(3)}%)`);
   // **`cqw` لا بكسلًا، ولا يَعرف هذا الموضعُ مقاسَ اللوح — وهو مقيسٌ لا مُفترَض.**
   // اللوحُ `container-type: inline-size` (`Stage.tsx`)، و`translate(Xcqw, Ycqw)`
   // أعلاه يَقرأ ذلك سلفًا. وقيسَ أنّ Chromium يَحُلّ `blur(5cqw)` داخل حاضنٍ عرضُه

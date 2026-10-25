@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { Palette } from '../../data/constants';
 import type { DocElement, TextElement } from '../../state/elements';
-import { resolveShapeLabelColor, resolveTextColor } from '../../state/elements';
+import { lineHeightOf, resolveShapeLabelColor, resolveTextColor } from '../../state/elements';
 import type { Lang } from '../../i18n/strings';
 import { computeImageCropLayout } from '../../lib/imageCrop';
 import { geoToPx } from '../../lib/geometry';
@@ -332,7 +332,7 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
             ...baseStyle,
             fontSize: `${fontSizeCqw.toFixed(3)}cqw`,
             fontFamily: el.fontFamily,
-            lineHeight: 1.15,
+            lineHeight: lineHeightOf(el),
             letterSpacing: trackingCss(el.tracking),
             fontWeight: { regular: 400, medium: 600, bold: 800 }[el.weight],
             color,
@@ -373,7 +373,7 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
           ...baseStyle,
           fontSize: `${fontSizeCqw.toFixed(3)}cqw`,
           fontFamily: el.fontFamily,
-          lineHeight: 1.15,
+          lineHeight: lineHeightOf(el),
           letterSpacing: trackingCss(el.tracking),
           fontWeight: { regular: 400, medium: 600, bold: 800 }[el.weight],
           ...colorStyle,

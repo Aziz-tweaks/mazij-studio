@@ -503,6 +503,55 @@ async function run(page, pageErrors) {
   await page.waitForTimeout(200);
 
   // ═══════════════════════════════════════════════════════════════════════
+  // ٩. رقمٌ مطروقٌ بلا Enter ثم نقرةٌ على مفتاحٍ آخر — ٢٥ أكتوبر ٢٠٢٦
+  // ═══════════════════════════════════════════════════════════════════════
+  // ظهر حين نُسخ مقطعٌ حقيقيٌّ بالأزرار: كُتب «-1.4055» في مفتاحٍ ولم يُضغط Enter،
+  // ثم نُقرت ماسةُ مفتاحٍ آخرَ قيمتُه ٠٫٨٤ — فعرض حقلُه «-1.4055». نقرةُ الماسة لا
+  // تُفقِد الحقلَ تركيزَه، والمكوّنُ نفسُه كان يبقى بمسوّدته للمفتاح الجديد، والإيماءةُ
+  // مفتوحةٌ بلا خطوة تراجع.
+  console.log('\n٩. المسوّدةُ لمفتاحها وحده');
+  // و`Escape` في آخر §٨٫٢ ضُغط والحقلُ مركَّز: يُغلق المنبثقة. كان لا يفعل شيئًا
+  // (المعالجُ العامّ يترك المُدخَلات)، فتبقى منبثقةُ مسار y مفتوحةً فوق صفّ x —
+  // ومنفذُ هذا الملفّ يضع صفوفَ العنوان قرب أسفل النافذة، فلا مكان لها إلّا فوقها.
+  assert((await page.locator('[data-testid="kf-popover"]').count()) === 0, '`Escape` والحقلُ مركَّزٌ يُغلق منبثقةَ المفتاح');
+  await page.waitForTimeout(1100); // تأخيرُ الحفظ التلقائيّ ٧٠٠ms
+  const ySaved = await savedTrack(page, 'head', 'y');
+  assert(
+    // «1.923» تُخزَّن على شبكة المنزلتين (§ الدقّة أعلاه) ‎0.0192‎ — والمقصودُ أنها لم ترجع ‎0.0123‎.
+    ySaved.track && ySaved.track.some((k) => Math.abs(k.value - 0.0192) < 1e-9) && !ySaved.track.some((k) => Math.abs(k.value - 0.0123) < 1e-9),
+    `وما كُتب قبله («1.923» ← ١٫٩٢ على الشبكة) باقٍ في مفتاحه، لا راجعًا إلى «1.23» — الإغلاقُ يُلزِم ولا يُلغي (${JSON.stringify(ySaved.track && ySaved.track.map((k) => k.value))})`,
+  );
+  await selectKfByIndex(page, 'head', 'x', 1);
+  const otherShown = await field(page).inputValue();
+  await selectKfByIndex(page, 'head', 'x', 0);
+  const firstBefore = Number(await field(page).inputValue());
+  await field(page).click({ clickCount: 3 });
+  await page.keyboard.press('Meta+a');
+  await page.keyboard.type('3.21', { delay: 35 });
+  await page.waitForTimeout(200);
+  await selectKfByIndex(page, 'head', 'x', 1);
+  assert(
+    (await field(page).inputValue()) === otherShown,
+    `**والمفتاحُ الآخرُ يَعرض قيمتَه هو** «${await field(page).inputValue()}» = «${otherShown}» — لا «3.21» المطروقةَ في سابقه`,
+  );
+  await page.waitForTimeout(1100);
+  const sw = await savedTrack(page, 'head', 'x');
+  const firstKf = sw.track && [...sw.track].sort((a, b) => a.time - b.time)[0];
+  assert(firstKf && firstKf.value === 0.0321, `وما طُرق حيًّا وصل إلى مفتاحه هو (${firstKf && firstKf.value} = 0.0321)`);
+  const undo9 = page.getByRole('button', { name: 'تراجع' });
+  assert(
+    (await undo9.getAttribute('title')) === 'تراجع: قيمة المفتاح',
+    `**وأُلزِم عند الانتقال خطوةً واحدةً مسمّاة** («${await undo9.getAttribute('title')}»)`,
+  );
+  await undo9.click();
+  await page.waitForTimeout(300);
+  await selectKfByIndex(page, 'head', 'x', 0);
+  assert(
+    Number(await field(page).inputValue()) === firstBefore,
+    `وتراجعٌ واحدٌ يُرجعه إلى ${firstBefore} (قرأ ${await field(page).inputValue()})`,
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════
   console.log('');
   assert(pageErrors.length === 0, `ولا خطأَ في وحدة التحكّم خلال الملفّ كلّه (${pageErrors.slice(0, 3).join(' | ') || 'لا شيء'})`);
 }

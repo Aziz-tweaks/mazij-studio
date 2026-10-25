@@ -361,9 +361,14 @@ async function main() {
 
   // مفاتيحُ النقل **بعد ضغطة**: `preventDefault` تُسقط التركيزَ الذي كان فعلُ
   // الضغطة يَمنحه، فبلا تركيزٍ صريحٍ على حاوية السطح تَسكُت هذه المفاتيحُ كلُّها.
+  // **الحاويةُ أقربُ سَلَفٍ يحمل `tabIndex`** لا أبُ المسطرة المباشر: منذ تكبير الخطّ
+  // الزمنيّ (٢٥ أكتوبر ٢٠٢٦) تقع المسطرةُ والمسارات داخل لوحٍ داخليّ يتّسع بالتكبير
+  // (`timeline-canvas`) ويُمرَّر داخل الحاوية نفسها — فصار أبوها ذلك اللوح. والقرارُ
+  // المقيس هنا لم يتغيّر: التركيزُ على صاحبة `tabIndex` لا على `body`.
   const keyFocus = await page.evaluate(() => {
     const ruler = document.querySelector('[data-testid="timeline-ruler"]');
-    return document.activeElement === ruler.parentElement;
+    const host = ruler.parentElement.closest('[tabindex]');
+    return !!host && document.activeElement === host && host.querySelector('[data-testid="timeline-canvas"]') !== null;
   });
   assert(keyFocus, 'والضغطةُ تُركّز حاويةَ السطح الزمنيّ (صاحبةَ `tabIndex`) لا تُسقط التركيزَ إلى `body`');
   const tKey0 = await page.locator('[data-testid="timeline-time"]').evaluate((e) => Number(e.dataset.t));

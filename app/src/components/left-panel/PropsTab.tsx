@@ -5,7 +5,7 @@ import type { HAlign, VAlign } from '../../state/types';
 import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
 import { geoToPx } from '../../lib/geometry';
 import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
-import { animPropertiesFor, hasCustomAnimation, resolveTextColor } from '../../state/elements';
+import { animPropertiesFor, hasCustomAnimation, lineHeightOf, pivotOf, resolveTextColor } from '../../state/elements';
 import { keyframeAt } from '../../lib/animTimeline';
 import { isInstantEffect, revealUnitCount, revealValueAt } from '../../lib/textStagger';
 import type { EasingId } from '../../lib/easing';
@@ -224,6 +224,7 @@ export function PropsTab() {
                     );
                   })}
                 </div>
+                {state.selectedIds.length === 1 && MEDIUM_SURFACES[state.medium].motionProps && <PivotRow el={el} />}
                 {state.selectedIds.length === 1 && MEDIUM_SURFACES[state.medium].motionProps && <KeyframeToggleRow el={el} />}
               </section>
 
@@ -508,6 +509,15 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
     }
   };
 
+  const [lineHeightDraft, setLineHeightDraft] = useState<string | null>(null);
+  useEffect(() => setLineHeightDraft(null), [el.id]);
+  const commitLineHeight = () => {
+    if (lineHeightDraft === null) return;
+    const parsed = Number(lineHeightDraft);
+    setLineHeightDraft(null);
+    if (lineHeightDraft.trim() !== '' && Number.isFinite(parsed)) actions.setTextLineHeight(el.id, parsed);
+  };
+
   return (
     <>
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -598,6 +608,26 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
             style={{ width: 54, border: 0, background: 'transparent', outline: 0, fontSize: 12, textAlign: 'center' }}
           />
           <span style={{ color: 'var(--muted)', fontSize: 11 }}>%</span>
+        </label>
+        {/* تباعدُ الأسطر — مضاعِفٌ للمقاس كما في CSS، ويُلزِم عند Enter أو المغادرة. */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
+          <span style={{ flex: 1, color: 'var(--muted)' }}>{L.line_height}</span>
+          <input
+            data-testid={`text-line-height-${el.id}`}
+            dir="ltr"
+            type="number"
+            min={0.5}
+            max={4}
+            step={0.05}
+            value={lineHeightDraft ?? Number(lineHeightOf(el).toFixed(3))}
+            onChange={(e) => setLineHeightDraft(e.target.value)}
+            onBlur={commitLineHeight}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitLineHeight();
+            }}
+            style={{ width: 54, border: 0, background: 'transparent', outline: 0, fontSize: 12, textAlign: 'center' }}
+          />
+          <span style={{ color: 'var(--muted)', fontSize: 11 }}>×</span>
         </label>
         <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
           {WEIGHTS.map((w) => {
@@ -1833,27 +1863,88 @@ const iconBtnStyle = { display: 'grid', placeItems: 'center', width: 22, height:
  * إلا ما يُقرأ رقمًا — فالحالات الوسيطة («‑»، «‑.»، الفراغ) لا تُكتب إلى المستند
  * ولا تُمحى من الحقل. وتُطرح المسوّدة عند الخروج فيعود الحقل يعرض القيمة
  * الفعليّة. والاتجاه نفسه لم يُمَسّ: موجبٌ = مع عقارب الساعة، كـCSS وSVG. */
+/** **نقطةُ الارتكاز** (`ElementBase.pivot`): شبكةُ تسعٍ للمواضع الشائعة — الأركانُ ومنتصفاتُ
+ * الأضلاع والمركز — ورقمان للدقّة بنسبةٍ مئويّةٍ من صندوق العنصر. الشبكةُ مكانيّةٌ لا
+ * منطقيّة (`dir="ltr"`): خانتُها اليسرى يسارُ العنصر في أيّ لغةٍ كانت الواجهة. */
+function PivotRow({ el }: { el: DocElement }) {
+  const { actions, dict: L } = useStudio();
+  const p = pivotOf(el);
+  const stops = [0, 0.5, 1];
+  const custom = Math.abs(p.x - 0.5) > 1e-9 || Math.abs(p.y - 0.5) > 1e-9;
+  return (
+    <div data-testid="pivot-row" title={L.pivot_hint} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div dir="ltr" data-testid="pivot-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 16px)', gridTemplateRows: 'repeat(3, 16px)', gap: 1, padding: 3, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>
+        {stops.map((y, row) =>
+          stops.map((x, col) => {
+            const on = Math.abs(p.x - x) < 1e-9 && Math.abs(p.y - y) < 1e-9;
+            return (
+              <button
+                key={`${col}-${row}`}
+                data-testid={`pivot-cell-${col}-${row}`}
+                aria-pressed={on}
+                onClick={() => actions.setElementPivot(el.id, { x, y })}
+                style={{ width: 16, height: 16, padding: 0, border: 0, borderRadius: 4, background: on ? 'var(--accentSoft)' : 'transparent', display: 'grid', placeItems: 'center', cursor: 'pointer' }}
+              >
+                <span style={{ width: on ? 7 : 4, height: on ? 7 : 4, borderRadius: 4, background: on ? 'var(--accent)' : 'var(--muted)' }} />
+              </button>
+            );
+          }),
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ flex: 1, fontSize: 11, color: 'var(--muted)' }}>{L.pivot_label}</span>
+          {custom && (
+            <button data-testid="pivot-reset" onClick={() => actions.setElementPivot(el.id, null)} style={{ height: 18, padding: '0 6px', border: '1px solid var(--line)', borderRadius: 999, background: 'transparent', color: 'var(--muted)', fontSize: 10 }}>
+              {L.pivot_reset}
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          {(['x', 'y'] as const).map((axis) => (
+            <label key={axis} style={{ display: 'flex', alignItems: 'center', gap: 4, height: 26, padding: '0 4px 0 6px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 11 }}>
+              <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 10.5 }}>{axis.toUpperCase()}</span>
+              <NumField
+                testId={`pivot-${axis}`}
+                decimals={1}
+                value={p[axis] * 100}
+                onCommit={(v) => actions.setElementPivot(el.id, { ...p, [axis]: v / 100 })}
+                style={{ flex: 1, minWidth: 0, width: '100%', border: 0, background: 'transparent', outline: 0, fontSize: 11.5, fontVariantNumeric: 'tabular-nums' }}
+              />
+              <span style={{ color: 'var(--muted)', fontSize: 10.5 }}>%</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NumField({
   value,
   onCommit,
   disabled,
   style,
   testId,
+  decimals,
 }: {
   value: number;
   onCommit: (v: number) => void;
   disabled?: boolean;
   style?: React.CSSProperties;
   testId?: string;
+  /** منازلُ عشريّةٌ تُعرض (الغيابُ = عددٌ صحيح كما كان) — لنقطة الارتكاز بنسبةٍ مئويّة. */
+  decimals?: number;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const shown = decimals ? String(Number(value.toFixed(decimals))) : String(Math.round(value));
   return (
     <input
       data-testid={testId}
       dir="ltr"
       type="number"
       disabled={disabled}
-      value={draft ?? String(Math.round(value))}
+      value={draft ?? shown}
       onChange={(e) => {
         const raw = e.target.value;
         setDraft(raw);

@@ -37,6 +37,9 @@ export interface HandlesProps {
   /** المقابض المعروضة — كلّها إن لم تُسمَّ. نصٌّ في الوضع البسيط بلا فوق/تحت (الأداة الشائعة):
    * انظر `StudioState.pro` و`MEDIUM_SURFACES.canvaTextGrip`. */
   handles?: readonly ResizeHandleId[];
+  /** نقطةُ ارتكاز الحركة (`ElementBase.pivot`) — تُرسم علامةً داخل الصندوق متى لم تكن
+   * في المركز، فيرى المصمّمُ حول ماذا سيدور العنصر قبل أن يشغّل الحركة. */
+  pivot?: { x: number; y: number };
 }
 
 /** حجم المقبض **المرسوم** على الشاشة. لم يتغيّر — هو ما يراه المصمم. */
@@ -75,7 +78,7 @@ const HIT_PX = 32;
  * واحدًا، فـ10 بكسل كانت مقاسه المرسوم ومنطقة إصابته معًا. أمّا الآن فالعنصر
  * الخارجي منطقةُ إصابة شفّافة تبلغ 32 بكسل (رقم الأداة الشائعة المقيس) وداخله الشكل
  * المرسوم بـ10 بكسل كما كان — فيكبر الهدف ولا يكبر ما يراه المصمم. */
-export function Handles({ geo, scale, size, onHandleDown, onDoubleClick, handles }: HandlesProps) {
+export function Handles({ geo, scale, size, onHandleDown, onDoubleClick, handles, pivot }: HandlesProps) {
   // 1 artboard px * px = 1 screen px
   const px = 1 / scale;
 
@@ -135,6 +138,17 @@ export function Handles({ geo, scale, size, onHandleDown, onDoubleClick, handles
 
   return (
     <div style={boxStyle} data-testid="selection-handles">
+      {pivot && (Math.abs(pivot.x - 0.5) > 1e-9 || Math.abs(pivot.y - 0.5) > 1e-9) && (
+        <div
+          data-testid="pivot-marker"
+          style={{ position: 'absolute', left: `${pivot.x * 100}%`, top: `${pivot.y * 100}%`, width: 16 * px, height: 16 * px, transform: 'translate(-50%, -50%)', pointerEvents: 'none' }}
+        >
+          <svg width="100%" height="100%" viewBox="0 0 16 16" style={{ display: 'block', overflow: 'visible' }}>
+            <circle cx={8} cy={8} r={5} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
+            <path d="M8 0v5M8 11v5M0 8h5M11 8h5" stroke="var(--accent)" strokeWidth={1.5} />
+          </svg>
+        </div>
+      )}
       {/* الحوافّ قبل الزوايا في ترتيب الـDOM عن قصد: مقبض الحافّة صار بكامل طول
           الحافّة فيتقاطع مع مقبضَي زاويتها، والمتأخّر في الترتيب يفوز بالإصابة —
           فتبقى الزاوية (تحجيم بمحورين) هي ما يُمسَك عند الزاوية. والأداة الشائعة تملك

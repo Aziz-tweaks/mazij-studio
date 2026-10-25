@@ -18,7 +18,7 @@ import { initialStudioState } from './types';
 // من رحلة البوست (تلوين الشكل عبر كومة المظهر لا عبر الحقل القديم). لا تعارض في
 // النيّة — ملفٌّ واحد التقت عليه ثلاثة فروع.
 import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, ImageElement, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
-import { DEFAULT_IMAGE_CROP, animPropertiesFor, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, motionTracks, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
+import { DEFAULT_IMAGE_CROP, DEFAULT_LINE_HEIGHT, animPropertiesFor, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, motionTracks, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
 import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor, withBaseStroke, withBaseStrokeHidden, withBaseStrokeWidth } from '../lib/appearance';
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
@@ -817,6 +817,8 @@ export interface StudioActions {
   /** تتبُّع الأحرف بالنسبة المئويّة من مقاس الخطّ — انظر `TextElement.tracking`.
    * يُقصَر عند الالتزام لا عند كل ضغطة، تمامًا كمقاس الخطّ. */
   setElementTracking: (id: ElementId, percent: number) => void;
+  /** تباعدُ الأسطر (`TextElement.lineHeight`)، مضاعِفًا للمقاس — والافتراضيُّ يحذف الحقل. */
+  setTextLineHeight: (id: ElementId, lineHeight: number) => void;
   setElementWeight: (id: ElementId, weight: Weight) => void;
   setElementColor: (id: ElementId, hex: string) => void;
   setElementHAlign: (id: ElementId, a: HAlign) => void;
@@ -832,6 +834,9 @@ export interface StudioActions {
    * `liveUpdateShapeSmoothAmount`: سحبةٌ واحدةٌ = خطوةُ تراجعٍ واحدة. */
   liveUpdateElementBlur: (id: ElementId, blur: number) => void;
   setElementGeoPx: (id: ElementId, patch: { x?: number; y?: number; w?: number; h?: number; rotation?: number }) => void;
+  /** نقطةُ ارتكاز الحركة (`ElementBase.pivot`)، كسرًا من صندوق العنصر — و`null` أو المركزُ
+   * يحذفانها فيعود المستندُ كما كان بايتًا ببايت. خطوةُ تراجعٍ واحدة. */
+  setElementPivot: (id: ElementId, pivot: { x: number; y: number } | null) => void;
   setShapeFill: (id: ElementId, hex: string) => void;
   setShapeStroke: (id: ElementId, hex: string | null) => void;
   setShapeStrokeWidth: (id: ElementId, w: number) => void;
@@ -2526,7 +2531,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const s = stateRef.current;
         const el = s.elements.find((e) => e.id === s.selectedIds[0]);
         if (!el) return;
-        patch({ animClipboard: { anim: structuredClone(el.anim), textAnim: el.type === 'text' ? structuredClone(el.textAnim) : null, fromType: el.type } });
+        // ونقطةُ الارتكاز معها: حركةٌ تدور حول طرفٍ تصير غيرَها لو دارت حول المركز.
+        patch({ animClipboard: { anim: structuredClone(el.anim), textAnim: el.type === 'text' ? structuredClone(el.textAnim) : null, fromType: el.type, pivot: el.pivot ? { ...el.pivot } : null } });
       },
       pasteAnimation: () =>
         setState((s) => {
@@ -2548,8 +2554,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // فتنتقل مع البداية بلا حساب.
             const anim: ElementAnim = { ...structuredClone(clip.anim), start: e.anim.start, tracks };
             changed = true;
-            if (e.type === 'text' && textAnim) return { ...e, anim, textAnim };
-            return { ...e, anim };
+            const { pivot: _drop, ...noPivot } = e;
+            const withPivot = (clip.pivot ? { ...noPivot, pivot: { ...clip.pivot } } : noPivot) as DocElement;
+            if (withPivot.type === 'text' && textAnim) return { ...withPivot, anim, textAnim };
+            return { ...withPivot, anim };
           });
           if (!changed) return s;
           return { ...s, elements, ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_paste_anim) };
@@ -3054,6 +3062,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setElementFont: (id, fontFamily) => patchTextEl(id, { fontFamily }),
       setElementFontSize: (id, px) => patchTextEl(id, { fontSize: clamp(px, 8, 400) }),
       setElementTracking: (id, percent) => patchTextEl(id, { tracking: clamp(percent, -20, 50) }),
+      setTextLineHeight: (id, lh) =>
+        commitElements((els) =>
+          els.map((e) => {
+            if (e.id !== id || e.type !== 'text') return e;
+            const { lineHeight: _old, ...rest } = e;
+            if (!Number.isFinite(lh) || Math.abs(lh - DEFAULT_LINE_HEIGHT) < 1e-9) return rest as DocElement;
+            return { ...e, lineHeight: clamp(lh, 0.5, 4) };
+          }),
+        ),
       setElementWeight: (id, weight) => patchTextEl(id, { weight }),
       setElementColor: (id, hex) =>
         commitElements((els) =>
@@ -3076,6 +3093,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setElementBlur: (id, blur) => commitElements((els) => els.map((e) => (e.id === id ? { ...e, blur: clamp(blur, 0, 1) } : e))),
       liveUpdateElementBlur: (id, blur) =>
         liveUpdateElements((els) => els.map((e) => (e.id === id ? { ...e, blur: clamp(blur, 0, 1) } : e))),
+      setElementPivot: (id, pivot) =>
+        commitElements((els) =>
+          els.map((e) => {
+            if (e.id !== id) return e;
+            const { pivot: _old, ...rest } = e;
+            if (!pivot || !Number.isFinite(pivot.x) || !Number.isFinite(pivot.y)) return rest as DocElement;
+            const x = clamp(pivot.x, 0, 1);
+            const y = clamp(pivot.y, 0, 1);
+            if (Math.abs(x - 0.5) < 1e-9 && Math.abs(y - 0.5) < 1e-9) return rest as DocElement;
+            return { ...e, pivot: { x, y } };
+          }),
+        ),
       setElementGeoPx: (id, p) =>
         commitElements((els) =>
           els.map((e) => {

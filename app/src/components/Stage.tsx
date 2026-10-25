@@ -993,7 +993,7 @@ export function Stage() {
   // (`effectiveBlur` في `animTimeline.ts`): العنصرُ يَحمل نصفَ القطر الأساس،
   // والمسارُ يَحمل فرقَه عند هذه اللحظة، ولا يجوز أن يَجمعهما أحدٌ غيرُ ذلك الموضع.
   const entranceByTool: Record<string, { opacity?: number; transform?: string; filter?: string }> = {};
-  for (const el of state.elements) entranceByTool[el.id] = entranceStyleAt(el.anim, t, el.blur ?? 0);
+  for (const el of state.elements) entranceByTool[el.id] = entranceStyleAt(el.anim, t, el.blur ?? 0, el.pivot);
 
   const hintKey = HINT_KEYS[state.tool];
   const selected = state.selectedIds;
@@ -1196,6 +1196,7 @@ export function Stage() {
             onHandleDown={onHandleDown}
             onDoubleClick={(e) => onDoubleClickElement(e, handlesFor.id)}
             handles={canvaTextGrip && handlesFor.type === 'text' ? CANVA_TEXT_HANDLES : undefined}
+            pivot={handlesFor.pivot}
           />
         )}
       </div>
