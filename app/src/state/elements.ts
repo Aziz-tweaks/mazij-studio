@@ -71,9 +71,34 @@ export interface AnimKeyframe {
  * الساكنة لا معاملٌ يُضرَب — لأنّ محايدَ الضبابيّة `0` لا `1`، فالجمعُ هو الذي
  * يَجعل غيابَ المسار محايدًا. ووحدتُها كسرٌ من عرض اللوح كـ`x`/`y`. والصيغةُ
  * الواحدةُ في `effectiveBlur` (`src/lib/animTimeline.ts`). */
-export type AnimProperty = 'opacity' | 'x' | 'y' | 'scale' | 'scaleX' | 'scaleY' | 'rotation' | 'blur';
+export type AnimProperty = 'opacity' | 'x' | 'y' | 'scale' | 'scaleX' | 'scaleY' | 'rotation' | 'blur' | 'trimStart' | 'trimEnd' | 'reveal';
 
-export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation', 'blur'];
+/** **و`trimStart`/`trimEnd` — «بداية الخط» و«نهاية الخط» — الخصيصتان التاسعة والعاشرة**
+ * (٢٥ أكتوبر ٢٠٢٦): كسرانِ من **طول** حدّ الشكل، والمرسومُ من الحدّ ما بينهما — «Trim
+ * Paths» في After Effects. مفتاحٌ على `trimEnd` من ٠ إلى ١ يرسم الخطَّ تدريجيًّا على
+ * طوله. ولا يمسّان التعبئة ولا غيرَ الأشكال؛ والقصُّ نفسُه هندسيٌّ في
+ * `src/lib/pathTrim.ts`، تقرؤه الرسّاماتُ الثلاث. */
+export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 'scaleX', 'scaleY', 'rotation', 'blur', 'trimStart', 'trimEnd', 'reveal'];
+
+/** **و`reveal` — «الظهور» — الخصيصةُ الحادية عشرة** (٢٥ أكتوبر ٢٠٢٦): كم وحدةً من نصٍّ
+ * متتابعِ الظهور قد بدأت (حرفًا أو كلمةً أو سطرًا). مفاتيحُها بتخفيف «تثبيت» تُظهر كلَّ
+ * كلمةٍ في إطارها مع صوت الراوي؛ وبلا مسارٍ يبقى التوقيتُ التلقائيّ كما كان. لا تمسّ
+ * تحويلَ الصندوق، ولذلك ليست في `AnimVisual` — تقرؤها `textStagger.ts` وحدها. */
+const TRIM_PROPERTIES = new Set<AnimProperty>(['trimStart', 'trimEnd']);
+
+/** الخصائصُ التي لها معنًى على هذا العنصر — صفوفُ الخطّ الزمنيّ وأزرارُ المفاتيح تُبنى
+ * منها. «بداية الخط» و«نهاية الخط» للأشكال وحدها: نصٌّ أو صورةٌ لا حدَّ مسارٍ لهما يُقَصّ،
+ * وصفّان لا يفعلان شيئًا عليهما وعدٌ كاذب. و«الظهور» للنصّ الذي فُعِّل تتابعُه وحده، للسبب
+ * نفسه: بلا تتابعٍ لا وحداتٍ تظهر. */
+export function animPropertiesFor(el: { type: string; textAnim?: { enabled: boolean } }): AnimProperty[] {
+  // الصوتُ لا يُرى، فلا خاصّيّةَ مرئيّةَ تُحرَّك عليه — صفُّه صفُّ المقطع وحده.
+  if (el.type === 'audio') return [];
+  return ANIM_PROPERTIES.filter((p) => {
+    if (TRIM_PROPERTIES.has(p)) return el.type === 'shape';
+    if (p === 'reveal') return el.type === 'text' && !!el.textAnim?.enabled;
+    return true;
+  });
+}
 
 /** Value each property renders as when it has no track at all (untouched by any
  * animation): full opacity, no positional offset, no extra scale (uniform or
@@ -88,7 +113,7 @@ export const ANIM_PROPERTIES: AnimProperty[] = ['opacity', 'x', 'y', 'scale', 's
  * و**محايدُ `blur` صفرٌ لأنها فرقٌ يُجمَع**، والجمعُ لا الضرب: `س + 0 = س` تامٌّ في
  * IEEE 754 كما `س × 1 = س`، فمستندٌ لا يحمل مسارَ الضبابيّة يُعطي الضبابيّةَ
  * الساكنةَ **نفسَها** لا مكافئًا لها. والمتطابقةُ هي الحجّةُ، لا «قيمةٌ معقولة». */
-export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, blur: 0 };
+export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1, x: 0, y: 0, scale: 1, scaleX: 1, scaleY: 1, rotation: 0, blur: 0, trimStart: 0, trimEnd: 1, reveal: 0 };
 
 /** One keyframe on one property's independent track.
  *
@@ -175,6 +200,24 @@ export interface ElementAnim {
    * تفعل `migrateAppearance`، فالمستندُ المحفوظ يحمله دائمًا؛ وبقاؤه اختياريًّا
    * في النوع هو ما يَمنع مُحلِّلًا أن يُعيد `NaN` لعنصرٍ بُني بلا الحقل. */
   sourceIn?: number;
+  /** **يظهر في مقطعه فقط** — العنصرُ مرسومٌ من `start` حتى `start + duration` ثم يغيب.
+   *
+   * مدّةُ المقطع في مزيج **ليست** نافذةَ ظهور: `trackValueAt` تَحجز القيمةَ الطرفيّة
+   * قبل المقطع وبعده، فعنصرٌ انتهى مقطعُه يبقى مرسومًا إلى آخر المستند. وهذا قرارٌ
+   * مكتوبٌ في `splitAt` (`src/lib/timelineEdit.ts`) ولا يُنقَض هنا: «أن يَحجب مدى
+   * المقطع ما خارجه تغييرٌ في معنى `duration` يُخفي كلَّ عنصرٍ في كلّ مستندٍ قائم
+   * بعد ٠٫٦ث من بدايته». فالحقلُ **اختياريٌّ ويُطلَب صراحةً**، وغيابُه هو السلوكُ
+   * القائمُ بالحرف — لا يتبدّل بكسلٌ في مستندٍ محفوظ.
+   *
+   * ولِمَ يلزم: مقطعٌ طُلب نسخُه (٤٤ ثانية، ١٨ مشهدًا) فيه نحو تسعين عنصرًا لكلٍّ منها
+   * لحظةُ دخولٍ ولحظةُ خروج. والطريقُ الوحيدُ إليهما قبله تقسيمٌ ثم حذفٌ مرّتين لكلّ
+   * عنصر، يتركان على مسار الشفافيّة مفتاحَي عتبةٍ يُعطّلان حركاتِ الدخول الجاهزة
+   * (`hasCustomAnimation`). وهذا ما يفعله كلُّ محرّرِ فيديو يعرفه المصمّم: الطبقةُ
+   * موجودةٌ بين نقطتَي دخولها وخروجها (محرّر فيديو شائع، وAfter Effects بنقطتَي In/Out).
+   *
+   * والصيغةُ الواحدةُ في `clipShowsAt` (`src/lib/animTimeline.ts`)، تقرؤها المعاينةُ
+   * والقُماشُ وSVG فلا يختلف ما يُرى عمّا يُصدَّر. */
+  bounded?: boolean;
   easing: EasingId;
   bezier: Bezier;
   keyframes: AnimKeyframe[];
@@ -226,7 +269,11 @@ export function cascadeEasingToTracks(tracks: PropertyTracks, easing: EasingId, 
   const next: PropertyTracks = {};
   for (const prop of ANIM_PROPERTIES) {
     const track = tracks[prop];
-    if (track) next[prop] = track.map((k) => ({ ...k, easing, bezier: [...bezier] }));
+    // **«الظهور» توقيتٌ لا منحنى حركة.** مفاتيحُه بـ«تثبيت» هي التي تُظهر الكلمةَ في
+    // إطارها؛ ومنحنى المقطع كلِّه لو سرى عليها لصارت الكلمةُ تظهر في منتصف ما بين
+    // مفتاحين. فتبقى كما وُقِّتت، ومنحناها يُغيَّر مفتاحًا مفتاحًا.
+    if (track && prop === 'reveal') next[prop] = track;
+    else if (track) next[prop] = track.map((k) => ({ ...k, easing, bezier: [...bezier] }));
   }
   return next;
 }
@@ -240,7 +287,7 @@ export function cascadeEasingToTracks(tracks: PropertyTracks, easing: EasingId, 
  * `track.length > 2` وحدها، فتُبيده `withPreset` عند أوّل ضغطةٍ على «تلاشٍ» بلا
  * تحذيرٍ ولا تراجعٍ معلَن — وهو العطلُ الموصوفُ أسفلَ هذا التعليق بعينه، مُعادًا
  * على خصيصةٍ جديدة. */
-const PRESET_FREE_PROPERTIES = new Set<AnimProperty>(['x', 'rotation', 'scaleX', 'scaleY', 'blur']);
+const PRESET_FREE_PROPERTIES = new Set<AnimProperty>(['x', 'rotation', 'scaleX', 'scaleY', 'blur', 'trimStart', 'trimEnd', 'reveal']);
 
 /** أهذه المساراتُ ما زالت ما يُنتجه نمطٌ جاهزٌ وحده، أم بُنيت باليد فوقه؟
  *
@@ -252,6 +299,15 @@ const PRESET_FREE_PROPERTIES = new Set<AnimProperty>(['x', 'rotation', 'scaleX',
  * وكانت هذه الدالّةُ تسكن `Timeline.tsx` ومُستهلِكها **واحدٌ: تلوينُ أيقونةِ ساعة**.
  * نُقِلت هنا لأنّ لها الآن مستهلِكًا ثانيًا يَحمي المستند: حرسُ `withPreset` —
  * فتطبيقُ نمطٍ لم يَعُد يُبيد مسارًا بُني باليد في صمت. */
+/** مساراتُ **حركة الصندوق** وحدها — كلُّها إلّا «الظهور»، الذي هو توقيتُ وحداتِ نصٍّ لا
+ * حركة. هي ما يسأل عنه حرسُ الأنماط (`withPreset` وأزرارُ «الدخول»): توقيتُ الكلمات مع
+ * الصوت لا يجعل الصندوقَ «مبنيًّا باليد»، والنمطُ لا يمسّه. */
+export function motionTracks(tracks: PropertyTracks): PropertyTracks {
+  if (!tracks.reveal) return tracks;
+  const { reveal: _timing, ...motion } = tracks;
+  return motion;
+}
+
 export function hasCustomAnimation(tracks: PropertyTracks): boolean {
   return Object.entries(tracks).some(([prop, track]) => {
     if (!track || !track.length) return false;
@@ -281,7 +337,9 @@ export function defaultAnim(preset: AnimPreset, start: number, duration: number,
 
 export type StaggerUnit = 'char' | 'word' | 'line';
 export type StaggerDirection = 'start' | 'end' | 'center' | 'random';
-export type StaggerEffect = 'fade' | 'slide' | 'scale' | 'rotate';
+/** `blur` تنقشع من ضبابيّة؛ `none` ظهورٌ فوريٌّ بلا مدّة؛ `type` «كتابة»: بادئةُ النصّ
+ * تظهر مُشكَّلةً وحدها كما يراها من يكتب (انظر `textStagger.ts`). */
+export type StaggerEffect = 'fade' | 'slide' | 'scale' | 'rotate' | 'blur' | 'none' | 'type';
 
 /** Per-text-element stagger layer (roadmap #6): splits the element's own text content
  * into units (grapheme/word/authored-line) and reveals each with a sequential delay,
@@ -666,7 +724,31 @@ export interface VideoElement extends ElementBase {
   poster: string | null;
 }
 
-export type DocElement = TextElement | ShapeElement | ImageElement | LottieElement | VideoElement;
+/** **مقطعٌ صوتيّ** — الراوي والموسيقى (٢٥ أكتوبر ٢٠٢٦).
+ *
+ * **لِمَ طبقةٌ لا قائمةٌ موازية.** المقطعُ الصوتيّ يُنقَل ويُقصّ ويُقفَل ويُخفى ويُسمّى
+ * ويُحذَف ويُتراجَع عنه — وكلُّ ذلك للطبقات في مزيج أصلًا: صفُّ الخطّ الزمنيّ، وحافّتا
+ * القصّ، وحقلا «البداية» و«النهاية»، والعين. فطبقةٌ بلا صورةٍ على اللوحة (كطبقات الصوت
+ * في After Effects) تنال ذلك كلَّه بلا واجهةٍ ثانية؛ وما لا معنى له عليها يُستثنى في
+ * مواضعه (لا مقابض، ولا تحويل، ولا رسم).
+ *
+ * **والزمن:** ما يُسمَع عند لحظة الخطّ الزمنيّ `t` هو موضعُ الملف `animTimeAt(anim, t)`
+ * — أي `t − البداية + القصّ من الرأس` — داخل المقطع `[start, start + duration)`. فسحبُ
+ * المقطع ينقله كاملًا، وقصُّ رأسه يتخطّى أوّلَ الملف، وقصُّ ذيله يُسكته قبل آخره؛ وهي
+ * دلالةُ كلّ محرّر فيديو. `geo` لا يُستعمَل (صندوقٌ صفريّ)، و`anim.tracks` فارغة. */
+export interface AudioElement extends ElementBase {
+  type: 'audio';
+  /** بايتاتُ الملف عنوانَ بيانات، محفوظةً مع المستند — كالفيديو والصورة: لا مرجعَ لملفٍّ
+   * قد يُنقَل أو يُحذَف. */
+  src: string | null;
+  /** المدّةُ الكاملة للملف بالثواني، مقيسةً عند الاستيراد. */
+  durationSec: number;
+  /** ٠..١ — يُطبَّق في المعاينة والتصدير معًا. */
+  volume: number;
+  muted: boolean;
+}
+
+export type DocElement = TextElement | ShapeElement | ImageElement | LottieElement | VideoElement | AudioElement;
 
 export function resolvePaletteToken(pal: Palette, token: PaletteToken): string {
   return token === 'bg' ? pal.bg : token === 'fg' ? pal.fg : pal.ac;

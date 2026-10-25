@@ -4,6 +4,7 @@ import { useStudio } from '../state/StudioContext';
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
 const CMD = isMac ? '⌘' : 'Ctrl';
 const SHIFT = isMac ? '⇧' : 'Shift';
+const ALT = isMac ? '⌥' : 'Alt';
 
 type Row = { keys: string[][]; label: string };
 
@@ -56,6 +57,8 @@ export function ShortcutsSheet() {
     { keys: [['Space']], label: L.sc_play },
     { keys: [[CMD, 'B']], label: L.sc_split },
     { keys: [['←'], ['→']], label: L.sc_frame },
+    { keys: [[ALT, CMD, 'C']], label: L.sm_copy_anim },
+    { keys: [[ALT, CMD, 'V']], label: L.sm_paste_anim },
   ];
 
   return (

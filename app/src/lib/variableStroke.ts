@@ -304,10 +304,24 @@ function ringToCmds(ring: Pt[], bw: number, bh: number): PathCmd[] {
  * يُعبَّأ الناتج بـ`nonzero` دائمًا — لا `evenodd`. وحلقةٌ تلتفّ على نفسها
  * (كالخطّ الأحمر في `t02`) منطقةُ تقاطعها لفُّها ٢، و`nonzero` تُعبّئها
  * فتبدو الحلقةُ متّصلة؛ أمّا `evenodd` فكانت ستثقبها. */
-export function variableStrokeOutlineCmds(centreline: PathCmd[], profile: StrokeWidthProfile, widthPx: number, bw: number, bh: number): PathCmd[] {
+export function variableStrokeOutlineCmds(
+  centreline: PathCmd[],
+  profile: StrokeWidthProfile,
+  widthPx: number,
+  bw: number,
+  bh: number,
+  /** «بداية الخط» و«نهاية الخط» (`src/lib/pathTrim.ts`): كسرانِ من طول كلّ جزء، والمضلَّعُ
+   * يُبنى لما بينهما وحده. **والمَلمحُ يبقى مفتاحُه طولَ المسار كاملًا** لا طولَ المقطوع —
+   * فخطٌّ يرقّ في آخره ويُرسَم تدريجيًّا يظهر أوّلُه سميكًا كما سيكون، ولا يرقّ رأسُه
+   * النامي في كلّ إطار. غيابُه = المسارُ كاملًا، بالحرف كما كان. */
+  range?: { start: number; end: number },
+): PathCmd[] {
   if (!(widthPx > 0) || !(bw > 0) || !(bh > 0) || !centreline.length) return [];
   const half = widthPx / 2;
   const out: PathCmd[] = [];
+  const s = range ? Math.max(0, Math.min(1, range.start)) : 0;
+  const e = range ? Math.max(0, Math.min(1, range.end)) : 1;
+  if (e <= s) return [];
 
   for (const sub of flattenToPixelSubpaths(centreline, bw, bh)) {
     const pts = sub.closed ? [...sub.pts, sub.pts[0]] : sub.pts;
@@ -323,7 +337,35 @@ export function variableStrokeOutlineCmds(centreline: PathCmd[], profile: Stroke
     const total = cum[n - 1];
     if (!(total > 1e-12)) continue;
 
-    const ring = openRing(pts, (i) => half * widthFactorAt(profile, cum[i] / total));
+    if (s <= 0 && e >= 1) {
+      const ring = openRing(pts, (i) => half * widthFactorAt(profile, cum[i] / total));
+      out.push(...ringToCmds(ring, bw, bh));
+      continue;
+    }
+    // الخطُّ المكسَّر بين الطولين، بطرفين مُستوفَين على القطعتين اللتين يقعان فيهما.
+    const a = s * total;
+    const b = e * total;
+    const keptPts: Pt[] = [];
+    const keptT: number[] = [];
+    const at = (l: number): Pt => {
+      let i = 1;
+      while (i < n - 1 && cum[i] < l) i++;
+      const span = cum[i] - cum[i - 1];
+      const f = span > 0 ? (l - cum[i - 1]) / span : 0;
+      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f };
+    };
+    keptPts.push(at(a));
+    keptT.push(a / total);
+    for (let i = 0; i < n; i++) {
+      if (cum[i] > a && cum[i] < b) {
+        keptPts.push(pts[i]);
+        keptT.push(cum[i] / total);
+      }
+    }
+    keptPts.push(at(b));
+    keptT.push(b / total);
+    if (keptPts.length < 2) continue;
+    const ring = openRing(keptPts, (i) => half * widthFactorAt(profile, keptT[i]));
     out.push(...ringToCmds(ring, bw, bh));
   }
   return out;

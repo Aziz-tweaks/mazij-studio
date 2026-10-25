@@ -64,6 +64,9 @@ export function elementDisplayName(el: DocElement, L: Dictionary): string {
       return L.ln_lottie;
     case 'video':
       return L.ln_video;
+    // اسمُ الملف يُكتب في `name` عند الاستيراد فيسبق هذا الفرع؛ وهذا لطبقةٍ بلا اسم.
+    case 'audio':
+      return L.audio_layer;
     default:
       return L.ln_element;
   }

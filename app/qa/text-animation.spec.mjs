@@ -105,15 +105,23 @@ async function main() {
   await toggle.click();
   await page.waitForTimeout(100);
 
-  const charSpanCount = await page.locator('[data-el-id="discount"] span span').count();
-  // "خصم يصل إلى ٥٠٪ على كل شيء · حتى الأحد" has exactly 29 non-whitespace grapheme
-  // clusters (confirmed via Intl.Segmenter directly) — whitespace tokens render as
-  // plain text, not spans, so the animated-span count must match exactly.
-  assert(charSpanCount === 29, `char stagger: discount text renders exactly one animated <span> per non-whitespace grapheme (got ${charSpanCount}, expected 29)`);
+  // **عُدِّل هذا الفحصُ في ٢٥ أكتوبر ٢٠٢٦، لأنّ القرارين اللذين يقيسهما تغيّرا عن قصد:**
+  //
+  // ١. **العدُّ ٢٨ لا ٢٩.** «خصم يصل إلى ٥٠٪ على كل شيء · حتى الأحد» فيها ٢٩ عنقودًا غيرَ
+  //    مسافة (مقيسٌ بـ`Intl.Segmenter`)، وكان كلُّ عنقودٍ وحدة. لكنّ «لأ» في «الأحد» ربطةٌ
+  //    **إلزاميّة** (`rlig`) تُرسَم حرفًا واحدًا، وفصلُها كان يرسم لامًا وسطى وهمزةً على ألفٍ
+  //    أخيرة — صورةً ليست في الخطّ. فصارت لام-ألف وحدةً واحدة (`letterClusters` في
+  //    `src/lib/textStagger.ts`)، وهي الفجوةُ التي كان `docs/CONTROLS.md` يذكرها مؤجَّلة.
+  // ٢. **المحدِّدُ `[data-stagger-unit]` لا `span span`.** حروفُ الكلمة الواحدة صارت داخل
+  //    `<span style="white-space:nowrap">` كي لا يكسر Chromium السطرَ بين حرفين (مقيسٌ: كان
+  //    يكسر «abcdefghijklmnop» بعد حرفها التاسع، والقُماشُ لا يكسر إلّا عند المسافة)، فـ
+  //    `span span` صار يعدّ أغلفةَ الكلمات مع الحروف. والمقيسُ هو هو: وحدةٌ متحرّكةٌ لكلّ حرف.
+  const charSpanCount = await page.locator('[data-el-id="discount"] [data-stagger-unit]').count();
+  assert(charSpanCount === 28, `char stagger: discount text renders exactly one animated unit per letter — a non-whitespace grapheme, with the mandatory lam-alef ligature «لأ» as one unit (got ${charSpanCount}, expected 28)`);
 
   await page.locator('[data-testid="stagger-unit-discount-word"]').click();
   await page.waitForTimeout(100);
-  const wordSpanCount = await page.locator('[data-el-id="discount"] span span').count();
+  const wordSpanCount = await page.locator('[data-el-id="discount"] [data-stagger-unit]').count();
   assert(wordSpanCount > 0 && wordSpanCount < charSpanCount, `word stagger: fewer animated units than char stagger on the same text (word=${wordSpanCount}, char=${charSpanCount})`);
 
   // Direction/effect/easing buttons are real and reflect state.

@@ -4,11 +4,12 @@ import { resolveShapeLabelColor, resolveTextColor } from '../state/elements';
 import type { Lang } from '../i18n/strings';
 import type { Weight } from '../state/types';
 import { computeImageCropLayout } from './imageCrop';
-import { maskLocalPolygonPoints, type PxBox } from './geometry';
-import { commandsToSvgPath, drawPathCommandsToCtx, pathElementCommands } from './pathGeometry';
+import { maskClipLocal } from './maskGeometry';
+import { commandsToSvgPath, drawPathCommandsToCtx, ellipsePathCmds, pathElementCommands, roundRectPathCmds, type PathCmd } from './pathGeometry';
+import { isTrimmed, trimPathCmds } from './pathTrim';
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from './variableStroke';
-import { canvasBlurRadiusPx, documentDuration, effectiveScale, entranceVisualAt } from './animTimeline';
-import { SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, type StaggerToken, type UnitVisual } from './textStagger';
+import { animTimeAt, canvasBlurRadiusPx, clipShowsAt, documentDuration, effectiveScale, entranceVisualAt } from './animTimeline';
+import { HIDDEN_UNIT_VISUAL, SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, typedSplit, typedUnitCount, type StaggerToken, type UnitVisual } from './textStagger';
 import { getLottieExportFrame, resetLottieExportEngine } from './lottieExportEngine';
 import { getVideoExportFrame, resetVideoExportEngine } from './videoExportEngine';
 import { normalizeShutter, runningMeanAlpha, shutterIsOpen, shutterSampleTimes, type ShutterSpec } from './motionBlur';
@@ -121,6 +122,19 @@ interface PositionedToken {
   tok: StaggerToken;
 }
 
+/** ما يُرسَم به نصٌّ متتابعُ الظهور، مجموعًا مرّةً واحدة قبل الرسم: التعبئةُ، والظلالُ
+ * الخارجيّة، والحدُّ الأعلى — **ما يرسمه المسارُ الساكن نفسُه** (انظر فرع النصّ في
+ * `drawElements`). كان المسارُ المتتابع يرسم التعبئةَ وحدها، فنصٌّ له ظلٌّ في المعاينة
+ * (`text-shadow` يرثه كلُّ حرف) يخرج بلا ظلٍّ في الفيديو. و`blurPx`/`scaleMean` ضبابيّةُ
+ * العنصر ومقياسُه، لتُركَّب معهما ضبابيّةُ الوحدة. */
+interface StaggerPaint {
+  fill: string | CanvasGradient | CanvasPattern;
+  shadows: { color: string; blur: number; offsetX: number; offsetY: number; opacity: number }[];
+  stroke: { color: string; width: number; opacity: number } | null;
+  blurPx: number;
+  scaleMean: number;
+}
+
 /** Groups a token sequence into atomic "word" runs (one or more tokens that must
  * never be split across a line break — for 'word' granularity each run is already a
  * single token, for 'char' granularity a run is every grapheme between two
@@ -144,16 +158,17 @@ function groupStaggerTokensIntoWords(tokens: StaggerToken[]): { isSpace: boolean
 /** Same greedy word-wrap behavior as `wrapLines` above, but operating on the
  * already-tokenized/ranked sequence so each resulting visual line still carries each
  * token's own stagger rank — the canvas equivalent of the DOM preview's natural CSS
- * wrap around individually-styled spans. */
+ * wrap around individually-styled spans. Widths are those of what is actually drawn
+ * (`tok.shaped` — the joined Arabic form, see `textStagger.ts`). */
 function wrapStaggerTokensIntoLines(ctx: CanvasRenderingContext2D, tokens: StaggerToken[], maxWidth: number): PositionedToken[][] {
   const groups = groupStaggerTokensIntoWords(tokens);
   const lines: PositionedToken[][] = [];
   let current: PositionedToken[] = [];
   let currentWidth = 0;
-  const widthOf = (items: PositionedToken[]) => items.reduce((s, it) => s + ctx.measureText(it.tok.text).width, 0);
+  const widthOf = (items: PositionedToken[]) => items.reduce((s, it) => s + ctx.measureText(it.tok.shaped).width, 0);
   const trimTrailingSpace = () => {
     while (current.length && current[current.length - 1].tok.text.trim() === '') {
-      currentWidth -= ctx.measureText(current[current.length - 1].tok.text).width;
+      currentWidth -= ctx.measureText(current[current.length - 1].tok.shaped).width;
       current.pop();
     }
   };
@@ -181,23 +196,58 @@ function wrapStaggerTokensIntoLines(ctx: CanvasRenderingContext2D, tokens: Stagg
   return lines;
 }
 
+/** يرسم نصًّا واحدًا بطبقاته — الظلالُ الخارجيّة ثم التعبئةُ ثم الحدّ — بالترتيب الذي
+ * يرسم به المسارُ الساكن سطورَه. */
+function paintTextRun(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, paint: StaggerPaint, alpha: number) {
+  for (const sh of paint.shadows) {
+    ctx.save();
+    ctx.globalAlpha = alpha * sh.opacity;
+    ctx.shadowColor = sh.color;
+    ctx.shadowBlur = sh.blur;
+    ctx.shadowOffsetX = sh.offsetX;
+    ctx.shadowOffsetY = sh.offsetY;
+    ctx.fillStyle = sh.color;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = paint.fill;
+  ctx.fillText(text, x, y);
+  if (paint.stroke && paint.stroke.width > 0) {
+    ctx.save();
+    ctx.globalAlpha = alpha * paint.stroke.opacity;
+    ctx.strokeStyle = paint.stroke.color;
+    ctx.lineWidth = paint.stroke.width;
+    ctx.strokeText(text, x, y);
+    ctx.restore();
+  }
+}
+
 /** Draws one unit's own text at `(anchorX, baselineY)`, anchored by `textAlign`
  * ('left'/'right' — never 'center' for an individual unit, only the whole line uses
- * that), composing the unit's reveal `visual` (opacity/translateY/scale/rotateDeg —
+ * that), composing the unit's reveal `visual` (opacity/translateY/scale/rotateDeg/blur —
  * see `unitVisualAt` in `textStagger.ts`) with the element-level alpha already set
  * on `ctx` by the caller (`elementAlpha`). The transform pivots at the unit's own
  * anchor edge/baseline rather than its visual center — a minor, documented
  * (`docs/CONTROLS.md`) divergence from the DOM preview's `transformOrigin: center
- * bottom` for the scale/rotate effects specifically; fade/slide are unaffected. */
-function drawStaggerToken(ctx: CanvasRenderingContext2D, text: string, anchorX: number, baselineY: number, textAlign: 'left' | 'right', visual: UnitVisual, fontPx: number, elementAlpha: number) {
+ * bottom` for the scale/rotate effects specifically; fade/slide are unaffected.
+ *
+ * وضبابيّةُ الوحدة نصفُ قطرٍ بكسرٍ من الخطّ، مضروبًا في مقياس العنصر (`ctx.filter` لا
+ * تعرف المصفوفة — انظر `canvasBlurRadiusPx`) ومركّبًا مع ضبابيّة العنصر تركيبَ غاوسيّتين:
+ * الجذرُ التربيعيّ لمجموع المربّعين، وهو ما تُنتجه CSS حين تُضبّب كتلةً داخل كتلةٍ مضبّبة. */
+function drawStaggerToken(ctx: CanvasRenderingContext2D, text: string, anchorX: number, baselineY: number, textAlign: 'left' | 'right', visual: UnitVisual, fontPx: number, elementAlpha: number, paint: StaggerPaint) {
+  if (visual.opacity <= 0) return;
   ctx.save();
-  ctx.globalAlpha = elementAlpha * visual.opacity;
   ctx.textAlign = textAlign;
+  if (visual.blur > 0) {
+    const unitPx = visual.blur * fontPx * paint.scaleMean;
+    ctx.filter = `blur(${Math.hypot(paint.blurPx, unitPx).toFixed(3)}px)`;
+  }
   ctx.translate(anchorX, baselineY);
   if (visual.translateY !== 0) ctx.translate(0, visual.translateY * fontPx);
   if (visual.rotateDeg !== 0) ctx.rotate((visual.rotateDeg * Math.PI) / 180);
   if (visual.scale !== 1) ctx.scale(visual.scale, visual.scale);
-  ctx.fillText(text, 0, 0);
+  paintTextRun(ctx, text, 0, 0, paint, elementAlpha * visual.opacity);
   ctx.restore();
 }
 
@@ -220,8 +270,9 @@ function drawStaggerLine(
   resolve: (tok: StaggerToken) => UnitVisual,
   fontPx: number,
   elementAlpha: number,
+  paint: StaggerPaint,
 ) {
-  const widths = lineTokens.map((p) => ctx.measureText(p.tok.text).width);
+  const widths = lineTokens.map((p) => ctx.measureText(p.tok.shaped).width);
   const totalWidth = widths.reduce((a, b) => a + b, 0);
   const rightEdge = effectiveAlign === 'right' ? anchorX : effectiveAlign === 'left' ? anchorX + totalWidth : anchorX + totalWidth / 2;
   const leftEdge = effectiveAlign === 'left' ? anchorX : effectiveAlign === 'right' ? anchorX - totalWidth : anchorX - totalWidth / 2;
@@ -229,12 +280,44 @@ function drawStaggerLine(
   lineTokens.forEach((p, i) => {
     const visual = resolve(p.tok);
     if (dir === 'rtl') {
-      drawStaggerToken(ctx, p.tok.text, cursor, baselineY, 'right', visual, fontPx, elementAlpha);
+      drawStaggerToken(ctx, p.tok.shaped, cursor, baselineY, 'right', visual, fontPx, elementAlpha, paint);
       cursor -= widths[i];
     } else {
-      drawStaggerToken(ctx, p.tok.text, cursor, baselineY, 'left', visual, fontPx, elementAlpha);
+      drawStaggerToken(ctx, p.tok.shaped, cursor, baselineY, 'left', visual, fontPx, elementAlpha, paint);
       cursor += widths[i];
     }
+  });
+}
+
+/** **«الكتابة» على القُماش**: السطورُ سطورُ النصّ الكامل (`wrapLines` نفسُها التي يلفّ بها
+ * المسارُ الساكن — فلا يقفز سطرٌ حين يكتمل النصّ)، ومن كلّ سطرٍ يُرسَم ما يقع منه داخل
+ * البادئة الظاهرة **مُشكَّلًا وحده**، عند حافّة بداية السطر الكامل: يمينُه في العربيّة
+ * وإن كان السطرُ في الوسط. وهذا ما تفعله المعاينة: البادئةُ نصٌّ عاديٌّ يتبعه الباقي مخفيًّا
+ * في مكانه. */
+function drawTypedText(ctx: CanvasRenderingContext2D, text: string, visibleLen: number, dir: 'rtl' | 'ltr', effectiveAlign: 'left' | 'right' | 'center', anchorX: number, startY: number, lineHeight: number, lines: string[], elementAlpha: number, paint: StaggerPaint) {
+  // مواضعُ كلمات النصّ الأصليّ — `wrapLines` تقسم على المسافات وتجمع بمسافةٍ واحدة،
+  // فالكلمةُ الـn في سطورها هي الكلمةُ الـn هنا.
+  const words = [...text.matchAll(/\S+/g)].map((m) => ({ start: m.index ?? 0, word: m[0] }));
+  let w = 0;
+  lines.forEach((line, i) => {
+    const count = line.split(' ').length;
+    const lineWords = words.slice(w, w + count);
+    w += count;
+    const parts: string[] = [];
+    for (const lw of lineWords) {
+      if (lw.start >= visibleLen) break;
+      parts.push(lw.word.slice(0, Math.max(0, visibleLen - lw.start)));
+    }
+    const visible = parts.join(' ');
+    if (!visible) return;
+    const full = ctx.measureText(line).width;
+    const startIsRight = dir === 'rtl';
+    const rightEdge = effectiveAlign === 'right' ? anchorX : effectiveAlign === 'left' ? anchorX + full : anchorX + full / 2;
+    const leftEdge = rightEdge - full;
+    ctx.save();
+    ctx.textAlign = startIsRight ? 'right' : 'left';
+    paintTextRun(ctx, visible, startIsRight ? rightEdge : leftEdge, startY + i * lineHeight, paint, elementAlpha);
+    ctx.restore();
   });
 }
 
@@ -244,34 +327,49 @@ function drawStaggerLine(
  * so a video frame shows exactly the same per-unit reveal state the live timeline
  * scrubber would at that instant (same "one shared formula" convention as
  * `entranceVisualAt`/`resolveAnimAt` for the element-level `anim.tracks`). */
-function drawStaggeredText(ctx: CanvasRenderingContext2D, el: TextElement, bw: number, bh: number, dir: 'rtl' | 'ltr', fontPx: number, time: number, elementAlpha: number) {
+function drawStaggeredText(ctx: CanvasRenderingContext2D, el: TextElement, bw: number, bh: number, dir: 'rtl' | 'ltr', fontPx: number, time: number, elementAlpha: number, paint: StaggerPaint) {
   const cfg = el.textAnim;
-  const clipStart = el.anim.start;
   const lineHeight = fontPx * 1.15;
   const startIsRight = dir === 'rtl';
   const anchorX = el.halign === 'start' ? (startIsRight ? bw : 0) : el.halign === 'end' ? (startIsRight ? 0 : bw) : bw / 2;
   const effectiveAlign: 'left' | 'right' | 'center' =
     el.halign === 'start' ? (startIsRight ? 'right' : 'left') : el.halign === 'end' ? (startIsRight ? 'left' : 'right') : 'center';
+  const startYFor = (lineCount: number) => {
+    const totalHeight = lineCount * lineHeight || lineHeight;
+    if (el.valign === 'top') return fontPx * 0.9;
+    if (el.valign === 'middle') return (bh - totalHeight) / 2 + fontPx * 0.9;
+    return bh - totalHeight + fontPx * 0.9;
+  };
+  const tokens = buildStaggerTokens(el.text, cfg, el.id);
+  const typed = cfg.effect === 'type';
+  const n = tokens.reduce((m, t) => (t.order !== null ? Math.max(m, t.order + 1) : m), 0);
+  const k = typed ? typedUnitCount(cfg, el.anim, n, time) : 0;
+  const resolve = (tok: StaggerToken): UnitVisual => {
+    if (tok.rank === null) return SHOWN_UNIT_VISUAL;
+    if (typed) return tok.order !== null && tok.order < k ? SHOWN_UNIT_VISUAL : HIDDEN_UNIT_VISUAL;
+    return resolveUnitVisual(cfg, el.anim, tok.rank, time);
+  };
 
   if (cfg.unit === 'line') {
-    const tokens = buildStaggerTokens(el.text, cfg, el.id); // one token per authored paragraph
     const visualLines: { items: PositionedToken[]; paragraphIndex: number }[] = [];
     tokens.forEach((tok, pi) => {
       // An authored blank line (tok.text === '') wraps to zero lines via `wrapLines` —
       // fall back to one empty line so a blank authored line still occupies a row,
       // same as the DOM preview's `renderStaggeredText` (which falls back to a space).
       const subLines = wrapLines(ctx, tok.text, bw);
-      for (const sub of subLines.length ? subLines : ['']) visualLines.push({ items: [{ tok: { text: sub, rank: tok.rank } }], paragraphIndex: pi });
+      for (const sub of subLines.length ? subLines : ['']) visualLines.push({ items: [{ tok: { text: sub, rank: tok.rank, shaped: sub, order: tok.order } }], paragraphIndex: pi });
     });
-    const totalHeight = visualLines.length * lineHeight || lineHeight;
-    let startY: number;
-    if (el.valign === 'top') startY = fontPx * 0.9;
-    else if (el.valign === 'middle') startY = (bh - totalHeight) / 2 + fontPx * 0.9;
-    else startY = bh - totalHeight + fontPx * 0.9;
+    const startY = startYFor(visualLines.length);
     visualLines.forEach((vl, i) => {
-      const baselineY = startY + i * lineHeight;
-      drawStaggerLine(ctx, vl.items, dir, effectiveAlign, anchorX, baselineY, (tok) => (tok.rank === null ? SHOWN_UNIT_VISUAL : resolveUnitVisual(cfg, tok.rank, clipStart, time)), fontPx, elementAlpha);
+      drawStaggerLine(ctx, vl.items, dir, effectiveAlign, anchorX, startY + i * lineHeight, resolve, fontPx, elementAlpha, paint);
     });
+    return;
+  }
+
+  if (typed) {
+    const lines = wrapLines(ctx, el.text, bw);
+    const visibleLen = typedSplit(tokens, k).visible.length;
+    drawTypedText(ctx, el.text, visibleLen, dir, effectiveAlign, anchorX, startYFor(lines.length), lineHeight, lines, elementAlpha, paint);
     return;
   }
 
@@ -279,16 +377,10 @@ function drawStaggeredText(ctx: CanvasRenderingContext2D, el: TextElement, bw: n
   // `buildStaggerTokens(el.text, ...)` call), then wrap that single ranked sequence
   // into visual lines — so every token keeps the exact rank the DOM preview assigned
   // it, regardless of where the canvas happens to break the line.
-  const tokens = buildStaggerTokens(el.text, cfg, el.id);
   const lines = wrapStaggerTokensIntoLines(ctx, tokens, bw);
-  const totalHeight = lines.length * lineHeight || lineHeight;
-  let startY: number;
-  if (el.valign === 'top') startY = fontPx * 0.9;
-  else if (el.valign === 'middle') startY = (bh - totalHeight) / 2 + fontPx * 0.9;
-  else startY = bh - totalHeight + fontPx * 0.9;
+  const startY = startYFor(lines.length);
   lines.forEach((lineTokens, i) => {
-    const baselineY = startY + i * lineHeight;
-    drawStaggerLine(ctx, lineTokens, dir, effectiveAlign, anchorX, baselineY, (tok) => (tok.rank === null ? SHOWN_UNIT_VISUAL : resolveUnitVisual(cfg, tok.rank, clipStart, time)), fontPx, elementAlpha);
+    drawStaggerLine(ctx, lineTokens, dir, effectiveAlign, anchorX, startY + i * lineHeight, resolve, fontPx, elementAlpha, paint);
   });
 }
 
@@ -313,6 +405,11 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
   const time = spec.time ?? settledTimeOf(spec);
   for (const el of spec.elements) {
     if (!el.visible) continue;
+    // الصوتُ يُسمَع ولا يُرى — مكانُه خلطُ الصوت في `videoExport.ts` لا الإطار.
+    if (el.type === 'audio') continue;
+    // العنصرُ المحدودُ بمقطعه غائبٌ خارجه — `clipShowsAt` الواحدة التي تقرؤها
+    // المعاينةُ وSVG، وغيرُ المحدود (كلُّ مستندٍ قائم) يمرّ كما كان.
+    if (!clipShowsAt(el.anim, time)) continue;
     const x = el.geo.x * w;
     const y = el.geo.y * h;
     const bw = el.geo.w * w;
@@ -362,19 +459,21 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     if (visual.rotation !== 0) ctx.rotate((visual.rotation * Math.PI) / 180);
     ctx.translate(-bw / 2, -bh / 2);
 
-    // Generic clipping mask: any element kind clips to its mask shape's outline mapped
-    // into this element's local frame — same math as the live DOM view and SVG export
-    // (maskLocalPolygonPoints), not image-only.
+    // Generic clipping mask: any element kind clips to its mask shape's **real outline**
+    // (rect radius, ellipse, pen path / polygon with its curves and regions) under the
+    // mask's **own** transform at this instant, mapped into this element's local frame
+    // by the inverse of this element's transform — `maskClipLocal`, the one formula the
+    // live DOM view and the SVG export read too. So the cut stays where the mask says
+    // whatever the content does: a label wiping in behind a moving mask, a figure rising
+    // out of a still one. See `src/lib/maskGeometry.ts` for why it changed.
     if (el.maskId) {
       const maskEl = spec.elements.find((m) => m.id === el.maskId && m.type === 'shape') as ShapeElement | undefined;
       if (maskEl) {
-        const elBox: PxBox = { x, y, w: bw, h: bh, rotation: el.geo.rotation };
-        const maskBox: PxBox = { x: maskEl.geo.x * w, y: maskEl.geo.y * h, w: maskEl.geo.w * w, h: maskEl.geo.h * h, rotation: maskEl.geo.rotation };
-        const pts = maskLocalPolygonPoints(elBox, maskBox, maskEl.shape === 'ellipse' ? 'ellipse' : 'rect');
-        ctx.beginPath();
-        pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-        ctx.closePath();
-        ctx.clip();
+        const clip = maskClipLocal(el, maskEl, { w, h }, time);
+        if (clip) {
+          drawPathCommandsToCtx(ctx, clip.cmds, 1, 1);
+          ctx.clip(clip.evenOdd ? 'evenodd' : 'nonzero');
+        }
       }
     }
 
@@ -447,7 +546,8 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
           const resolved = resolveAppearance(el, spec.palette);
           const tracer = rectTracer(bw, bh, 0);
           paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
-          const video = await getVideoExportFrame(el.id, el.src, time, el.trimIn, el.trimOut, el.loop);
+          // **من بداية مقطعه** (`animTimeAt`) لا بزمن المستند — انظر `src/lib/audioMix.ts`.
+          const video = await getVideoExportFrame(el.id, el.src, animTimeAt(el.anim, time), el.trimIn, el.trimOut, el.loop);
           const layout = computeImageCropLayout({ w: bw, h: bh }, { w: video.videoWidth, h: video.videoHeight }, 'cover', 0.5, 0.5, 1);
           ctx.save();
           ctx.beginPath();
@@ -468,17 +568,37 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       }
     } else if (el.type === 'shape') {
       const resolved = resolveAppearance(el, spec.palette);
+      // «بداية الخط» و«نهاية الخط»: الحدُّ يُرسَم على **المسار المقصوص** (`trimPathCmds`)،
+      // والتعبئةُ والظلُّ على الشكل كاملًا. والحالةُ المحايدة (٠..١) لا تلمس سطرًا هنا.
+      const trimmed = isTrimmed(visual.trimStart, visual.trimEnd);
       if (el.shape === 'rect') {
-        const tracer = rectTracer(bw, bh, Math.min(bw, bh) * el.radius);
+        const radiusPx = Math.min(bw, bh) * el.radius;
+        const tracer = rectTracer(bw, bh, radiusPx);
         paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
         paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
-        paintStrokesCanvas(ctx, resolved.strokes, tracer);
+        paintStrokesCanvas(
+          ctx,
+          resolved.strokes,
+          trimmed
+            ? (c, inset) => {
+                const w2 = Math.max(0, bw - 2 * inset);
+                const h2 = Math.max(0, bh - 2 * inset);
+                tracePxCmds(c, trimPathCmds(roundRectPathCmds(inset, inset, w2, h2, Math.max(0, Math.min(radiusPx - inset, Math.min(w2, h2) / 2))), visual.trimStart, visual.trimEnd, 1, 1));
+              }
+            : tracer,
+        );
         paintInnerShadowsCanvas(ctx, resolved.shadows, tracer, bw, bh);
       } else if (el.shape === 'ellipse') {
         const tracer = ellipseTracer(bw, bh);
         paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
         paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
-        paintStrokesCanvas(ctx, resolved.strokes, tracer);
+        paintStrokesCanvas(
+          ctx,
+          resolved.strokes,
+          trimmed
+            ? (c, inset) => tracePxCmds(c, trimPathCmds(ellipsePathCmds(inset, inset, Math.max(0, bw - 2 * inset), Math.max(0, bh - 2 * inset)), visual.trimStart, visual.trimEnd, 1, 1))
+            : tracer,
+        );
         paintInnerShadowsCanvas(ctx, resolved.shadows, tracer, bw, bh);
       } else if (el.shape === 'path' && (el.points?.length || el.subpaths?.length || el.outline?.length)) {
         const { cmds, multiRegion, closedForFill } = pathElementCommands(el);
@@ -493,12 +613,12 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         // never the mandatory stroke every hand-drawn pen path gets (migrated into a
         // real stroke layer by `migrateAppearance` for every other path shape).
         if (!el.outline?.length) {
-          paintStrokesCanvas(ctx, uniformStrokes, tracer);
+          paintStrokesCanvas(ctx, uniformStrokes, trimmed ? pathCmdsTracer(trimPathCmds(cmds, visual.trimStart, visual.trimEnd, bw, bh), bw, bh) : tracer);
           // الحدّ متغيّر السُّمك: `fill` دائمًا بـ`nonzero` — لا `fillRule`
           // المحسوبة أعلاه. والمضلَّع حلقةٌ واحدة قد تلتفّ على نفسها، فـ`evenodd`
           // كانت ستثقب موضعَ التقاطع بدل أن تُعبّئه.
           for (const s of variableStrokes) {
-            const outline = variableStrokeOutlineCmds(cmds, s.widthProfile!, s.width, bw, bh);
+            const outline = variableStrokeOutlineCmds(cmds, s.widthProfile!, s.width, bw, bh, trimmed ? { start: visual.trimStart, end: visual.trimEnd } : undefined);
             if (!outline.length) continue;
             ctx.save();
             ctx.globalAlpha *= s.opacity;
@@ -577,7 +697,15 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         // Same char/word/line reveal-stagger the DOM preview renders (see
         // `renderStaggeredText` in ElementView.tsx) — a real per-unit rasterization
         // at `time`, not a reimplementation guessing at the live preview's state.
-        drawStaggeredText(ctx, el, bw, bh, dir, fontPx, time, ctx.globalAlpha);
+        const topStroke = resolved.strokes[resolved.strokes.length - 1];
+        const paint: StaggerPaint = {
+          fill: color,
+          shadows: resolved.shadows.filter((sh) => sh.kind === 'outer').map((sh) => ({ color: sh.color, blur: sh.blur, offsetX: sh.offsetX, offsetY: sh.offsetY, opacity: sh.opacity })),
+          stroke: topStroke && topStroke.width > 0 ? { color: topStroke.color, width: topStroke.width, opacity: topStroke.opacity } : null,
+          blurPx,
+          scaleMean: Math.sqrt(Math.max(0, sx) * Math.max(0, sy)),
+        };
+        drawStaggeredText(ctx, el, bw, bh, dir, fontPx, time, ctx.globalAlpha, paint);
       } else {
         let lines = wrapLines(ctx, el.text, bw);
         if (el.justify && dir === 'rtl') lines = await justifyCanvasLines(ctx, lines, bw);
@@ -627,6 +755,17 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     }
 
     ctx.restore();
+  }
+}
+
+/** يتتبّع أوامرَ مسارٍ بالبكسل على المسار الجاري **بلا** `beginPath` — شكلُ «المتتبِّع»
+ * (`SilhouetteTracer`) الذي يرسم به `paintStrokesCanvas` كلَّ حدّ. */
+function tracePxCmds(ctx: CanvasRenderingContext2D, cmds: PathCmd[]) {
+  for (const c of cmds) {
+    if (c.c === 'M') ctx.moveTo(c.x, c.y);
+    else if (c.c === 'L') ctx.lineTo(c.x, c.y);
+    else if (c.c === 'C') ctx.bezierCurveTo(c.x1, c.y1, c.x2, c.y2, c.x, c.y);
+    else ctx.closePath();
   }
 }
 
@@ -891,8 +1030,14 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
     parts.push(`<circle cx="${w * 0.68 + accentD / 2}" cy="${-0.16 * h + accentD / 2}" r="${accentD / 2}" fill="${spec.palette.ac}" />`);
   }
 
+  // لحظةُ هذا الملفّ الساكن — نفسُ ما يُحلّ عنده كلُّ ما يأخذ زمنًا أدناه.
+  const svgTime = spec.time ?? settledTimeOf(spec);
   for (const el of spec.elements) {
     if (!el.visible) continue;
+    if (el.type === 'audio') continue; // لا صورةَ للصوت.
+    // SVG لا يحمل حركةً (انظر التعليق على `svgBlurPx`)، لكنّ **الظهورَ** ليس حركة:
+    // عنصرٌ محدودٌ بمقطعه غائبٌ عن هذه اللحظة غائبٌ عن الملفّ، كما في PNG.
+    if (!clipShowsAt(el.anim, svgTime)) continue;
     const x = el.geo.x * w;
     const y = el.geo.y * h;
     const bw = el.geo.w * w;
@@ -926,18 +1071,20 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
       return ` filter="url(#${blurOnlyId})"`;
     };
 
-    // Generic clipping mask: any element kind gets a clip-path on its own outer <g>,
-    // same polygon math as the canvas/DOM paths (maskLocalPolygonPoints) — not image-only.
+    // Generic clipping mask: any element kind gets a clip-path on its own outer <g>, from
+    // the same `maskClipLocal` the canvas/DOM paths use — the mask's real outline, in this
+    // element's local frame. Static geometry (`time: null`): SVG carries no motion for any
+    // element, so neither does the mask.
     let maskClipAttr = '';
     if (el.maskId) {
       const maskEl = spec.elements.find((m) => m.id === el.maskId && m.type === 'shape') as ShapeElement | undefined;
       if (maskEl) {
-        const elBox: PxBox = { x, y, w: bw, h: bh, rotation: el.geo.rotation };
-        const maskBox: PxBox = { x: maskEl.geo.x * w, y: maskEl.geo.y * h, w: maskEl.geo.w * w, h: maskEl.geo.h * h, rotation: maskEl.geo.rotation };
-        const pts = maskLocalPolygonPoints(elBox, maskBox, maskEl.shape === 'ellipse' ? 'ellipse' : 'rect');
-        const maskClipId = `mask-${esc(el.id)}`;
-        parts.push(`<clipPath id="${maskClipId}"><polygon points="${pts.map((p) => `${p.x},${p.y}`).join(' ')}" /></clipPath>`);
-        maskClipAttr = ` clip-path="url(#${maskClipId})"`;
+        const clip = maskClipLocal(el, maskEl, { w, h }, null);
+        if (clip) {
+          const maskClipId = `mask-${esc(el.id)}`;
+          parts.push(`<clipPath id="${maskClipId}"><path d="${commandsToSvgPath(clip.cmds, 1, 1)}"${clip.evenOdd ? ' clip-rule="evenodd"' : ''} /></clipPath>`);
+          maskClipAttr = ` clip-path="url(#${maskClipId})"`;
+        }
       }
     }
 
@@ -950,8 +1097,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
       // uses for SVG — see `settledTimeOf` above), embedded as a real
       // `<image>` — never a blank box pretending to be the animation.
       try {
-        const time = spec.time ?? settledTimeOf(spec);
-        const frameCanvas = getLottieExportFrame(el.id, el.data, bw, bh, time, el.loop);
+        const frameCanvas = getLottieExportFrame(el.id, el.data, bw, bh, svgTime, el.loop);
         const dataUrl = frameCanvas.toDataURL('image/png');
         parts.push(`<g transform="${transform}" opacity="${opacity}"${maskClipAttr}${blurOnlyAttr()}><image href="${dataUrl}" x="0" y="0" width="${bw}" height="${bh}" /></g>`);
       } catch {

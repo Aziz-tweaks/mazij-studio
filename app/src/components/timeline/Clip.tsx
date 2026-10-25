@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import type { AnimProperty, DocElement } from '../../state/elements';
-import { ANIM_PROPERTIES } from '../../state/elements';
-import { animTimeAt, documentDuration, setKeyframe, snapToFrame, timelineSpan, timelineTimeOf } from '../../lib/animTimeline';
+import { ANIM_PROPERTIES, animPropertiesFor } from '../../state/elements';
+import { animTimeAt, documentDuration, formatKfDisplay, kfValueToDisplay, setKeyframe, snapToFrame, timelineSpan, timelineTimeOf } from '../../lib/animTimeline';
+import { useAudioPeaks, waveformPath } from '../../lib/audioPeaks';
 import { hitTest, type ClipEdge, type Hit, type HitClipRow } from '../../lib/timelineHit';
 import { moveClip, trim } from '../../lib/timelineEdit';
 import { useStudio } from '../../state/StudioContext';
@@ -16,6 +17,12 @@ export interface SelectedKf {
  * and it's the one property every element can usefully fade with) — expanding the
  * clip reveals the other four as independent rows underneath. */
 export const EXPANDABLE_PROPERTIES: AnimProperty[] = ANIM_PROPERTIES.filter((p) => p !== 'opacity');
+
+/** صفوفُ الخصائص التي تُفتَح تحت مقطع **هذا** العنصر — `animPropertiesFor` بلا الشفافيّة
+ * (صفُّ المقطع نفسُه). فشكلٌ يحمل «بداية الخط» و«نهاية الخط» ونصٌّ لا يحملهما. */
+export function expandablePropertiesFor(el: { type: string; textAnim?: { enabled: boolean } }): AnimProperty[] {
+  return animPropertiesFor(el).filter((p) => p !== 'opacity');
+}
 
 export const CLIP_ROW_H = 30;
 export const PROP_ROW_H = 22;
@@ -262,6 +269,11 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
       >
         <div
           data-testid={`clip-${el.id}${property === 'opacity' ? '' : `-${property}`}`}
+          // **المقطعُ المحدودُ يُقرأ محدودًا.** عنصرٌ يغيب خارج مقطعه (`anim.bounded`)
+          // جسمُه أوضح وحافّتاه مخطوطتان — طرفاه حدّا وجوده لا حدّا حركته — وتلميحُه
+          // يقول ذلك. وغيرُ المحدود على رسمه القديم بالحرف.
+          data-bounded={anim.bounded ? 'true' : 'false'}
+          title={property === 'opacity' ? (anim.bounded ? L.clip_bounded_tip : L.clip_unbounded_tip) : undefined}
           style={{
             position: 'absolute',
             left: `${leftPct}%`,
@@ -270,15 +282,21 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
             height: 16,
             borderRadius: 4,
             background: color,
-            opacity: property === 'opacity' ? 0.4 : 0.22,
+            boxShadow: anim.bounded && property === 'opacity' ? `inset 0 0 0 1.5px ${color}` : undefined,
+            opacity: property === 'opacity' ? (anim.bounded ? 0.62 : 0.4) : 0.22,
             // المؤشّرةُ تُورَّث من الصفّ: هي قرارُ `hitTest` لا صفةُ عقدةٍ ثابتة،
             // وإلا قالت الحافّةُ `grab` لأنها ترقد على الجسم.
             cursor: 'inherit',
           }}
         />
+        {/* **الصوتُ يُقرأ بموجته واسمه.** الموجةُ ما بين قصّ الرأس وآخر المقطع من الملف، فتنتقل
+            مع المقطع وتنقصّ معه؛ والاسمُ اسمُ الملف. */}
+        {el.type === 'audio' && property === 'opacity' && (
+          <AudioClipFace src={el.src} from={anim.sourceIn ?? 0} length={anim.duration} leftPct={leftPct} widthPct={widthPct} top={(height - 16) / 2} name={el.name ?? ''} color={color} />
+        )}
         {/* حركةُ الدخول مقروءةٌ على المقطع في الوضع البسيط: لا مفاتيحَ هناك
             تُخبرك بما يفعله، فاسمُ النمط هو كلُّ ما يُقرأ. */}
-        {!pro && property === 'opacity' && (
+        {!pro && property === 'opacity' && el.type !== 'audio' && (
           <div
             style={{
               position: 'absolute',
@@ -335,7 +353,7 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
               data-testid={`kf-${el.id}-${kf.id}`}
               // بالثواني لا بنسبةٍ من المقطع. كان التلميح يقول «٥١٪» — أي نسبةَ
               // المفتاح من مقطعه، وهو رقمٌ لا يستطيع المصمّم أن يفعل به شيئًا.
-              title={`${kf.time.toFixed(3)}s · ${(kf.value * 100).toFixed(0)}%`}
+              title={`${kf.time.toFixed(3)}s · ${formatKfDisplay(kfValueToDisplay(property, kf.value))}${property === 'rotation' ? '°' : property === 'reveal' ? '' : '%'}`}
               style={{
                 position: 'absolute',
                 left: `${pct}%`,
@@ -353,7 +371,7 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
             />
           );
         })}
-        {pro && (
+        {pro && el.type !== 'audio' && (
           <button
             data-testid={`clip-${el.id}-add-kf${property === 'opacity' ? '' : `-${property}`}`}
             data-anim-time={snapToFrame(animTimeAt(anim, state.t), state.fps).toFixed(4)}
@@ -390,12 +408,34 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
   };
 
   const showProps = pro && expanded;
-  const totalHeight = CLIP_ROW_H + (showProps ? EXPANDABLE_PROPERTIES.length * PROP_ROW_H : 0);
+  const rows = expandablePropertiesFor(el);
+  const totalHeight = CLIP_ROW_H + (showProps ? rows.length * PROP_ROW_H : 0);
 
   return (
     <div style={{ height: totalHeight, position: 'relative' }}>
       {row('opacity', CLIP_ROW_H, 0)}
-      {showProps && EXPANDABLE_PROPERTIES.map((p, i) => row(p, PROP_ROW_H, CLIP_ROW_H + i * PROP_ROW_H))}
+      {showProps && rows.map((p, i) => row(p, PROP_ROW_H, CLIP_ROW_H + i * PROP_ROW_H))}
+    </div>
+  );
+}
+
+/** وجهُ مقطع الصوت: موجتُه واسمُه داخل جسمه. رسمٌ لا هندسة (`pointerEvents: none`) — النقلُ
+ * والقصُّ من `hitTest` كغيره. */
+function AudioClipFace({ src, from, length, leftPct, widthPct, top, name, color }: { src: string | null; from: number; length: number; leftPct: number; widthPct: number; top: number; name: string; color: string }) {
+  const peaks = useAudioPeaks(src);
+  const d = peaks ? waveformPath(peaks, from, length) : '';
+  return (
+    <div
+      data-testid="audio-clip-face"
+      data-has-wave={d ? 'true' : 'false'}
+      style={{ position: 'absolute', left: `${leftPct}%`, width: `${widthPct}%`, top, height: 16, pointerEvents: 'none', overflow: 'hidden', borderRadius: 4 }}
+    >
+      {d && (
+        <svg viewBox={`0 -1 ${Math.max(0.001, length)} 2`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+          <path d={d} fill={color} opacity={0.95} />
+        </svg>
+      )}
+      <span style={{ position: 'absolute', insetInlineStart: 6, top: 1, fontSize: 9.5, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', textShadow: '0 0 3px var(--surface)' }}>{name}</span>
     </div>
   );
 }

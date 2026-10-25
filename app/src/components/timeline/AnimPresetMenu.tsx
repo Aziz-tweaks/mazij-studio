@@ -1,5 +1,5 @@
 import type { AnimPreset } from '../../state/elements';
-import { hasCustomAnimation } from '../../state/elements';
+import { hasCustomAnimation, motionTracks } from '../../state/elements';
 import { useStudio } from '../../state/StudioContext';
 
 const PRESETS: AnimPreset[] = ['none', 'fade', 'slide', 'pop'];
@@ -30,7 +30,8 @@ export function AnimPresetMenu() {
    * فالأزرارُ معطَّلةٌ وتلميحُها يقول السببَ وما يُزيله. وهي القاعدةُ نفسُها التي
    * تَجعل المؤشّرةَ `not-allowed` على حافّةِ مقطعٍ مقفول: الممنوعُ يقول ذلك
    * **قبل** أن تحاوله. */
-  const blocked = hasCustomAnimation(el.anim.tracks);
+  // و«الظهور» خارجَ السؤال: توقيتُ الكلمات لا يمسّه النمط (`withPreset`)، فلا يحجبه.
+  const blocked = hasCustomAnimation(motionTracks(el.anim.tracks));
 
   return (
     <div data-testid="anim-preset-menu" data-preset-blocked={blocked ? 'true' : 'false'} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

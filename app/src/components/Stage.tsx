@@ -12,13 +12,15 @@ import { geoToPx, pxToGeo, resizeBox, rotatePoint, computeSnap, boundsOfBoxes, c
 import { computeImageCropLayout } from '../lib/imageCrop';
 import { commandsToSvgPath, pathElementCommands } from '../lib/pathGeometry';
 import { closestTOnSegment, fitSmoothPath } from '../lib/pathSmoothing';
-import { entranceStyleAt } from '../lib/animTimeline';
+import { clipShowsAt, entranceStyleAt } from '../lib/animTimeline';
 import type { DocElement } from '../state/elements';
 import { defaultAnim, defaultTextStagger } from '../state/elements';
 import { NEW_TEXT_PLACEHOLDER, isPlaceholderText } from '../lib/textPresets';
 import { dragIsBigEnough, floorDegenerate, shapeDragBox, shapeGeometryFor } from '../lib/shapeFactory';
 import type { ShapeDrawKind } from '../state/types';
 import { useStudio } from '../state/StudioContext';
+import { AudioPlayback } from './stage/AudioPlayback';
+import { isAudioFile } from '../lib/audioFile';
 
 /** الصندوق الجاري رسمه، مع أي قُطرَي الصندوق يسلكه الخطّ (يُهمَل لبقيّة الأنواع). */
 type ShapeDraft = { x: number; y: number; w: number; h: number; flipX?: boolean; flipY?: boolean };
@@ -939,6 +941,12 @@ export function Stage() {
     const imageFile = files.find((f) => f.type.startsWith('image/'));
     const lottieFile = files.find((f) => /\.(json|lottie)$/i.test(f.name));
     const videoFile = files.find((f) => f.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(f.name));
+    // ملفُّ صوت: طبقةُ صوتٍ عند المؤشّر — لا موضعَ له على اللوحة، فنقطةُ الإفلات لا تعنيه.
+    const audioFile = files.find((f) => isAudioFile(f));
+    if (audioFile && !imageFile && !lottieFile && !videoFile) {
+      void actions.insertAudioFromFile(audioFile);
+      return;
+    }
     if (!imageFile && !lottieFile && !videoFile) return;
     const rect = artboardRef.current!.getBoundingClientRect();
     const p = docPointFromClient(e.clientX, e.clientY, rect, scale);
@@ -991,7 +999,8 @@ export function Stage() {
   const selected = state.selectedIds;
   const soleSelected = selected.length === 1 ? state.elements.find((e) => e.id === selected[0]) : undefined;
   /** العنصر الذي تُرسم مقابضُه — وخطُّ تحديده معها في طبقة المقابض (انظرها أدناه). */
-  const handlesFor = soleSelected && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id ? soleSelected : undefined;
+  // والصوتُ لا صندوقَ له على اللوحة: لا مقابض ولا خطَّ تحديد — يُحدَّد ويُحرَّر من صفّه.
+  const handlesFor = soleSelected && soleSelected.type !== 'audio' && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id ? soleSelected : undefined;
   const handlesLayerStyle: CSSProperties = {
     position: 'absolute',
     left: abStyle.left,
@@ -1003,7 +1012,7 @@ export function Stage() {
     pointerEvents: 'none',
   };
 
-  const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id)) && !state.pendingEditSnapshot && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
+  const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id) && e.type !== 'audio') && !state.pendingEditSnapshot && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
 
   // المسودّة كشكل مسار كامل الهيئة، بإحداثيات المستند (لا كسور صندوق) — فالمعاينة
   // تمرّ بنفس مُصيِّر الهندسة الذي سيرسم العنصر النهائي بعد `penFinish`.
@@ -1078,6 +1087,8 @@ export function Stage() {
           </div>
         )}
       </div>
+      {/* الصوتُ يُسمَع حيث تُرى اللوحة — طبقاتُ الصوت وصوتُ الفيديو، مزامَنةً مع المؤشّر. */}
+      <AudioPlayback />
 
       {/* أبعاد المستند الحقيقية بالبكسل، لا أبعاده على الشاشة: `abStyle` يحمل
           مقاسًا مضروبًا في `zoom`، فقياس العنصر من الشاشة لا يخبر بمقاس المستند.
@@ -1100,7 +1111,10 @@ export function Stage() {
           <div style={{ position: 'absolute', left: '68%', top: '-16%', width: '46%', aspectRatio: '1', borderRadius: '50%', background: pal.ac, pointerEvents: 'none' }} />
         )}
 
-        {state.elements.map((el: DocElement) => (
+        {/* العنصرُ المحدودُ بمقطعه لا يُرسَم خارجه — `clipShowsAt` نفسُها التي يقرؤها
+            التصدير. والمراجعُ (القناعُ والمسارُ) تُطلَب من `state.elements` كلِّها
+            لا من هذه القائمة، فقناعٌ خارج مقطعه يبقى قناعًا. */}
+        {state.elements.filter((el) => clipShowsAt(el.anim, t)).map((el: DocElement) => (
           <ElementView
             key={el.id}
             el={el}

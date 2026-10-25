@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStudio } from '../../state/StudioContext';
-import { CMD, MenuRow } from './ContextBar';
+import { ALT, CMD, MenuRow } from './ContextBar';
+import { MEDIUM_SURFACES } from '../../data/constants';
 import type { ImageElement } from '../../state/elements';
 
 /** **قائمة الزرّ الأيمن على اللوحة.**
@@ -95,6 +96,15 @@ export function StageMenu({ x, y, onElement, onClose }: { x: number; y: number; 
           <MenuRow testid="sm-cut" label={L.sc_cut} keys={`${CMD}X`} onClick={run(actions.cutSelected)} />
           <MenuRow testid="sm-paste" label={L.sc_paste} keys={`${CMD}V`} onClick={run(actions.pasteClipboard)} />
           <MenuRow testid="sm-duplicate" label={L.sc_dup} keys={`${CMD}D`} onClick={run(actions.duplicateSelected)} />
+          {/* الحركةُ تُنسَخ وتُلصَق كما تُنسَخ العناصر — لمستندٍ له زمنٌ وحده، فالساكنُ لا
+              خطَّ زمنيَّ فيه تُرى عليه. */}
+          {MEDIUM_SURFACES[state.medium].motionProps && (
+            <>
+              {sep}
+              <MenuRow testid="sm-copy-anim" label={L.sm_copy_anim} keys={`${ALT}${CMD}C`} onClick={run(actions.copyAnimation)} />
+              {state.animClipboard && <MenuRow testid="sm-paste-anim" label={L.sm_paste_anim} keys={`${ALT}${CMD}V`} onClick={run(actions.pasteAnimation)} />}
+            </>
+          )}
           {traceable && (
             <>
               {sep}

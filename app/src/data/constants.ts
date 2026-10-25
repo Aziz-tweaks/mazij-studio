@@ -338,7 +338,9 @@ export const TOOL_LIBRARY: Record<ToolId, ToolLibraryStatus> = {
   // «نصوص» صارت مكتبةً حقيقيّة (٢٤ أكتوبر ٢٠٢٦): عنوان، عنوان فرعي، نص، وأنماط
   // عربيّة جاهزة — `TextLibrary` في `left-panel/LibraryTab.tsx`.
   text: 'ready',
-  audio: 'soon',
+  // «صوت» صار لوحًا حقيقيًّا (٢٥ أكتوبر ٢٠٢٦): استيرادُ ملفٍّ عند المؤشّر وأصواتُ
+  // المشروع — `AudioLibrary` في `left-panel/AudioLibrary.tsx`.
+  audio: 'ready',
   fx: 'soon',
   // أمّا هذه فليست صامتة، فلا تأخذ لوحًا يحجب ما تعرضه فعلًا:
   //

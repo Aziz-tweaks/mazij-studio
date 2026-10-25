@@ -9,6 +9,7 @@ import { useStudio } from '../../state/StudioContext';
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
 export const CMD = isMac ? '⌘' : 'Ctrl ';
+export const ALT = isMac ? '⌥' : 'Alt ';
 
 type PopId = 'font' | 'color' | 'anim' | 'more' | 'align' | null;
 
@@ -308,6 +309,9 @@ export function ContextBar() {
       {pop === 'more' && (
         <Pop anchor={anchor} end>
           <MenuRow testid="ctx-duplicate" label={L.ctx_duplicate} keys={`${CMD}D`} onClick={() => { actions.duplicateSelected(); setPop(null); }} />
+          {/* نسخُ الحركة ولصقُها — البندان نفسُهما في قائمة الزرّ الأيمن (`StageMenu`). */}
+          {MEDIUM_SURFACES[state.medium].motionProps && <MenuRow testid="ctx-copy-anim" label={L.sm_copy_anim} keys={`${ALT}${CMD}C`} onClick={() => { actions.copyAnimation(); setPop(null); }} />}
+          {MEDIUM_SURFACES[state.medium].motionProps && state.animClipboard && <MenuRow testid="ctx-paste-anim" label={L.sm_paste_anim} keys={`${ALT}${CMD}V`} onClick={() => { actions.pasteAnimation(); setPop(null); }} />}
           <MenuRow testid="ctx-forward" label={L.bring_forward} keys={`${CMD}]`} onClick={() => { actions.bringForward(state.selectedIds); setPop(null); }} />
           <MenuRow testid="ctx-backward" label={L.send_backward} keys={`${CMD}[`} onClick={() => { actions.sendBackward(state.selectedIds); setPop(null); }} />
           <MenuRow testid="ctx-lock" label={L.lock_layer} keys={`${CMD}2`} onClick={() => { actions.lockSelected(); setPop(null); }} />

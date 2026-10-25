@@ -2,17 +2,18 @@ import type { DragEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { useStudio } from '../state/StudioContext';
-import { KF_VALUE_STEP, documentDuration, formatClock, formatDurationSec, formatKfDisplay, frameDuration, kfValueFromDisplay, kfValueToDisplay, quantizeKfValue, tickLadder, timelineSpan, timelineTimeOf } from '../lib/animTimeline';
+import { KF_VALUE_STEP, documentDuration, formatClock, formatDurationSec, formatKfDisplay, kfValueFromDisplay, kfValueToDisplay, quantizeKfValue, tickLadder, timeOfFrame, timelineSpan, timelineTimeOf } from '../lib/animTimeline';
 import type { AnimProperty, DocElement } from '../state/elements';
 import { hasCustomAnimation } from '../state/elements';
 import { canSplitAt } from '../lib/timelineEdit';
+import { revealUnitCount } from '../lib/textStagger';
 import { hitTest } from '../lib/timelineHit';
 import { elementDisplayName } from '../lib/layerNames';
 import { EASING_IDS, type EasingId } from '../lib/easing';
 import { EasingMenu, EASE_LABEL_KEY } from './timeline/EasingMenu';
 import { AnimPresetMenu } from './timeline/AnimPresetMenu';
 import { BezierEditor } from './timeline/BezierEditor';
-import { Clip, CLIP_ROW_H, PROP_ROW_H, EXPANDABLE_PROPERTIES, type SelectedKf } from './timeline/Clip';
+import { Clip, CLIP_ROW_H, PROP_ROW_H, expandablePropertiesFor, type SelectedKf } from './timeline/Clip';
 import { ICONS, clamp } from '../data/constants';
 
 const RULER_H = 26;
@@ -46,8 +47,8 @@ function tickLabel(t: number): string {
   return `${(Math.round(t * 100) / 100).toFixed(2).replace(/0$/, '')}s`;
 }
 
-function layerRowHeight(expanded: boolean): number {
-  return CLIP_ROW_H + (expanded ? EXPANDABLE_PROPERTIES.length * PROP_ROW_H : 0);
+function layerRowHeight(el: DocElement, expanded: boolean): number {
+  return CLIP_ROW_H + (expanded ? expandablePropertiesFor(el).length * PROP_ROW_H : 0);
 }
 
 /** Per-property slider range/unit for the keyframe-value popover: opacity, the three
@@ -57,7 +58,7 @@ function layerRowHeight(expanded: boolean): number {
  *
  * و`scaleX`/`scaleY` يأخذان مدى `scale` نفسَه (٠..٣٠٠٪) لأنهما وحدتُه نفسُها —
  * ومدًى آخرُ على المحورَين كان سيَجعل «١٥٠٪» تعني شيئَين في لوحٍ واحد. */
-function sliderRange(property: AnimProperty): [number, number] {
+function sliderRange(property: AnimProperty, el?: DocElement): [number, number] {
   switch (property) {
     case 'opacity':
       return [0, 100];
@@ -77,6 +78,14 @@ function sliderRange(property: AnimProperty): [number, number] {
       return [-20, 20];
     case 'rotation':
       return [-180, 180];
+    // كسرانِ من طول الحدّ بالنسبة المئويّة، كالشفافيّة.
+    case 'trimStart':
+    case 'trimEnd':
+      return [0, 100];
+    // عددُ وحدات **هذا** النصّ بوحدته الحاليّة: من لا شيء إلى الكلّ. وواحدٌ أرضيّةً كي لا
+    // يصير المدى صفرًا لنصٍّ فارغ.
+    case 'reveal':
+      return [0, Math.max(1, el && el.type === 'text' ? revealUnitCount(el.text, el.textAnim.unit) : 1)];
   }
 }
 
@@ -112,20 +121,20 @@ function sliderRange(property: AnimProperty): [number, number] {
  * **ومسوّدةٌ محلّيّةٌ بنمط `NumField`** (`left-panel/PropsTab.tsx`): `«‑»` و`«0.»`
  * و`«»` حالاتٌ وسيطةٌ لا تُلزِم، وإلّا مُحِيَت الإشارةُ من تحت يد الكاتب. */
 function KfValueField({
-  property,
+  range,
   display,
   onLive,
   onCommit,
   title,
 }: {
-  property: AnimProperty;
+  range: [number, number];
   display: number;
   onLive: (display: number) => void;
   onCommit: () => void;
   title: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const [min, max] = sliderRange(property);
+  const [min, max] = range;
   return (
     <input
       data-testid="kf-value-field"
@@ -181,7 +190,6 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
   // انظر `timelineSpan` لِمَ هما كمّيتان لا واحدة.
   const docDuration = documentDuration(state.elements.map((el) => el.anim), state.fps);
   const span = timelineSpan(docDuration);
-  const frame = frameDuration(state.fps);
   const playheadPct = (state.t / span) * 100;
   const [dragId, setDragId] = useState<string | null>(null);
   const [selectedKf, setSelectedKf] = useState<SelectedKf | null>(null);
@@ -220,6 +228,13 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedKf?.elId, selectedKf?.property, selectedKf?.kfId]);
 
+  /** **تحديدُ مفتاحٍ زال يُنسى.** تراجعٌ أو حذفُ عنصرٍ يُزيل المفتاحَ من المستند ويُبقي
+   * هذه الحالةَ المحلّيّة تُشير إليه — وكانت إشارتُها اليتيمة تبتلع Delete (انظر
+   * `onTrackKeyDown`). فمتى لم يبقَ للمفتاح وجودٌ رجعت إلى «لا شيء». */
+  useEffect(() => {
+    if (selectedKf && !selectedKfData) setSelectedKf(null);
+  }, [selectedKf, selectedKfData]);
+
   // Cumulative top offset of each layer's row block, in track-column pixels below the
   // ruler — needed because expanded layers are taller than collapsed ones, so a flat
   // `rowIndex * CLIP_ROW_H` (the old formula) would misplace every row after the
@@ -229,7 +244,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
     let top = 0;
     for (const el of layers) {
       layerTop.set(el.id, top);
-      top += layerRowHeight(expandedIds.has(el.id));
+      top += layerRowHeight(el, expandedIds.has(el.id));
     }
   }
 
@@ -329,7 +344,21 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
       // وُضِع بالسهم بين إطارَي مخرَج، فيُظهر الإطارُ الأوّل قيمةً مُستَقرَأة لا
       // قيمةَ المفتاح نفسه.
       // و`⇧` خمسةُ إطارات: خطوةٌ أكبر لا وحدةٌ أخرى، فيبقى كلُّ موضعٍ على الشبكة.
-      actions.scrubTo(state.t + dir * frame * (e.shiftKey ? 5 : 1));
+      //
+      // **ويُحسَب الهدفُ رقمَ إطارٍ ثم يُحوَّل زمنًا** (`timeOfFrame`)، لا جمعًا متراكمًا.
+      // كان `t + frame×5` يجمع خطأَ التقريب في كلّ ضغطة: ستُّ ضغطاتٍ من الصفر بلغت
+      // ٠٫٩٩٩٩٩٩٩٩٩٩٩٩٩٩٩ لا ١، فوقف المؤشّرُ «عند الثانية» قبلها بجزءٍ من التريليون —
+      // ورُسم «نهاية الخط» ٩٩٫٩٩٩٩٩٪ لا كاملًا.
+      //
+      // ورقمُ الإطار الحاليّ **عددٌ صحيحٌ تامٌّ متى كان المؤشّرُ على الشبكة** (يُقرَّب ما
+      // انحرف عنها بجزءٍ من المليون)، **وكسرٌ كما هو متى كان بين إطارين**: فالخطوةُ إطارٌ
+      // كاملٌ من الموضع نفسِه في الحالتين، و→ ثم ← يرجعان إليه بالضبط — وهما قراران
+      // تقيسهما `qa/phase1-representation` و`qa/phase2-live-clips`.
+      const raw = state.t * state.fps;
+      const nearest = Math.round(raw);
+      const cur = Math.abs(raw - nearest) < 1e-6 ? nearest : raw;
+      const steps = e.shiftKey ? 5 : 1;
+      actions.scrubTo(timeOfFrame(Math.max(0, cur + dir * steps), state.fps));
     } else if (e.key === 'Home') {
       e.preventDefault();
       e.stopPropagation();
@@ -349,7 +378,12 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
       // النهاية — العطل ٦ في `qa/motion-journey.spec.mjs`، مُغلَقٌ في المرحلة ١؛
       // وهذا هو المفتاحُ الذي كان ينقصه.
       actions.togglePlay();
-    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedKf) {
+    } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedKf && selectedKfData) {
+      // **المفتاحُ المحدَّد يجب أن يكون موجودًا ليبتلع Delete.** كان الشرطُ `selectedKf`
+      // وحده، وهي حالةٌ محلّيّةٌ تبقى بعد أن يزول مفتاحُها (تراجعٌ، أو حذفُ عنصره):
+      // فكان Delete يذهب إلى حذفِ مفتاحٍ غير موجود ويُوقف انتشارَه، فلا يُحذف المقطعُ
+      // المحدَّد ولا يحدث شيءٌ على الإطلاق. ظهر حين قُسِم مقطعٌ بعد تراجعٍ عن مفتاح.
+      // والمحذوفُ المتروكُ يُنظَّف في الأثر أدناه.
       e.preventDefault();
       e.stopPropagation();
       actions.deleteTrackKeyframe(selectedKf.elId, selectedKf.property, selectedKf.kfId);
@@ -542,7 +576,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
             const color = colorForLayer(el.id);
             const expanded = expandedIds.has(el.id);
             return (
-              <div key={el.id} style={{ height: layerRowHeight(expanded), flex: 'none' }}>
+              <div key={el.id} style={{ height: layerRowHeight(el, expanded), flex: 'none' }}>
                 <div
                   data-layer-id={el.id}
                   // التحديدُ مقروءٌ لا مُستنتَجًا من لونِ خلفيّة: المعيار B6 يسأل
@@ -609,7 +643,10 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                     // كزرّ القفل — يزيح الترتيب ويحوّل «حدّد الطبقة» إلى «اقفلها».
                     // الترتيب ليس عقدًا؛ المعرّف هو.
                     data-testid={`layer-name-${el.id}`}
-                    onClick={() => actions.selectElement(el.id)}
+                    // ⇧/⌘ مع النقرة **يضيف إلى التحديد** أو يُزيل منه، كما في قائمة طبقات كلّ
+                    // برنامجٍ يعرفه المصمّم. كانت النقرةُ تستبدل التحديد دائمًا، فلم يكن من
+                    // القائمة طريقٌ إلى تحديد مشهدٍ من صورةٍ ونصّين لتوقيته معًا.
+                    onClick={(e) => actions.selectElement(el.id, e.shiftKey || e.metaKey || e.ctrlKey)}
                     // النقرة المزدوجة تُعيد التسمية، كما في كل قائمة طبقاتٍ يعرفها المصمّم.
                     onDoubleClick={(e) => { e.stopPropagation(); setRenamingId(el.id); }}
                     // التلميح هو الاسم الكامل وحده. كان يضمّ «إعادة تسمية» للدلالة
@@ -620,7 +657,12 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                     title={labelFor(el)}
                     style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 10px', border: 0, background: 'transparent', color: 'var(--text)', fontSize: 12, textAlign: 'start', opacity: el.visible ? 1 : 0.45 }}
                   >
-                    <span style={{ width: 8, height: 8, borderRadius: el.groupId ? '50%' : 2, background: color, flex: 'none' }} />
+                    {el.type === 'audio' ? (
+                      // طبقةُ الصوت تُعرف بموجتها لا بمربّع لون: لا شيءَ على اللوحة يحمل لونها.
+                      <Icon size={12} path="M3 8v4M6.5 5v10M10 3v14M13.5 6v8M17 8.5v3" style={{ color, flex: 'none' }} />
+                    ) : (
+                      <span style={{ width: 8, height: 8, borderRadius: el.groupId ? '50%' : 2, background: color, flex: 'none' }} />
+                    )}
                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labelFor(el)}</span>
                     {/* العضوية في مجموعة تُقرأ من السطر مباشرة: القائمة مسطّحة، فلو لم
                         يُعلَن الانتماء لصار «لماذا تحرّك معه عنصرٌ آخر؟» لغزًا. */}
@@ -639,7 +681,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                         {el.trimIn.toFixed(1)}–{el.trimOut.toFixed(1)}s
                       </span>
                     )}
-                    {timed && <Icon size={13} path="M10 17a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM10 8v3l2 1M8 3h4" style={{ color: hasCustomAnimation(el.anim.tracks) ? 'var(--accentText)' : 'var(--muted)' }} />}
+                    {timed && el.type !== 'audio' && <Icon size={13} path="M10 17a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM10 8v3l2 1M8 3h4" style={{ color: hasCustomAnimation(el.anim.tracks) ? 'var(--accentText)' : 'var(--muted)' }} />}
                   </button>
                   )}
                   {timed && (
@@ -657,7 +699,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                   )}
                 </div>
                 {expanded &&
-                  EXPANDABLE_PROPERTIES.map((p) => (
+                  expandablePropertiesFor(el).map((p) => (
                     <div key={p} style={{ height: PROP_ROW_H, display: 'flex', alignItems: 'center', padding: '0 10px 0 28px', fontSize: 10.5, color: 'var(--muted)', borderBottom: '1px solid var(--line)' }}>
                       {propLabel(p)}
                     </div>
@@ -760,7 +802,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
             selectedKfData &&
             selectedKfEl &&
             (() => {
-              const propIdx = selectedKf.property === 'opacity' ? -1 : EXPANDABLE_PROPERTIES.indexOf(selectedKf.property);
+              const propIdx = selectedKf.property === 'opacity' ? -1 : expandablePropertiesFor(selectedKfEl).indexOf(selectedKf.property);
               const rowTopWithinLayer = propIdx === -1 ? 0 : CLIP_ROW_H + propIdx * PROP_ROW_H;
               const rowHeight = propIdx === -1 ? CLIP_ROW_H : PROP_ROW_H;
               const rowTop = RULER_H + (layerTop.get(selectedKfEl.id) ?? 0) + rowTopWithinLayer;
@@ -772,7 +814,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
               // the row, since its height varies (value row, easing row, and an optional
               // bezier editor when a keyframe's easing is 'custom').
               const placeBelow = rowTop - RULER_H < 90;
-              const [min, max] = sliderRange(selectedKf.property);
+              const [min, max] = sliderRange(selectedKf.property, selectedKfEl);
               // **رقمٌ واحدٌ يُغذّي السطحَين.** القيمةُ المخزونةُ تُحوَّل إلى الوحدة
               // المعروضة وتُقصَر على الشبكة **مرّةً واحدة**، ثم تَقرأ المِمسحةُ
               // والحقلُ والمقياسُ هذا الرقمَ بعينه. ولو حَسَب كلُّ سطحٍ لنفسه لَجاز
@@ -846,13 +888,13 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                     />
                     {/* الطريقُ الدقيق — انظر ترويسة `KfValueField`. */}
                     <KfValueField
-                      property={selectedKf.property}
+                      range={[min, max]}
                       display={display}
                       onLive={writeValue}
                       onCommit={() => actions.commitElementEdit()}
                       title={L.kf_value_field_hint}
                     />
-                    <span data-testid="kf-value-unit" style={{ width: 10, color: 'var(--muted)' }}>{selectedKf.property === 'rotation' ? '°' : '%'}</span>
+                    <span data-testid="kf-value-unit" style={{ width: 10, color: 'var(--muted)' }}>{selectedKf.property === 'rotation' ? '°' : selectedKf.property === 'reveal' ? '#' : '%'}</span>
                     <button
                       data-testid="kf-delete"
                       title={L.delete_keyframe}

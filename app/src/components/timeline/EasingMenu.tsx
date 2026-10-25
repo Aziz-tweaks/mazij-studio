@@ -14,12 +14,15 @@ export const EASE_LABEL_KEY: Record<EasingId, string> = {
   easeInOut: 'ease_in_out',
   back: 'ease_back',
   bounce: 'ease_bounce',
+  hold: 'ease_hold',
   custom: 'ease_custom',
 };
 
 function miniCurveD(easing: EasingId, bezier: readonly [number, number, number, number]) {
   const w = 26;
   const h = 14;
+  // الدرجةُ تُرسَم درجةً: عينةُ ١٠ نقاطٍ كانت ستُظهر آخرَها خطًّا مائلًا كاذبًا.
+  if (easing === 'hold') return `M 0 ${h} L ${w} ${h} L ${w} 0`;
   const steps = 10;
   let d = '';
   for (let i = 0; i <= steps; i++) {

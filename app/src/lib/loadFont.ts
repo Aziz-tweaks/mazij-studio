@@ -1,7 +1,10 @@
 import { inTauri } from './tauriEnv';
+import { registerFontBytes } from './fontsStore';
 
 export interface LoadedFont {
   family: string;
+  /** بايتاتُ الملف — تُحفَظ في مكتبة الخطوط فيبقى الخطُّ بعد إعادة التشغيل (`fontsStore.ts`). */
+  bytes: Uint8Array;
 }
 
 function guessFileName(url: string) {
@@ -34,8 +37,7 @@ export async function fetchAndRegisterFont(url: string, familyName: string): Pro
     bytes = await res.arrayBuffer();
   }
 
-  const face = new FontFace(familyName, bytes);
-  await face.load();
-  (document.fonts as FontFaceSet).add(face);
-  return { family: familyName };
+  // التسجيلُ الواحد للمكتبة كلّها — بمدى الأوزان الكامل، فلا يُعرَّض خطٌّ عريضٌ مرّةً ثانية.
+  await registerFontBytes(familyName, bytes);
+  return { family: familyName, bytes: new Uint8Array(bytes) };
 }

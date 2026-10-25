@@ -234,12 +234,18 @@ async function main() {
   // simply out of place on a still. The geometry assertions above deliberately ran
   // first, on the default 1080×1080 artboard they are about.
   await switchToTimed(page);
-  for (const tool of ['fx', 'audio']) {
+  for (const tool of ['fx']) {
     await page.locator(`[data-tool="${tool}"]`).click();
     await page.waitForTimeout(90);
     const shown = await page.locator(`[data-testid="library-soon-${tool}"]`).count();
     assert(shown === 1, `pressing "${tool}" opens a panel that names the tool and declares «قريبًا» — never silence`);
   }
+  // «صوت» خرج من «قريبًا» (٢٥ أكتوبر ٢٠٢٦): صار له لوحٌ حقيقيّ — استيرادُ ملفٍّ عند المؤشّر
+  // وأصواتُ المشروع (`AudioLibrary`). والقرارُ الذي يقيسه هذا الفحص باقٍ كما هو: الزرّ لا
+  // يصمت أبدًا — كان يقول «قريبًا»، وصار يفتح ما بُني.
+  await page.locator('[data-tool="audio"]').click();
+  await page.waitForTimeout(90);
+  assert((await page.locator('[data-testid="audio-library"]').count()) === 1 && (await page.locator('[data-testid="library-soon-audio"]').count()) === 0, 'pressing "audio" opens the real audio panel (import at the playhead + the project\'s audio) — never silence, and no longer «قريبًا»');
   for (const tool of ['image', 'lottie', 'video']) {
     await page.locator(`[data-tool="${tool}"]`).click();
     await page.waitForTimeout(90);

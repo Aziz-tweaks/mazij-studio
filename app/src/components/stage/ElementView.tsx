@@ -4,11 +4,14 @@ import type { DocElement, TextElement } from '../../state/elements';
 import { resolveShapeLabelColor, resolveTextColor } from '../../state/elements';
 import type { Lang } from '../../i18n/strings';
 import { computeImageCropLayout } from '../../lib/imageCrop';
-import { maskLocalPolygonPoints, geoToPx } from '../../lib/geometry';
-import { commandsToSvgPath, pathElementCommands, type PathCmd } from '../../lib/pathGeometry';
+import { geoToPx } from '../../lib/geometry';
+import { maskClipLocal } from '../../lib/maskGeometry';
+import { commandsToSvgPath, ellipsePathCmds, pathElementCommands, roundRectPathCmds, type PathCmd } from '../../lib/pathGeometry';
+import { isTrimmed, trimPathCmds } from '../../lib/pathTrim';
+import { animTimeAt, resolveAnimAt } from '../../lib/animTimeline';
 import { appearanceBoxShadowCss, fillsToCss, legacyBorderCss, resolveAppearance, withAlpha } from '../../lib/appearance';
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from '../../lib/variableStroke';
-import { SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, unitVisualToCssTransform } from '../../lib/textStagger';
+import { SHOWN_UNIT_VISUAL, TYPE_BREAK, buildStaggerTokens, resolveUnitVisual, typedSplit, typedUnitCount, unitVisualToCssFilter, unitVisualToCssTransform, type StaggerToken, type UnitVisual } from '../../lib/textStagger';
 import { shapeTextOnCurve } from '../../lib/textOnPath';
 import { wrapLines, justifyCanvasLines } from '../../lib/exportArtboard';
 import { LottiePreview } from './LottiePreview';
@@ -55,17 +58,47 @@ function TextOnPathView({ el, pathShape, size, color, dir }: { el: TextElement; 
  * 'line', each authored line becomes its own block so it stacks as its own row
  * inside the parent's `flexDirection: 'column'` container (see `baseStyle` below) —
  * see `src/lib/textStagger.ts` for why 'line' means an authored newline, not an
- * auto-wrapped visual line. */
+ * auto-wrapped visual line.
+ *
+ * **ثلاثةُ تصحيحاتٍ في ٢٥ أكتوبر ٢٠٢٦**، وكلٌّ منها فرقٌ كان قائمًا بين ما يُرى وما يُصدَّر:
+ *
+ * ١. **الحرفُ العربيّ موصول.** كلُّ وحدةٍ تُرسَم بنصّها المُحاط بمحرف الوصل (`tok.shaped`)
+ *    فتأخذ صورتَها في كلمتها — كان «سيف» يخرج «س ي ف». انظر `textStagger.ts`.
+ * ٢. **لا كسرَ سطرٍ داخل الكلمة.** الكتلُ المتجاورة (`inline-block`) يكسر Chromium السطرَ
+ *    بينها — مقيسٌ: «abcdefghijklmnop» في صندوقٍ ضيّق انكسرت بعد حرفها التاسع — بينما
+ *    يكسر القُماشُ عند المسافات وحدها (`wrapStaggerTokensIntoLines`). فحروفُ الكلمة الواحدة
+ *    تُجمَع في `white-space: nowrap`، فلا يبقى موضعُ كسرٍ إلّا المسافة، في الرسّامتين.
+ * ٣. **«الكتابة»**: البادئةُ الظاهرةُ نصٌّ عاديٌّ والباقي مخفيٌّ في مكانه (`visibility`) بعد
+ *    محرف عدم الوصل — فيبقى التخطيطُ تخطيطَ النصّ الكامل (البادئةُ تبدأ من حافّة بداية
+ *    سطرها ولا تقفز)، ويُشكَّل آخرُ حرفٍ ظاهرٍ بصورته الأخيرة كما يرسمه القُماش. */
 function renderStaggeredText(el: TextElement, time: number): ReactNode {
   const cfg = el.textAnim;
-  const clipStart = el.anim.start;
   const tokens = buildStaggerTokens(el.text, cfg, el.id);
+  const visualOf = (tok: StaggerToken): UnitVisual => (tok.rank === null ? SHOWN_UNIT_VISUAL : resolveUnitVisual(cfg, el.anim, tok.rank, time));
+  if (cfg.effect === 'type') {
+    const n = tokens.reduce((m, t) => (t.order !== null ? Math.max(m, t.order + 1) : m), 0);
+    const k = typedUnitCount(cfg, el.anim, n, time);
+    if (cfg.unit === 'line') {
+      return tokens.map((tok, i) => (
+        <div key={i} data-stagger-unit="" style={{ visibility: tok.order !== null && tok.order < k ? 'visible' : 'hidden' }}>
+          {tok.text || ' '}
+        </div>
+      ));
+    }
+    const { visible, rest } = typedSplit(tokens, k);
+    return (
+      <span data-stagger-typed={k}>
+        {visible}
+        {rest && <span style={{ visibility: 'hidden' }}>{TYPE_BREAK + rest}</span>}
+      </span>
+    );
+  }
   if (cfg.unit === 'line') {
     return tokens.map((tok, i) => {
-      const visual = tok.rank === null ? SHOWN_UNIT_VISUAL : resolveUnitVisual(cfg, tok.rank, clipStart, time);
+      const visual = visualOf(tok);
       return (
-        <div key={i} style={{ opacity: visual.opacity, transform: unitVisualToCssTransform(visual), transformOrigin: 'center' }}>
-          {tok.text || ' '}
+        <div key={i} data-stagger-unit="" style={{ opacity: visual.opacity, transform: unitVisualToCssTransform(visual), filter: unitVisualToCssFilter(visual), transformOrigin: 'center' }}>
+          {tok.text || ' '}
         </div>
       );
     });
@@ -76,19 +109,28 @@ function renderStaggeredText(el: TextElement, time: number): ReactNode {
   // anonymous item), so one token per top-level <span> would stack each character on
   // its own flex row instead of flowing inline. One wrapper element keeps this whole
   // run as a single flex item, with normal inline wrapping for the spans inside it.
-  return (
-    <span>
-      {tokens.map((tok, i) => {
-        if (tok.rank === null) return tok.text;
-        const visual = resolveUnitVisual(cfg, tok.rank, clipStart, time);
-        return (
-          <span key={i} style={{ display: 'inline-block', opacity: visual.opacity, transform: unitVisualToCssTransform(visual), transformOrigin: 'center bottom' }}>
-            {tok.text}
-          </span>
-        );
-      })}
-    </span>
-  );
+  const out: ReactNode[] = [];
+  let run: ReactNode[] = [];
+  const flush = () => {
+    if (!run.length) return;
+    out.push(run.length === 1 ? run[0] : <span key={`w${out.length}`} style={{ whiteSpace: 'nowrap' }}>{run}</span>);
+    run = [];
+  };
+  tokens.forEach((tok, i) => {
+    if (tok.rank === null) {
+      flush();
+      out.push(tok.text);
+      return;
+    }
+    const visual = visualOf(tok);
+    run.push(
+      <span key={i} data-stagger-unit="" style={{ display: 'inline-block', opacity: visual.opacity, transform: unitVisualToCssTransform(visual), filter: unitVisualToCssFilter(visual), transformOrigin: 'center bottom' }}>
+        {tok.shaped}
+      </span>,
+    );
+  });
+  flush();
+  return <span>{out}</span>;
 }
 
 let measureCtx: CanvasRenderingContext2D | null = null;
@@ -206,13 +248,17 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
   const selOutline = `${1.5 * px}px solid var(--accent)`;
 
   // Clipping mask applies identically to any element kind — computed once here (not
-  // image-specific) and merged into baseStyle so every branch below inherits it.
+  // image-specific) and merged into baseStyle so every branch below inherits it. The
+  // outline is `maskClipLocal`'s: the mask's real shape under its own motion at `time`,
+  // brought into this box's local pixels by the inverse of this element's transform —
+  // which is exactly the frame CSS `clip-path` is resolved in (the border box, before
+  // `transform`), so the cut stays where the mask is while the content moves.
   const frameBoxPx = geoToPx(el.geo, size);
-  const clipPath = maskShape
-    ? `polygon(${maskLocalPolygonPoints(frameBoxPx, geoToPx(maskShape.geo, size), maskShape.shape === 'ellipse' ? 'ellipse' : 'rect')
-        .map((p) => `${(p.x / frameBoxPx.w) * 100}% ${(p.y / frameBoxPx.h) * 100}%`)
-        .join(',')})`
-    : undefined;
+  const maskClip = maskShape ? maskClipLocal(el, maskShape, size, time ?? 0) : null;
+  // «بداية الخط» و«نهاية الخط» عند هذه اللحظة — للأشكال وحدها (`src/lib/pathTrim.ts`).
+  const trimVisual = el.type === 'shape' ? resolveAnimAt(el.anim, time ?? 0) : null;
+  const trimmed = !!trimVisual && isTrimmed(trimVisual.trimStart, trimVisual.trimEnd);
+  const clipPath = maskClip ? `path(${maskClip.evenOdd ? 'evenodd, ' : ''}'${commandsToSvgPath(maskClip.cmds, 1, 1) || 'M0 0'}')` : undefined;
 
   const baseStyle: CSSProperties = {
     position: 'absolute',
@@ -463,7 +509,8 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
         style={{ ...baseStyle, overflow: 'hidden', background: el.src ? undefined : 'rgba(127,127,127,.12)' }}
       >
         {el.src ? (
-          <VideoPreview src={el.src} poster={el.poster} trimIn={el.trimIn} trimOut={el.trimOut} loop={el.loop} time={time ?? 0} />
+          // زمنُ المقطع لا زمنُ المستند: الفيديو يبدأ من أوّله حيث يبدأ مقطعُه (`audioMix.ts`).
+          <VideoPreview src={el.src} poster={el.poster} trimIn={el.trimIn} trimOut={el.trimOut} loop={el.loop} time={animTimeAt(el.anim, time ?? 0)} />
         ) : (
           <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>
             <svg width="7cqw" height="7cqw" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round">
@@ -474,6 +521,10 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
       </div>
     );
   }
+
+  // الصوتُ طبقةٌ لا تُرى: لا عقدةَ على اللوحة، فلا نقرةَ تصيبها ولا صندوقَ يُرسَم لها.
+  // يُحدَّد من صفّه في قائمة الطبقات، ويُسمَع من `AudioPlayback`.
+  if (el.type === 'audio') return null;
 
   // shape
   // Roadmap #17 — rect/ellipse get the full multi-layer treatment: every fill layer
@@ -490,8 +541,13 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
   const labelColor = el.label ? resolveShapeLabelColor(el, pal) : undefined;
   const fillCss = fillsToCss(resolved.fills);
   const legacyBorder = resolved.shadows.length === 0 ? legacyBorderCss(resolved.strokes) : undefined;
-  const strokeShadowStyle: CSSProperties =
-    legacyBorder !== undefined ? { border: legacyBorder } : { border: 'none', boxShadow: appearanceBoxShadowCss(resolved.strokes, resolved.shadows) };
+  // الحدُّ المقصوص لا يُرسَم إطارًا ولا حلقةَ ظلّ — CSS لا يملك حدًّا جزئيًّا — بل مسارًا
+  // في طبقةٍ فوقه (أدناه)، والظلالُ وحدها تبقى في `box-shadow`.
+  const strokeShadowStyle: CSSProperties = trimmed
+    ? { border: 'none', boxShadow: appearanceBoxShadowCss([], resolved.shadows) }
+    : legacyBorder !== undefined
+      ? { border: legacyBorder }
+      : { border: 'none', boxShadow: appearanceBoxShadowCss(resolved.strokes, resolved.shadows) };
   // **نصفُ القطر كسرٌ من أقصر ضلعَي الصندوق، لا نسبةٌ مئويّة من كلٍّ منهما.**
   // كان `${radius * 100}%`، والنسبة في CSS تُحسب من العرض أفقيًّا ومن الارتفاع
   // رأسيًّا — فشريطٌ عريض بـ`radius: 0.5` صار **بيضاويًّا** مدبَّب الطرفين على
@@ -533,6 +589,7 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
                 fillRule={multiRegion ? 'evenodd' : 'nonzero'}
                 fill={closedForFill && topFill ? fillColor : 'none'}
                 fillOpacity={topFill?.opacity}
+                data-trimmed={trimmed ? 'true' : undefined}
                 // لا حدَّ متى خلت كومة المظهر من طبقة حدٍّ مرئيّة. كان الاحتياط
                 // هنا `var(--accent)` بسُمك 2 — وهو ما يجعل شكل مسار معبَّأً بلا
                 // حدٍّ (مثلّثًا أو نجمة من المكتبة) يظهر بحدٍّ لم يطلبه أحد، ويُخالف
@@ -540,11 +597,24 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
                 // (`paintStrokesCanvas` على مصفوفة خالية = لا شيء). وكل مسار
                 // قديم يمرّ بـ`migrateAppearance` التي تمنحه طبقة حدٍّ إلزاميّة،
                 // فـ`topStroke` موجودة له دائمًا ولا يتغيّر شيء في أي مستند قائم.
-                stroke={isOutline || !topStroke ? 'none' : topStroke.color}
-                strokeOpacity={isOutline || !topStroke ? undefined : topStroke.opacity}
-                strokeWidth={isOutline || !topStroke ? 0 : topStroke.width}
+                stroke={isOutline || !topStroke || trimmed ? 'none' : topStroke.color}
+                strokeOpacity={isOutline || !topStroke || trimmed ? undefined : topStroke.opacity}
+                strokeWidth={isOutline || !topStroke || trimmed ? 0 : topStroke.width}
                 vectorEffect="non-scaling-stroke"
               />
+              {/* الحدُّ المقصوص مسارٌ ثانٍ بلا تعبئة: التعبئةُ على الشكل كاملًا أعلاه، والحدُّ
+                  على ما بين «بداية الخط» و«نهايته» وحده. والطولُ يُقاس ببكسل الصندوق. */}
+              {trimmed && !isOutline && topStroke && trimVisual && (
+                <path
+                  data-trim-stroke="true"
+                  d={commandsToSvgPath(trimPathCmds(cmds, trimVisual.trimStart, trimVisual.trimEnd, frameBoxPx.w, frameBoxPx.h), 100, 100)}
+                  fill="none"
+                  stroke={topStroke.color}
+                  strokeOpacity={topStroke.opacity}
+                  strokeWidth={topStroke.width}
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
               {/* الحدّ متغيّر السُّمك: مضلَّعٌ معبَّأ بلون الحدّ، لا حدٌّ. ولا
                   `vectorEffect` هنا عن قصد — هذا الشكلُ **هندسةٌ** مبنيّةٌ سلفًا
                   في فضاء بكسل الصندوق، و`preserveAspectRatio="none"` يردّ الكسور
@@ -554,7 +624,7 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
                 <path
                   key={s.id}
                   data-variable-stroke={s.id}
-                  d={commandsToSvgPath(variableStrokeOutlineCmds(cmds, s.widthProfile!, s.width, frameBoxPx.w, frameBoxPx.h), 100, 100)}
+                  d={commandsToSvgPath(variableStrokeOutlineCmds(cmds, s.widthProfile!, s.width, frameBoxPx.w, frameBoxPx.h, trimmed && trimVisual ? { start: trimVisual.trimStart, end: trimVisual.trimEnd } : undefined), 100, 100)}
                   fill={s.color}
                   fillOpacity={s.opacity}
                   fillRule="nonzero"
@@ -570,6 +640,24 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
             <span style={{ color: labelColor, fontWeight: 800, fontSize: '5.4cqw', pointerEvents: 'none' }}>{el.label}</span>
           )}
         </div>
+      )}
+      {/* حدُّ المستطيل أو البيضة المقصوصُ: مسارٌ لكلّ طبقة حدٍّ بالبكسل في `viewBox` بقدر
+          الصندوق نفسه — فلا تشويهَ في السُّمك — بنفس إزاحة «داخل/خارج» التي يرسمها القُماش. */}
+      {trimmed && trimVisual && el.shape !== 'path' && (
+        <svg data-trim-strokes="true" viewBox={`0 0 ${frameBoxPx.w} ${frameBoxPx.h}`} preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }}>
+          {resolved.strokes
+            .filter((st) => st.width > 0)
+            .map((st, i) => {
+              const inset = st.position === 'inside' ? st.width / 2 : st.position === 'outside' ? -st.width / 2 : 0;
+              const w2 = Math.max(0, frameBoxPx.w - 2 * inset);
+              const h2 = Math.max(0, frameBoxPx.h - 2 * inset);
+              const base =
+                el.shape === 'ellipse'
+                  ? ellipsePathCmds(inset, inset, w2, h2)
+                  : roundRectPathCmds(inset, inset, w2, h2, Math.max(0, Math.min(Math.min(frameBoxPx.w, frameBoxPx.h) * el.radius - inset, Math.min(w2, h2) / 2)));
+              return <path key={i} d={commandsToSvgPath(trimPathCmds(base, trimVisual.trimStart, trimVisual.trimEnd, 1, 1), 1, 1)} fill="none" stroke={st.color} strokeOpacity={st.opacity} strokeWidth={st.width} />;
+            })}
+        </svg>
       )}
       {el.label && el.labelPosition === 'inline-end' && (
         <span

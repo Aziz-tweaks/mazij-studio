@@ -187,7 +187,9 @@ async function main() {
   await page.waitForTimeout(250);
   const keptFocus = focusTrail.every((t) => typeof t === 'string' && t.endsWith('-hex'));
   assert(keptFocus, `التركيز باقٍ في الحقل بعد كل حرف — got ${JSON.stringify(focusTrail)}`);
-  assert((await page.locator('[data-testid="library-soon-audio"]').count()) === 0, 'الحرف `a` بقي حرفًا في الحقل ولم يصر اختصارَ أداة الصوت');
+  // لوحُ «صوت» صار حقيقيًّا (٢٥ أكتوبر ٢٠٢٦، `audio-library`) بعد أن كان «قريبًا»
+  // (`library-soon-audio`)؛ والكاشفُ يبحث عن الاثنين كي لا يصير صادقًا دائمًا بغياب اللوح القديم.
+  assert((await page.locator('[data-testid="library-soon-audio"], [data-testid="audio-library"]').count()) === 0, 'الحرف `a` بقي حرفًا في الحقل ولم يصر اختصارَ أداة الصوت');
 
   // --- ٥. اللون المكتوب يُطلى فعلًا على النصّ ---------------------------------------
   const paintedText = await page.locator(`[data-el-id="${txt}"]`).evaluate((e) => getComputedStyle(e.querySelector('*') ?? e).color);

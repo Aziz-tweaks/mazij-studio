@@ -3,6 +3,7 @@ import { Icon } from '../Icon';
 import { BRAND, PALETTES, sizeAt } from '../../data/constants';
 import type { AssetsTab as AssetsTabId } from '../../state/types';
 import { firstSelectedElement, useStudio } from '../../state/StudioContext';
+import { isAudioFile } from '../../lib/audioFile';
 
 /** لوح «علامتي» و«ملفاتي» — بابان في شريط الإضافة على لوحٍ واحد.
  *
@@ -26,6 +27,7 @@ export function AssetsTab() {
             return (
               <button
                 key={id}
+                data-testid={`assets-tab-${id}`}
                 onClick={() => actions.setAssetsTab(id)}
                 style={{ height: 32, padding: '0 10px', border: 0, borderBottom: `2px solid ${active ? 'var(--accent)' : 'transparent'}`, background: 'transparent', color: active ? 'var(--text)' : 'var(--muted)', fontSize: 12, fontWeight: 600, marginBottom: -1 }}
               >
@@ -56,6 +58,7 @@ function FilesPane() {
       if (file.type.startsWith('image/')) void actions.insertImageFromFile(file, p);
       else if (/\.(json|lottie)$/i.test(file.name)) void actions.insertLottieFromFile(file, p);
       else if (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)) void actions.insertVideoFromFile(file, p);
+      else if (isAudioFile(file)) void actions.insertAudioFromFile(file);
     }
   };
   return (
@@ -84,7 +87,7 @@ function FilesPane() {
           data-testid="upload-input"
           type="file"
           multiple
-          accept="image/*,video/*,.json,.lottie"
+          accept="image/*,video/*,audio/*,.json,.lottie"
           style={{ display: 'none' }}
           onChange={(e) => {
             place(e.target.files);
@@ -101,8 +104,53 @@ function FontsPane() {
   const { state, actions, dict: L } = useStudio();
   const selectedEl = firstSelectedElement(state);
   const selectedFontFamily = selectedEl?.type === 'text' ? selectedEl.fontFamily : null;
+  const [systemName, setSystemName] = useState('');
   return (
     <>
+      {/* **خطٌّ من الجهاز** — ملفٌّ يُحفَظ في مكتبة الخطوط، أو خطٌّ مثبّتٌ يُستعمَل باسمه. كان
+          «أضف خط» رابطًا وحده، والخطُّ المحمَّل يضيع عند إعادة التشغيل (`fontsStore.ts`). */}
+      <div data-testid="font-device" style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>
+        <button
+          data-testid="font-from-file"
+          onClick={() => void actions.addFontFromFile()}
+          style={{ height: 34, border: '1px dashed var(--lineStrong)', borderRadius: 'var(--rs)', background: 'var(--surface)', color: 'var(--text)', fontSize: 12.5, fontWeight: 700 }}
+        >
+          {L.font_from_file}
+        </button>
+        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{L.font_from_file_hint}</div>
+        <div style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>{L.font_system}</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            data-testid="font-system-name"
+            dir="ltr"
+            value={systemName}
+            onChange={(e) => setSystemName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                actions.addSystemFont(systemName);
+                setSystemName('');
+              }
+            }}
+            placeholder={L.font_system_ph}
+            style={{ flex: 1, minWidth: 0, height: 32, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface)', outline: 0, fontSize: 12, textAlign: 'left' }}
+          />
+          <button
+            data-testid="font-system-use"
+            onClick={() => {
+              actions.addSystemFont(systemName);
+              setSystemName('');
+            }}
+            style={{ height: 32, padding: '0 12px', border: 0, borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', fontSize: 12, fontWeight: 600, opacity: systemName.trim() ? 1 : 0.5 }}
+          >
+            {L.font_use}
+          </button>
+        </div>
+        {state.fontError && (
+          <div data-testid="font-error" style={{ fontSize: 11, color: 'var(--danger)', lineHeight: 1.5 }}>
+            {state.fontError}
+          </div>
+        )}
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)' }}>
         <div style={{ fontSize: 12, fontWeight: 600 }}>{L.add_font}</div>
         <div style={{ display: 'flex', gap: 6 }}>
@@ -127,35 +175,50 @@ function FontsPane() {
         {state.fonts.map((f) => {
           const selected = selectedFontFamily === f.family;
           const selectable = f.status === 'ready' && !!selectedEl && selectedEl.type === 'text';
+          // الصفُّ حاويةٌ لا زرّ: زرُّ الاختيار يُعطَّل بلا نصٍّ محدَّد، والزرُّ المعطَّل يبتلع
+          // نقرات ما بداخله — فكان «×» الإزالة ميّتًا كلّما لم يُحدَّد نصّ (مقيسٌ في
+          // `qa/user-fonts.spec.mjs`). فالإزالةُ زرٌّ شقيقٌ لا ابن.
           return (
-            <button
-              key={f.id}
-              onClick={() => selectable && actions.setElementFont(selectedEl!.id, f.family)}
-              disabled={!selectable}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--line)', border: 0, background: selected ? 'var(--accentSoft)' : 'transparent', textAlign: 'start', cursor: selectable ? 'pointer' : 'default', width: '100%' }}
-            >
-              <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 17, lineHeight: 1.2, fontFamily: f.family, opacity: f.status === 'ready' ? 1 : 0.5 }}>{L.sample}</span>
-                <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'start', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
-                {f.status === 'error' && f.error && (
-                  <span style={{ fontSize: 10, color: 'var(--danger)', textAlign: 'start' }}>{f.error}</span>
-                )}
-              </span>
-              {f.custom && (
-                <span
-                  style={{
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                    fontSize: 10,
-                    fontWeight: 600,
-                    background: f.status === 'ready' ? 'var(--accentSoft)' : f.status === 'error' ? 'rgba(255,107,107,.14)' : 'var(--surface2)',
-                    color: f.status === 'ready' ? 'var(--accentText)' : f.status === 'error' ? 'var(--danger)' : 'var(--muted)',
-                  }}
-                >
-                  {f.status === 'ready' ? L.ready : f.status === 'error' ? L.font_error : L.loading}
+            <div key={f.id} style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--line)', background: selected ? 'var(--accentSoft)' : 'transparent' }}>
+              <button
+                onClick={() => selectable && actions.setElementFont(selectedEl!.id, f.family)}
+                disabled={!selectable}
+                style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 0, background: 'transparent', textAlign: 'start', cursor: selectable ? 'pointer' : 'default' }}
+              >
+                <span data-testid={`font-row-${f.name}`} data-family={f.family} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: 17, lineHeight: 1.2, fontFamily: f.family, opacity: f.status === 'ready' ? 1 : 0.5 }}>{L.sample}</span>
+                  <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'start', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.name}</span>
+                  {f.status === 'error' && f.error && (
+                    <span style={{ fontSize: 10, color: 'var(--danger)', textAlign: 'start' }}>{f.error}</span>
+                  )}
                 </span>
+                {f.custom && (
+                  <span
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      background: f.status === 'ready' ? 'var(--accentSoft)' : f.status === 'error' ? 'rgba(255,107,107,.14)' : 'var(--surface2)',
+                      color: f.status === 'ready' ? 'var(--accentText)' : f.status === 'error' ? 'var(--danger)' : 'var(--muted)',
+                    }}
+                  >
+                    {f.status === 'ready' ? (f.system ? L.font_system_badge : L.ready) : f.status === 'error' ? L.font_error : L.loading}
+                  </span>
+                )}
+              </button>
+              {f.user && (
+                <button
+                  data-testid={`font-remove-${f.name}`}
+                  title={L.font_remove}
+                  aria-label={L.font_remove}
+                  onClick={() => actions.removeUserFont(f.family)}
+                  style={{ width: 28, height: 28, marginInlineEnd: 6, display: 'grid', placeItems: 'center', border: 0, borderRadius: 6, background: 'transparent', color: 'var(--muted)', fontSize: 15, cursor: 'pointer' }}
+                >
+                  ×
+                </button>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

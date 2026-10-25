@@ -3,6 +3,7 @@ import { mkdir, remove, writeFile } from '@tauri-apps/plugin-fs';
 import { Command } from '@tauri-apps/plugin-shell';
 
 import { renderArtboardFrames, type ArtboardRenderSpec } from './exportArtboard';
+import { audioMixFilter, audioMixPlan, dataUrlBytes, extForDataUrl, type MixSegment } from './audioMix';
 import type { ShutterSpec } from './motionBlur';
 
 export type VideoFormat = 'mp4' | 'gif';
@@ -49,6 +50,22 @@ async function runFfmpeg(args: string[], totalFrames: number, onFrame: (frame: n
     command.on('error', (err) => reject(new Error(String(err))));
     command.spawn().catch(reject);
   });
+}
+
+/** أفي هذا الملف مسارُ صوت؟ — FFmpeg يطبع سطرَ «Audio:» لكلّ مسارٍ قبل أن يسأل عن مخرج.
+ * فيديو صامتٌ يُسقَط من الخلط: `[n:a]` على ملفٍّ بلا صوتٍ خطأٌ يُفشل التصدير كلَّه. */
+async function hasAudioStream(path: string): Promise<boolean> {
+  const probe = Command.sidecar('binaries/ffmpeg', ['-i', path]);
+  let stderr = '';
+  probe.stderr.on('data', (line: string) => {
+    stderr += `${line}\n`;
+  });
+  await new Promise<void>((resolve) => {
+    probe.on('close', () => resolve());
+    probe.on('error', () => resolve());
+    probe.spawn().catch(() => resolve());
+  });
+  return /Stream #\d+:\d+[^\n]*Audio:/.test(stderr);
 }
 
 /** Renders the current document's animation to a real MP4 or GIF file: rasterizes
@@ -116,11 +133,30 @@ export async function exportVideoTarget(
 
     if (opts.format === 'mp4') {
       const crf = opts.quality === 'high' ? '18' : '23';
+      // **الصوت** (٢٥ أكتوبر ٢٠٢٦): طبقاتُ الصوت وصوتُ الفيديو، بخطّة `audioMixPlan` نفسِها
+      // التي تُشغّل بها المعاينة (`mediaTimeAt`). كلُّ مصدرٍ يُكتب ملفًّا مؤقّتًا ويُمرَّر مدخلًا
+      // بعد الإطارات، ومرشّحُ `audioMixFilter` يقصّه ويؤخّره ويخلطه. والمستندُ بلا صوتٍ يُصدَّر
+      // بالسطر القديم حرفًا — لا مسارَ صوتٍ فارغًا في ملفّه.
+      const plan = audioMixPlan(frameSpec.elements, opts.durationSeconds);
+      const audioPaths: string[] = [];
+      const segments: MixSegment[] = [];
+      for (let k = 0; k < plan.inputs.length; k++) {
+        const el = plan.inputs[k];
+        if (!el.src) continue;
+        const path = await join(tmpDir, `audio-${k}.${extForDataUrl(el.src)}`);
+        await writeFile(path, dataUrlBytes(el.src));
+        if (el.type === 'video' && !(await hasAudioStream(path))) continue;
+        audioPaths.push(path);
+        segments.push({ ...plan.segments[k], input: audioPaths.length });
+      }
+      const mix = audioMixFilter(segments);
       await runFfmpeg(
         [
           '-y',
           '-framerate', String(opts.fps),
           '-i', inputPattern,
+          ...audioPaths.flatMap((p) => ['-i', p]),
+          ...(mix ? ['-filter_complex', mix.filter, '-map', '0:v', '-map', mix.out, '-c:a', 'aac', '-b:a', '192k'] : []),
           '-frames:v', String(frameCount),
           '-pix_fmt', 'yuv420p',
           '-c:v', 'libx264',

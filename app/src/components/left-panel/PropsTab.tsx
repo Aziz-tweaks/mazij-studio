@@ -5,8 +5,9 @@ import type { HAlign, VAlign } from '../../state/types';
 import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
 import { geoToPx } from '../../lib/geometry';
 import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
-import { ANIM_PROPERTIES, hasCustomAnimation, resolveTextColor } from '../../state/elements';
+import { animPropertiesFor, hasCustomAnimation, resolveTextColor } from '../../state/elements';
 import { keyframeAt } from '../../lib/animTimeline';
+import { isInstantEffect, revealUnitCount, revealValueAt } from '../../lib/textStagger';
 import type { EasingId } from '../../lib/easing';
 import { EASE_LABEL_KEY } from '../timeline/EasingMenu';
 import { DEFAULT_MODEL_ID, downloadModel, getModelBytes, isModelDownloaded, modelById } from '../../lib/localModels';
@@ -21,8 +22,8 @@ import { WIDTH_PROFILE_PRESETS, type StrokeWidthProfile } from '../../lib/variab
 
 const STAGGER_UNITS: StaggerUnit[] = ['char', 'word', 'line'];
 const STAGGER_DIRECTIONS: StaggerDirection[] = ['start', 'end', 'center', 'random'];
-const STAGGER_EFFECTS: StaggerEffect[] = ['fade', 'slide', 'scale', 'rotate'];
-const STAGGER_EASINGS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'back', 'bounce'];
+const STAGGER_EFFECTS: StaggerEffect[] = ['fade', 'slide', 'scale', 'rotate', 'blur', 'none', 'type'];
+const STAGGER_EASINGS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'back', 'bounce', 'hold'];
 
 const WEIGHTS: Array<'regular' | 'medium' | 'bold'> = ['regular', 'medium', 'bold'];
 
@@ -160,6 +161,13 @@ export function PropsTab() {
               </button>
             </section>
           )}
+          {/* **الصوتُ لا يُرى**: لا تحويلَ ولا مظهرَ ولا محاذاة — علوُّه وكتمُه وتوقيتُه وحدها. */}
+          {el.type === 'audio' && (
+            <>
+              <AudioProps el={el} />
+              {MEDIUM_SURFACES[state.medium].motionProps && <TimingSection />}
+            </>
+          )}
           {el.type === 'text' && <TextProps el={el} />}
           {el.type === 'shape' && <ShapeProps el={el} />}
           {el.type === 'image' && <ImageProps el={el} />}
@@ -172,7 +180,7 @@ export function PropsTab() {
           {/* كانت هذه كلّها خلف «احترافي». ألغى المالك الوضعين (٢٤ أكتوبر ٢٠٢٦):
               «العمق يُطلب ولا يُفرض» — فالأقسام حاضرة، والمفاتيح الزمنيّة وحدها
               تنتظر مستندًا له زمن. */}
-            <>
+            {el.type !== 'audio' && <>
               {state.selectedIds.length === 1 && <AppearanceSection el={el} />}
               <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -219,6 +227,8 @@ export function PropsTab() {
                 {state.selectedIds.length === 1 && MEDIUM_SURFACES[state.medium].motionProps && <KeyframeToggleRow el={el} />}
               </section>
 
+              {MEDIUM_SURFACES[state.medium].motionProps && <TimingSection />}
+
               <ArrangeSection />
               {shapeSelection && <BooleanOpsSection shapes={shapeSelection} />}
 
@@ -238,10 +248,58 @@ export function PropsTab() {
                 </div>
               </section>
               {state.selectedIds.length === 1 && <EffectsSection el={el} />}
-            </>
+            </>}
         </>
       )}
     </div>
+  );
+}
+
+/** لوحُ طبقة الصوت: اسمُها وطولُها، وعلوُّها (سحبةٌ واحدة = خطوةُ تراجعٍ واحدة) وكتمُها. */
+function AudioProps({ el }: { el: DocElement & { type: 'audio' } }) {
+  const { actions, dict: L } = useStudio();
+  const fmt = (sec: number) => `${Math.floor(sec / 60)}:${(sec % 60).toFixed(2).padStart(5, '0')}`;
+  return (
+    <section data-testid={`audio-props-${el.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.sec_audio}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.audio_length}</span>
+        <span dir="ltr" data-testid={`audio-length-${el.id}`} style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(el.anim.duration)}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.audio_file_length}</span>
+        <span dir="ltr" style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt(el.durationSec)}</span>
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.audio_volume}</span>
+        <input
+          data-testid={`audio-volume-${el.id}`}
+          dir="ltr"
+          type="range"
+          min={0}
+          max={100}
+          value={Math.round(el.volume * 100)}
+          onChange={(e) => {
+            actions.beginElementEdit(L.undo_audio_volume);
+            actions.liveSetAudioVolume(el.id, Number(e.target.value) / 100);
+          }}
+          onPointerUp={() => actions.commitElementEdit()}
+          onKeyUp={() => actions.commitElementEdit()}
+          onBlur={() => actions.commitElementEdit()}
+          style={{ flex: 1.4, accentColor: 'var(--accent)' }}
+        />
+        <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11, minWidth: 34, textAlign: 'end' }}>{Math.round(el.volume * 100)}%</span>
+      </label>
+      <button
+        data-testid={`audio-mute-${el.id}`}
+        aria-pressed={el.muted}
+        onClick={() => actions.setAudioMuted(el.id, !el.muted)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, height: 28, padding: 0, border: 0, background: 'transparent', color: 'var(--text)', fontSize: 12, textAlign: 'start' }}
+      >
+        <Toggle on={el.muted} />
+        <span style={{ flex: 1 }}>{L.audio_muted}</span>
+      </button>
+    </section>
   );
 }
 
@@ -257,7 +315,7 @@ function KeyframeToggleRow({ el }: { el: DocElement }) {
   const { state, actions, dict: L } = useStudio();
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-      {ANIM_PROPERTIES.map((p: AnimProperty) => {
+      {animPropertiesFor(el).map((p: AnimProperty) => {
         // «عند المؤشّر» صادقةٌ الآن في كلّ موضعٍ بلا استثناء، فلم يبقَ لهذا الصفّ
         // حالةُ تعطيل. وما كان يُعطِّله هو أنّ المؤشّر **قبل** بداية المقطع لا
         // كسرَ له؛ وقد صار زمنَ حركةٍ سالبًا، وهو زمنٌ مشروع. فذهبت
@@ -297,6 +355,112 @@ function KeyframeToggleRow({ el }: { el: DocElement }) {
         );
       })}
     </div>
+  );
+}
+
+/** **«التوقيت» — متى يدخل العنصر ومتى يخرج، بالأرقام.**
+ *
+ * كان الطريقُ الوحيد إلى بداية مقطعٍ ونهايته سحبَ جسمه وحافّته على الخطّ الزمنيّ، وعلى
+ * مستندٍ طوله أربعٌ وأربعون ثانيةً يصير البكسلُ الواحدُ هناك أكثرَ من إطار. فهذان حقلان
+ * بالثواني على شبكة الإطارات، وزرّان يأخذان اللحظةَ من المؤشّر (`[` و`⌥]` في After
+ * Effects)، ومفتاحُ «يظهر في مقطعه فقط» (`ElementAnim.bounded`).
+ *
+ * ويعمل على **كلّ المحدَّد** معًا: مشهدٌ من صورةٍ ونصّين يُوقَّت بإيماءةٍ واحدة. وحقلٌ
+ * تختلف قيمتُه بين المحدَّدين يُعرَض فارغًا بعلامة «مختلف» لا برقمِ أوّلها — رقمٌ واحدٌ
+ * يُعرَض عن عناصرَ مختلفة كذبٌ عن البقيّة. */
+function TimingSection() {
+  const { state, actions, dict: L } = useStudio();
+  const sel = selectedElements(state);
+  if (!sel.length) return null;
+  const ids = sel.map((e) => e.id);
+  const starts = sel.map((e) => e.anim.start);
+  const ends = sel.map((e) => e.anim.start + e.anim.duration);
+  const same = (xs: number[]) => xs.every((x) => Math.abs(x - xs[0]) < 1e-6);
+  const start = same(starts) ? starts[0] : null;
+  const end = same(ends) ? ends[0] : null;
+  const boundedAll = sel.every((e) => !!e.anim.bounded);
+  const locked = sel.every((e) => e.locked);
+  const fieldBox: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 4px 0 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 };
+  const hereBtn: React.CSSProperties = { height: 22, padding: '0 7px', border: '1px solid var(--line)', borderRadius: 999, background: 'transparent', color: 'var(--muted)', fontSize: 10.5, fontWeight: 600 };
+  return (
+    <section data-testid="timing-section" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.sec_timing}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+        {(
+          [
+            { key: 'start', label: L.timing_start, value: start, tip: L.timing_start_here },
+            { key: 'end', label: L.timing_end, value: end, tip: L.timing_end_here },
+          ] as const
+        ).map((f) => (
+          <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <label style={fieldBox}>
+              <span style={{ color: 'var(--muted)', fontSize: 11, minWidth: 34 }}>{f.label}</span>
+              <TimeField
+                testId={`timing-${f.key}`}
+                value={f.value}
+                placeholder={L.timing_mixed}
+                disabled={locked}
+                onCommit={(v) => actions.setClipTiming(ids, f.key === 'start' ? { start: v } : { end: v })}
+              />
+              <span style={{ color: 'var(--muted)', fontSize: 11 }}>{state.lang === 'ar' ? 'ث' : 's'}</span>
+            </label>
+            <button
+              data-testid={`timing-${f.key}-here`}
+              title={f.tip}
+              disabled={locked}
+              onClick={() => actions.setClipTiming(ids, f.key === 'start' ? { start: state.t } : { end: state.t })}
+              style={hereBtn}
+            >
+              {L.timing_from_playhead}
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        data-testid="timing-bounded"
+        aria-pressed={boundedAll}
+        disabled={locked}
+        onClick={() => actions.setClipBounded(ids, !boundedAll)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, height: 28, padding: 0, border: 0, background: 'transparent', color: 'var(--text)', fontSize: 12, textAlign: 'start' }}
+      >
+        <Toggle on={boundedAll} />
+        <span style={{ flex: 1 }}>{L.clip_bounded}</span>
+      </button>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.clip_bounded_hint}</p>
+    </section>
+  );
+}
+
+/** حقلُ ثوانٍ: يُلتزَم عند Enter أو الخروج لا عند كلّ ضغطة — «٢» ثم «٢٫٢» ثم «٢٫٢٧»
+ * ثلاثُ حالاتٍ في الطريق إلى رقمٍ واحد، ولو كُتب كلٌّ منها لانتقل المقطعُ ثلاث مرّات
+ * وامتلأ التراجعُ بخطواتٍ لا معنى لها. ويُعرض بمنزلتين: الإطارُ عند ٣٠ ثلاثُ مئويّات. */
+function TimeField({ value, onCommit, disabled, placeholder, testId }: { value: number | null; onCommit: (v: number) => void; disabled?: boolean; placeholder?: string; testId?: string }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = Number(draft.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).replace('٫', '.'));
+    setDraft(null);
+    if (draft.trim() !== '' && Number.isFinite(v)) onCommit(v);
+  };
+  return (
+    <input
+      data-testid={testId}
+      dir="ltr"
+      inputMode="decimal"
+      disabled={disabled}
+      placeholder={value === null ? placeholder : undefined}
+      value={draft ?? (value === null ? '' : value.toFixed(2))}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit();
+          (e.target as HTMLInputElement).blur();
+        } else if (e.key === 'Escape') setDraft(null);
+      }}
+      onBlur={commit}
+      style={{ flex: 1, minWidth: 0, width: '100%', border: 0, background: 'transparent', outline: 0, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}
+    />
   );
 }
 
@@ -597,8 +761,17 @@ function TextOutlineSection({ el }: { el: TextElement }) {
  * `TextStaggerAnim` in `state/elements.ts` and `docs/CONTROLS.md`. Available on every
  * text element (not gated to the headline like the legacy preset chooser above). */
 function TextStaggerSection({ el }: { el: TextElement }) {
-  const { actions, dict: L } = useStudio();
+  const { state, actions, dict: L } = useStudio();
   const cfg = el.textAnim;
+  const instant = isInstantEffect(cfg.effect);
+  // **توقيتُ كلّ وحدة**: بلا مسار «ظهور» يبقى التلقائيّ (التأخيرُ بين الوحدات)؛ ومعه
+  // تظهر كلُّ وحدةٍ عند مفتاحها. والعدّادُ يقرأ القيمةَ عند المؤشّر بالدالّة نفسِها التي
+  // يرسم بها الرسّامان — فما يقوله اللوحُ هو ما تراه.
+  const keyed = !!el.anim.tracks.reveal?.length;
+  const total = revealUnitCount(el.text, cfg.unit);
+  const shownNow = keyed ? Math.min(total, Math.floor((revealValueAt(el.anim, state.t) ?? 0) + 1e-6)) : null;
+  const allTimed = keyed && shownNow !== null && shownNow >= total;
+  const nextLabel = cfg.unit === 'char' ? L.reveal_next_char : cfg.unit === 'word' ? L.reveal_next_word : L.reveal_next_line;
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -631,22 +804,6 @@ function TextStaggerSection({ el }: { el: TextElement }) {
           {cfg.unit === 'line' && <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.5 }}>{L.stagger_line_hint}</div>}
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {STAGGER_DIRECTIONS.map((d) => {
-              const active = cfg.direction === d;
-              return (
-                <button
-                  key={d}
-                  data-testid={`stagger-dir-${el.id}-${d}`}
-                  onClick={() => actions.setTextStagger(el.id, { direction: d })}
-                  style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)' }}
-                >
-                  {L[`stagger_dir_${d}` as const]}
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {STAGGER_EFFECTS.map((fx) => {
               const active = cfg.effect === fx;
               return (
@@ -662,53 +819,114 @@ function TextStaggerSection({ el }: { el: TextElement }) {
             })}
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <span style={{ color: 'var(--muted)', minWidth: 70 }}>{L.stagger_delay}</span>
-            <input
-              dir="ltr"
-              type="range"
-              min={0}
-              max={300}
-              step={5}
-              value={Math.round(cfg.stagger * 1000)}
-              onChange={(e) => actions.setTextStagger(el.id, { stagger: Number(e.target.value) / 1000 })}
-              style={{ flex: 1, accentColor: 'var(--accent)' }}
-              data-testid={`stagger-delay-${el.id}`}
-            />
-            <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 42, textAlign: 'end', fontSize: 11 }}>{Math.round(cfg.stagger * 1000)}ms</span>
-          </label>
+          {/* «الكتابة» تُظهر بادئةَ النصّ، والبادئةُ بترتيب القراءة وحده — فلا يُعرَض
+              اتّجاهٌ لا أثرَ له (`effectiveDirection`)، ويُقال لماذا مكانه. */}
+          {cfg.effect === 'type' ? (
+            <div data-testid={`stagger-type-hint-${el.id}`} style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.stagger_type_hint}</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {STAGGER_DIRECTIONS.map((d) => {
+                const active = cfg.direction === d;
+                return (
+                  <button
+                    key={d}
+                    data-testid={`stagger-dir-${el.id}-${d}`}
+                    onClick={() => actions.setTextStagger(el.id, { direction: d })}
+                    style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, fontWeight: 500, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)' }}
+                  >
+                    {L[`stagger_dir_${d}` as const]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-            <span style={{ color: 'var(--muted)', minWidth: 70 }}>{L.stagger_unit_duration}</span>
-            <input
-              dir="ltr"
-              type="range"
-              min={50}
-              max={1000}
-              step={10}
-              value={Math.round(cfg.unitDuration * 1000)}
-              onChange={(e) => actions.setTextStagger(el.id, { unitDuration: Number(e.target.value) / 1000 })}
-              style={{ flex: 1, accentColor: 'var(--accent)' }}
-              data-testid={`stagger-duration-${el.id}`}
-            />
-            <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 42, textAlign: 'end', fontSize: 11 }}>{Math.round(cfg.unitDuration * 1000)}ms</span>
-          </label>
-
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {STAGGER_EASINGS.map((id) => {
-              const active = cfg.easing === id;
-              return (
+          <div data-testid={`reveal-timing-${el.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, border: '1px solid var(--line)', borderRadius: 'var(--rs)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ flex: 1, fontSize: 11.5, fontWeight: 600 }}>{L.reveal_timing}</span>
+              {keyed && (
+                <span data-testid={`reveal-count-${el.id}`} dir="auto" style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                  {L.reveal_count(shownNow ?? 0, total)}
+                </span>
+              )}
+            </div>
+            {!keyed && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ color: 'var(--muted)', minWidth: 70 }}>{L.stagger_delay}</span>
+                <input
+                  dir="ltr"
+                  type="range"
+                  min={0}
+                  max={300}
+                  step={5}
+                  value={Math.round(cfg.stagger * 1000)}
+                  onChange={(e) => actions.setTextStagger(el.id, { stagger: Number(e.target.value) / 1000 })}
+                  style={{ flex: 1, accentColor: 'var(--accent)' }}
+                  data-testid={`stagger-delay-${el.id}`}
+                />
+                <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 42, textAlign: 'end', fontSize: 11 }}>{Math.round(cfg.stagger * 1000)}ms</span>
+              </label>
+            )}
+            {!keyed && <div style={{ fontSize: 10.5, color: 'var(--muted)', lineHeight: 1.6 }}>{L.reveal_auto_hint}</div>}
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                data-testid={`reveal-next-${el.id}`}
+                title={L.reveal_next_tip}
+                disabled={el.locked || allTimed || total === 0}
+                onClick={() => actions.revealNextAtPlayhead(el.id)}
+                style={{ flex: 1, height: 28, border: '1px solid var(--accent)', borderRadius: 'var(--rs)', background: 'var(--accentSoft)', color: 'var(--accentText)', fontSize: 11.5, fontWeight: 600, opacity: allTimed ? 0.55 : 1 }}
+              >
+                {allTimed ? L.reveal_all_timed : nextLabel}
+              </button>
+              {keyed && (
                 <button
-                  key={id}
-                  data-testid={`stagger-ease-${el.id}-${id}`}
-                  onClick={() => actions.setTextStagger(el.id, { easing: id })}
-                  style={{ height: 26, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', fontSize: 11, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)' }}
+                  data-testid={`reveal-clear-${el.id}`}
+                  disabled={el.locked}
+                  onClick={() => actions.clearRevealTiming(el.id)}
+                  style={{ height: 28, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--muted)', fontSize: 11 }}
                 >
-                  {L[EASE_LABEL_KEY[id] as keyof typeof L] as string}
+                  {L.reveal_clear}
                 </button>
-              );
-            })}
+              )}
+            </div>
           </div>
+
+          {/* مدّةُ الوحدة ومنحناها لأثرٍ يجري في زمن — والأثرُ الفوريّ لا زمنَ له. */}
+          {!instant && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+              <span style={{ color: 'var(--muted)', minWidth: 70 }}>{L.stagger_unit_duration}</span>
+              <input
+                dir="ltr"
+                type="range"
+                min={50}
+                max={1000}
+                step={10}
+                value={Math.round(cfg.unitDuration * 1000)}
+                onChange={(e) => actions.setTextStagger(el.id, { unitDuration: Number(e.target.value) / 1000 })}
+                style={{ flex: 1, accentColor: 'var(--accent)' }}
+                data-testid={`stagger-duration-${el.id}`}
+              />
+              <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 42, textAlign: 'end', fontSize: 11 }}>{Math.round(cfg.unitDuration * 1000)}ms</span>
+            </label>
+          )}
+
+          {!instant && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {STAGGER_EASINGS.map((id) => {
+                const active = cfg.easing === id;
+                return (
+                  <button
+                    key={id}
+                    data-testid={`stagger-ease-${el.id}-${id}`}
+                    onClick={() => actions.setTextStagger(el.id, { easing: id })}
+                    style={{ height: 26, padding: '0 10px', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 'var(--rs)', fontSize: 11, background: active ? 'var(--accentSoft)' : 'var(--surface2)', color: active ? 'var(--accentText)' : 'var(--text)' }}
+                  >
+                    {L[EASE_LABEL_KEY[id] as keyof typeof L] as string}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </section>

@@ -1,7 +1,7 @@
 import type { Lang } from '../i18n/strings';
 import type { SizeMedium, ToolId } from '../data/constants';
 import { defaultTargetsFor } from '../data/constants';
-import type { DocElement, ElementId } from './elements';
+import type { DocElement, ElementAnim, ElementId, TextStaggerAnim } from './elements';
 // `createDefaultElements` لم يعد يُستورَد هنا: شاشة البداية نقلت البوستر التجريبي الجاهز
 // إلى `starterTemplates.ts` وجعلت المستند الفاضي هو نقطة الانطلاق، فلم يبقَ له إلا
 // ذكرٌ في تعليق أدناه. وبقي `DEFAULT_POLYGON_N` لأن مكتبة الأشكال تحتاجه.
@@ -105,6 +105,10 @@ export interface FontEntry {
   status: 'ready' | 'loading' | 'error';
   custom?: boolean;
   error?: string;
+  /** في مكتبة خطوط المستعمل (`fontsStore.ts`) — يبقى بعد إعادة التشغيل ويُحذَف من القائمة. */
+  user?: boolean;
+  /** خطٌّ مثبّتٌ في الجهاز يُستعمَل باسمه (لا ملفَّ له في المكتبة). */
+  system?: boolean;
 }
 
 /** The undo/redo-able subset of state: the full element list plus artboard-level
@@ -260,6 +264,12 @@ export interface StudioState {
   traceBusyId: ElementId | null;
   /** آخرُ تتبّعٍ فشل: لأيّ صورة وبأيّ رسالة، يعرضها قسمُ الصورة تحت زرّه. */
   traceError: { id: ElementId; message: string } | null;
+  /** **حافظةُ الحركة** («نسخ الحركة» ← «لصق الحركة»): مقطعُ عنصرٍ كاملٌ — مساراته وطوله
+   * وقصّه و«يظهر في مقطعه فقط» — وتتابعُ نصّه إن كان نصًّا. حالةُ واجهةٍ لا مستند:
+   * لا تُحفظ ولا تُسجَّل، كحافظة العناصر. */
+  animClipboard: { anim: ElementAnim; textAnim: TextStaggerAnim | null; fromType: string } | null;
+  /** آخرُ استيرادِ صوتٍ فشل ولماذا — يعرضه لوحُ «صوت» تحت زرّه. */
+  audioError: string | null;
   lockAspect: boolean;
   /** Roadmap #8: when on, applying a new artboard size from `ArtboardSizeMenu` runs
    * the document's elements through `magicResizeElements` (anchored contain-fit,
@@ -291,6 +301,8 @@ export interface StudioState {
   nodeEditSel: { index: number; part: 'anchor' | 'in' | 'out' } | null;
   fonts: FontEntry[];
   fontUrl: string;
+  /** آخرُ إضافةِ خطٍّ فشلت (ملفّ أو اسمٌ غيرُ مثبّت) ولماذا — يعرضها لوحُ الخطوط. */
+  fontError: string | null;
   postPalette: number;
   elements: DocElement[];
   /** حقل المستند — انظر `DocSnapshot.decorAccent`. يعيش مسطّحًا على الحالة كما
@@ -493,6 +505,8 @@ export const initialStudioState: StudioState = {
   cropEditingId: null,
   traceBusyId: null,
   traceError: null,
+  animClipboard: null,
+  audioError: null,
   lockAspect: false,
   magicResizeOn: false,
   pendingEditSnapshot: null,
@@ -507,6 +521,7 @@ export const initialStudioState: StudioState = {
     { id: 3, name: 'Vazirmatn', family: 'Vazirmatn', status: 'ready' },
   ],
   fontUrl: '',
+  fontError: null,
   postPalette: 0,
   // لوحةٌ فارغة فعلًا. هذا هو الإصلاح الأهم في هذه الدفعة: المستند الافتتاحي كان
   // `createDefaultElements()` — سبعة عناصر تؤلّف البوستر التجريبي الجاهز — فكان على

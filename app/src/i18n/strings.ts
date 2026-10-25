@@ -90,7 +90,7 @@ export interface Dictionary {
   decor_title: string; decor_accent: string; decor_hint: string;
   apply_palette_all: string; apply_palette_hint: string;
   'l_badge-label': string; 'l_logo-label': string;
-  ease_linear: string; ease_in: string; ease_in_out: string; ease_back: string; ease_bounce: string; ease_custom: string;
+  ease_linear: string; ease_in: string; ease_in_out: string; ease_back: string; ease_bounce: string; ease_hold: string; ease_custom: string;
   no_easing_target: string; add_keyframe: string; delete_keyframe: string; kf_value: string; soon: string;
   /** اسمُ خطوةِ التراجع لتغييرِ قيمةِ مفتاح — انظر `pushHistory`: كلُّ ما يُغيّر
    * المستند خطوةٌ واحدةٌ **مُسمّاة**. */
@@ -175,6 +175,14 @@ export interface Dictionary {
   ctx_group: string; ctx_duplicate: string; ctx_delete: string; ctx_align_sel: string;
   pages: string; pages_add: string; pages_same_design: string; pages_to_reel: string;
   up_drop: string; up_pick: string; up_note: string; brand_pick_hint: string;
+  sec_timing: string; timing_start: string; timing_end: string; timing_mixed: string; timing_from_playhead: string; timing_start_here: string; timing_end_here: string; clip_bounded: string; clip_bounded_hint: string; undo_clip_timing: string; undo_clip_bounded: string; clip_bounded_tip: string; clip_unbounded_tip: string;
+  prop_trimStart: string; prop_trimEnd: string;
+  prop_reveal: string; stagger_fx_blur: string; stagger_fx_none: string; stagger_fx_type: string; stagger_type_hint: string; reveal_timing: string; reveal_auto_hint: string; reveal_next_char: string; reveal_next_word: string; reveal_next_line: string; reveal_next_tip: string; reveal_clear: string; reveal_all_timed: string; undo_reveal_next: string; undo_reveal_clear: string;
+  reveal_count: (shown: number, total: number) => string;
+  sm_copy_anim: string; sm_paste_anim: string; undo_paste_anim: string;
+  undo_audio_add: string; undo_audio_volume: string; undo_audio_mute: string; audio_add: string; audio_add_hint: string; audio_drop_hint: string; audio_in_doc: string; audio_none: string; sec_audio: string; audio_length: string; audio_file_length: string; audio_volume: string; audio_muted: string; audio_layer: string;
+  undo_font: string; font_from_file: string; font_from_file_hint: string; font_system: string; font_system_ph: string; font_use: string; font_remove: string; font_system_badge: string;
+  font_not_installed: (name: string) => string;
 }
 
 export const AR: Dictionary = {
@@ -187,7 +195,7 @@ export const AR: Dictionary = {
   hint_text: 'انقر في أي مكان واكتب', hint_shape: 'اسحب وارسم · Shift للتناسب · Option من المركز',
   hint_pen: 'انقر نقطة · اسحب منحنى · Enter تخلّص', hint_image: 'انقر مكان الصورة، أو اسحبها هنا',
   hint_lottie: 'انقر مكان الملصق، أو اسحب ملف لوتي هنا',
-  hint_video: 'انقر مكان الفيديو، أو اسحبه هنا', hint_audio: 'الموسيقى والتعليق الصوتي — قريب',
+  hint_video: 'انقر مكان الفيديو، أو اسحبه هنا', hint_audio: 'أضف موسيقى أو تعليقًا صوتيًّا يبدأ عند المؤشّر',
   hint_fx: 'التأثيرات — قريب',
   img_ph: 'صورة المنتج', fit: 'ملاءمة', timeline: 'الحركة', layers: 'الطبقات', easing: 'المنحنى',
   ease_out: 'تباطؤ في النهاية', tl_simple_hint: 'حدّد عنصر واختر حركته',
@@ -304,7 +312,7 @@ export const AR: Dictionary = {
   apply_palette_hint: 'يلوّن كل النصوص والأشكال باللوحة الحالية — حتى اللي لوّنتها بيدك. وتقدر تتراجع.',
   'l_badge-label': 'نص الشارة', 'l_logo-label': 'نص الشعار',
   ease_linear: 'خطي', ease_in: 'تسريع في البداية', ease_in_out: 'تسريع وتباطؤ', ease_back: 'قفزة للخلف',
-  ease_bounce: 'ارتداد', ease_custom: 'مخصص',
+  ease_bounce: 'ارتداد', ease_hold: 'تثبيت', ease_custom: 'مخصص',
   no_easing_target: 'حدّد عنصر وغيّر منحناه', add_keyframe: 'إضافة مفتاح عند المؤشر',
   delete_keyframe: 'حذف المفتاح', kf_value: 'القيمة', soon: 'قريبًا',
   kf_set_value: 'قيمة المفتاح',
@@ -446,6 +454,14 @@ export const AR: Dictionary = {
   ctx_group: 'جمّع', ctx_duplicate: 'كرّر', ctx_delete: 'احذف', ctx_align_sel: 'رتّب',
   pages: 'اللوحات', pages_add: 'لوحة جديدة', pages_same_design: 'نفس التصميم بمقاس ثاني', pages_to_reel: 'حوّله لريل',
   up_drop: 'اسحب ملفاتك هنا', up_pick: 'ارفع ملف', up_note: 'صور، فيديو، أو ملصقات لوتي — تنزل في وسط اللوحة.', brand_pick_hint: 'حدّد نص أو شكل وانقر اللون.',
+  sec_timing: 'التوقيت', timing_start: 'البداية', timing_end: 'النهاية', timing_mixed: 'مختلف', timing_from_playhead: 'من المؤشّر', timing_start_here: 'ابدأ المقطع عند المؤشّر (ينقل حركته معه)', timing_end_here: 'أنهِ المقطع عند المؤشّر', clip_bounded: 'يظهر في مقطعه فقط', clip_bounded_hint: 'يختفي قبل بداية مقطعه وبعد نهايته، مثل طبقات الفيديو. بدونه يبقى العنصر ظاهرًا على كامل المقطع.', undo_clip_timing: 'توقيت المقطع', undo_clip_bounded: 'الظهور داخل المقطع', clip_bounded_tip: 'يظهر في مقطعه فقط', clip_unbounded_tip: 'يبقى ظاهرًا قبل مقطعه وبعده',
+  prop_trimStart: 'بداية الخط', prop_trimEnd: 'نهاية الخط',
+  prop_reveal: 'الظهور', stagger_fx_blur: 'انقشاع', stagger_fx_none: 'فوري', stagger_fx_type: 'كتابة', stagger_type_hint: 'الكتابة تمشي بترتيب القراءة، وكل حرف يظهر بشكله وهو آخر المكتوب', reveal_timing: 'توقيت كل وحدة', reveal_auto_hint: 'تلقائي الحين: كل وحدة بعد اللي قبلها بالتأخير. تبيها مع الصوت؟ وقّف المؤشّر عند أول كلمة واضغط', reveal_next_char: 'الحرف التالي هنا', reveal_next_word: 'الكلمة التالية هنا', reveal_next_line: 'السطر التالي هنا', reveal_next_tip: 'تظهر الوحدة التالية في إطار المؤشّر بالضبط', reveal_clear: 'رجّعها تلقائي', reveal_all_timed: 'كل الوحدات موقّتة', undo_reveal_next: 'توقيت الظهور', undo_reveal_clear: 'إلغاء توقيت الظهور',
+  reveal_count: (shown, total) => `ظاهر ${shown} من ${total}`,
+  sm_copy_anim: 'نسخ الحركة', sm_paste_anim: 'لصق الحركة', undo_paste_anim: 'لصق الحركة',
+  undo_audio_add: 'إضافة صوت', undo_audio_volume: 'مستوى الصوت', undo_audio_mute: 'كتم الصوت', audio_add: 'أضف ملف صوت', audio_add_hint: 'يبدأ عند المؤشّر. يقبل mp3 وm4a وwav — ومقطع فيديو يُؤخذ منه صوته', audio_drop_hint: 'أو اسحب ملف الصوت على اللوحة', audio_in_doc: 'الصوت في المشروع', audio_none: 'ما فيه صوت بعد', sec_audio: 'الصوت', audio_length: 'الطول', audio_file_length: 'طول الملف', audio_volume: 'مستوى الصوت', audio_muted: 'كتم', audio_layer: 'صوت',
+  undo_font: 'تغيير الخط', font_from_file: 'أضف خطًّا من جهازك', font_from_file_hint: 'ttf أو otf أو woff — يبقى في مزيج بعد إعادة التشغيل، ويُطبَّق على النص المحدّد', font_system: 'خط مثبّت على الجهاز', font_system_ph: 'اسم الخط، مثل Arial', font_use: 'استخدم', font_remove: 'إزالة من المكتبة', font_system_badge: 'مثبّت',
+  font_not_installed: (name) => `«${name}» مو مثبّت على هالجهاز — تأكّد من الاسم أو أضف ملفّه`,
 };
 
 export const EN: Dictionary = {
@@ -574,7 +590,7 @@ export const EN: Dictionary = {
   apply_palette_hint: 'Re-colors every text and shape in the design to the current palette, even elements you manually recolored — one undo step (Cmd+Z to revert).',
   'l_badge-label': 'Badge text', 'l_logo-label': 'Logo text',
   ease_linear: 'Linear', ease_in: 'Ease in', ease_in_out: 'Ease in-out', ease_back: 'Back', ease_bounce: 'Bounce',
-  ease_custom: 'Custom',
+  ease_hold: 'Hold', ease_custom: 'Custom',
   no_easing_target: 'Select an element to edit its easing curve', add_keyframe: 'Add keyframe at playhead',
   delete_keyframe: 'Delete keyframe', kf_value: 'Value', soon: 'Coming soon',
   kf_set_value: 'Keyframe value',
@@ -709,6 +725,14 @@ export const EN: Dictionary = {
   ctx_group: 'Group', ctx_duplicate: 'Duplicate', ctx_delete: 'Delete', ctx_align_sel: 'Arrange',
   pages: 'Artboards', pages_add: 'New artboard', pages_same_design: 'Same design, another size', pages_to_reel: 'Make it a reel',
   up_drop: 'Drop files here', up_pick: 'Upload a file', up_note: 'Images, video or Lottie stickers — they land at the centre.', brand_pick_hint: 'Select a text or shape, then click a colour.',
+  sec_timing: 'Timing', timing_start: 'Start', timing_end: 'End', timing_mixed: 'Mixed', timing_from_playhead: 'From playhead', timing_start_here: 'Start the clip at the playhead (its motion moves with it)', timing_end_here: 'End the clip at the playhead', clip_bounded: 'Visible only during its clip', clip_bounded_hint: 'Hidden before its clip starts and after it ends, like video layers. Without it the element stays on screen for the whole piece.', undo_clip_timing: 'Clip timing', undo_clip_bounded: 'Visible during clip', clip_bounded_tip: 'Visible only during this clip', clip_unbounded_tip: 'Stays visible before and after this clip',
+  prop_trimStart: 'Line start', prop_trimEnd: 'Line end',
+  prop_reveal: 'Reveal', stagger_fx_blur: 'Unblur', stagger_fx_none: 'Instant', stagger_fx_type: 'Typing', stagger_type_hint: 'Typing follows reading order; each new letter shows the shape it has as the last one typed', reveal_timing: 'Per-unit timing', reveal_auto_hint: 'Automatic now: each unit follows the last by the delay. Want it on the voice? Park the playhead on the first word and press', reveal_next_char: 'Next letter here', reveal_next_word: 'Next word here', reveal_next_line: 'Next line here', reveal_next_tip: 'The next unit appears on the playhead\'s exact frame', reveal_clear: 'Back to automatic', reveal_all_timed: 'Every unit is timed', undo_reveal_next: 'Reveal timing', undo_reveal_clear: 'Clear reveal timing',
+  reveal_count: (shown, total) => `${shown} of ${total} shown`,
+  sm_copy_anim: 'Copy animation', sm_paste_anim: 'Paste animation', undo_paste_anim: 'Paste animation',
+  undo_audio_add: 'Add audio', undo_audio_volume: 'Volume', undo_audio_mute: 'Mute', audio_add: 'Add an audio file', audio_add_hint: 'Starts at the playhead. Takes mp3, m4a, wav — or a video, keeping its sound', audio_drop_hint: 'Or drop an audio file on the canvas', audio_in_doc: 'Audio in this project', audio_none: 'No audio yet', sec_audio: 'Audio', audio_length: 'Length', audio_file_length: 'File length', audio_volume: 'Volume', audio_muted: 'Mute', audio_layer: 'Audio',
+  undo_font: 'Change font', font_from_file: 'Add a font from your device', font_from_file_hint: 'ttf, otf or woff — stays in Mazij after restart, and applies to the selected text', font_system: 'A font installed on this device', font_system_ph: 'Font name, e.g. Arial', font_use: 'Use', font_remove: 'Remove from library', font_system_badge: 'Installed',
+  font_not_installed: (name) => `“${name}” isn't installed on this device — check the name or add its file`,
 };
 
 export const DICTS: Record<Lang, Dictionary> = { ar: AR, en: EN };

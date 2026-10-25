@@ -2,6 +2,7 @@ import { TOOL_LIBRARY } from '../../data/constants';
 import { useStudio } from '../../state/StudioContext';
 import { ShapesLibrary } from './ShapesLibrary';
 import { TextLibrary } from './TextLibrary';
+import { AudioLibrary } from './AudioLibrary';
 
 /** لوح محتوى الأداة المختارة.
  *
@@ -11,7 +12,7 @@ import { TextLibrary } from './TextLibrary';
  * §5.1) — ومزيج اليوم عكسها: `setTool()` وحدها بلا أثر مرئي، لكل أداة لا للأشكال
  * فقط. وذلك هو الجذر الحقيقي لشكوى المالك.
  *
- * **ما بُني**: الأشكال، والنصوص (٢٤ أكتوبر ٢٠٢٦). **وما بقي**: صوت، تأثيرات —
+ * **ما بُني**: الأشكال، والنصوص (٢٤ أكتوبر ٢٠٢٦)، والصوت (٢٥ أكتوبر). **وما بقي**: تأثيرات —
  * ولكلٍّ منها لوحٌ **يسمّي الأداة ويعلن «قريبًا»**، لأن الصمت ليس بديلًا مقبولًا
  * وقاعدة المشروع أن المعطَّل يُعرَض معطَّلًا لا يُخفى. إضافة لوحٍ حقيقي لاحقًا =
  * تبديل `'soon'` إلى `'ready'` في `TOOL_LIBRARY` + فرع واحد أدناه. لا نظام ألواح
@@ -24,6 +25,7 @@ export function LibraryTab() {
 
   if (status === 'ready' && tool === 'shape') return <ShapesLibrary />;
   if (status === 'ready' && tool === 'text') return <TextLibrary />;
+  if (status === 'ready' && tool === 'audio') return <AudioLibrary />;
 
   return (
     <div data-testid={`library-soon-${tool}`} style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>

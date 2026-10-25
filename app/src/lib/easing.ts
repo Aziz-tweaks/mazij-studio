@@ -1,16 +1,26 @@
 /** Easing curves for the timeline's per-element animation clips. Every named preset
- * (other than 'bounce') is itself just a cubic-bezier through two control points, the
- * same representation 'custom' uses — so picking a preset and then tweaking its curve
- * in the bezier editor is just switching `easing` to 'custom' and reusing `bezier`. */
-export type EasingId = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'back' | 'bounce' | 'custom';
+ * (other than 'bounce' and 'hold') is itself just a cubic-bezier through two control
+ * points, the same representation 'custom' uses — so picking a preset and then tweaking
+ * its curve in the bezier editor is just switching `easing` to 'custom' and reusing
+ * `bezier`.
+ *
+ * **`'hold'` — «تثبيت» — ليس منحنًى بل درجة.** القيمةُ تبقى على قيمة المفتاح حتى
+ * المفتاحِ التالي ثم تقفز إليه في لحظته بالضبط. وُلد من مقطعٍ حقيقيٍّ طُلب نسخُه:
+ * كلماتٌ تظهر **فجأةً** مع صوت الراوي، وصورٌ تتبدّل كلَّ ثلاثة إطارات، ومشاهدُ
+ * تنقطع بلا مزج. وبدونه كان أقربُ ما يُصنَع منحدرًا خطّيًّا بين إطارين متجاورين —
+ * وهو ما يفعله التقسيمُ نفسُه (`splitAt`) — فيبدو صحيحًا عند كلّ إطارٍ على الشبكة
+ * ويكذب بين الإطارين: ضبابُ الحركة يأخذ عيّناتٍ **بين** الإطارين
+ * (`shutterSampleTimes`)، فيُرسَم آخرُ إطارٍ قبل القطع نصفَ شفّاف. والدرجةُ لا
+ * قيمةَ وسطى لها، فلا يراها الغالق. */
+export type EasingId = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'back' | 'bounce' | 'hold' | 'custom';
 
 export type Bezier = [number, number, number, number];
 
-export const EASING_IDS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'back', 'bounce', 'custom'];
+export const EASING_IDS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'back', 'bounce', 'hold', 'custom'];
 
 export const DEFAULT_BEZIER: Bezier = [0.42, 0, 0.58, 1];
 
-export const EASING_BEZIER: Record<Exclude<EasingId, 'bounce' | 'custom'>, Bezier> = {
+export const EASING_BEZIER: Record<Exclude<EasingId, 'bounce' | 'hold' | 'custom'>, Bezier> = {
   linear: [0, 0, 1, 1],
   easeIn: [0.42, 0, 1, 1],
   easeOut: [0, 0, 0.58, 1],
@@ -66,6 +76,10 @@ function bounceOut(p: number): number {
 export function applyEasing(easing: EasingId, bezier: Bezier, p: number): number {
   const clamped = Math.max(0, Math.min(1, p));
   if (easing === 'bounce') return bounceOut(clamped);
+  // الدرجة: صفرٌ طوال المقطع، وواحدٌ عند نهايته بالضبط. و`trackValueAt` تُسلّم
+  // لحظةَ المفتاح التالي بتقدّمٍ ١ تمامًا (المقطعُ الأوّلُ الذي يحويها)، فتظهر
+  // قيمتُه **عند** لحظته لا بعدها بإطار.
+  if (easing === 'hold') return clamped >= 1 ? 1 : 0;
   const b = easing === 'custom' ? bezier : EASING_BEZIER[easing];
   return bezierY(b, clamped);
 }

@@ -113,3 +113,53 @@ export function drawPathCommandsToCtx(ctx: CanvasRenderingContext2D, cmds: PathC
     }
   }
 }
+
+/** ثابتُ تقريب ربع الدائرة بمنحنى بيزيه تكعيبيّ — `4/3·(√2−1)`؛ وخطؤه الشعاعيّ الأقصى
+ * ٠٫٠٢٧٪ من نصف القطر، دون نصف بكسلٍ على أيّ لوحٍ يفتحه مزيج. */
+const KAPPA = 0.5522847498307936;
+
+/** **حدُّ البيضة أوامرَ مسار** (بكسلات)، يبدأ عند أقصى اليمين ويدور باتّجاه عقارب الساعة
+ * على الشاشة — بداية `ctx.ellipse(…, 0, 2π)` واتّجاهُها نفسُهما، فخطٌّ يُرسَم تدريجيًّا
+ * على بيضةٍ يبدأ حيث يبدأ رسمُها الكامل. تقرؤه القناعُ (`maskGeometry.ts`) وقصُّ المسار
+ * (`pathTrim.ts`). */
+export function ellipsePathCmds(x: number, y: number, w: number, h: number): PathCmd[] {
+  const rx = w / 2;
+  const ry = h / 2;
+  const cx = x + rx;
+  const cy = y + ry;
+  const ox = rx * KAPPA;
+  const oy = ry * KAPPA;
+  return [
+    { c: 'M', x: cx + rx, y: cy },
+    { c: 'C', x1: cx + rx, y1: cy + oy, x2: cx + ox, y2: cy + ry, x: cx, y: cy + ry },
+    { c: 'C', x1: cx - ox, y1: cy + ry, x2: cx - rx, y2: cy + oy, x: cx - rx, y: cy },
+    { c: 'C', x1: cx - rx, y1: cy - oy, x2: cx - ox, y2: cy - ry, x: cx, y: cy - ry },
+    { c: 'C', x1: cx + ox, y1: cy - ry, x2: cx + rx, y2: cy - oy, x: cx + rx, y: cy },
+    { c: 'Z' },
+  ];
+}
+
+/** **حدُّ المستطيل المدوَّر أوامرَ مسار** (بكسلات)، نصفُ القطر مقصورٌ على نصف الضلع
+ * الأقصر كما يقصره `ctx.roundRect`. يبدأ عند طرف الضلع العلويّ الأيسر ويدور باتّجاه
+ * عقارب الساعة — بدايةُ `roundRect` نفسُها. */
+export function roundRectPathCmds(x: number, y: number, w: number, h: number, r: number): PathCmd[] {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  if (rr <= 0) {
+    return [{ c: 'M', x, y }, { c: 'L', x: x + w, y }, { c: 'L', x: x + w, y: y + h }, { c: 'L', x, y: y + h }, { c: 'Z' }];
+  }
+  const k = rr * KAPPA;
+  const X = x + w;
+  const Y = y + h;
+  return [
+    { c: 'M', x: x + rr, y },
+    { c: 'L', x: X - rr, y },
+    { c: 'C', x1: X - rr + k, y1: y, x2: X, y2: y + rr - k, x: X, y: y + rr },
+    { c: 'L', x: X, y: Y - rr },
+    { c: 'C', x1: X, y1: Y - rr + k, x2: X - rr + k, y2: Y, x: X - rr, y: Y },
+    { c: 'L', x: x + rr, y: Y },
+    { c: 'C', x1: x + rr - k, y1: Y, x2: x, y2: Y - rr + k, x, y: Y - rr },
+    { c: 'L', x, y: y + rr },
+    { c: 'C', x1: x, y1: y + rr - k, x2: x + rr - k, y2: y, x: x + rr, y },
+    { c: 'Z' },
+  ];
+}

@@ -122,6 +122,22 @@ export function clipOffset(anim: ElementAnim): number {
   return anim.start - (anim.sourceIn ?? 0);
 }
 
+/** **أيُرسَم العنصرُ عند هذه اللحظة؟** — جوابُ `ElementAnim.bounded` الواحد.
+ *
+ * عنصرٌ غيرُ محدود (`bounded` غائبٌ أو `false` — كلُّ مستندٍ محفوظٍ قبله) يُرسَم دائمًا:
+ * هو السلوكُ القائمُ بالحرف. والمحدودُ يُرسَم من `start` **شاملًا** حتى `start + duration`
+ * **غيرَ شامل** — نصفُ فترةٍ مفتوح كما يحسب `documentDuration` طولَ المستند: إطارُ
+ * النهاية ليس منه، والإطارُ الذي قبله منه بكامل فترته، فعيّناتُ الغالق داخل ذلك الإطار
+ * (`shutterSampleTimes` تأخذها **بعد** لحظة الإطار) تراه كلُّها.
+ *
+ * والتسامحُ `FRAME_TOLERANCE` نفسُه الذي تحمله `frameAtTime`: `7/30` تُحسَب
+ * `0.23333333333333334` وطرفُ المقطع ربّما `0.2333333333333333` — فرقٌ في آخر بتّة لا
+ * يجوز أن يُغيّر جوابَ «أظاهرٌ هو؟» عند إطارٍ على الشبكة. */
+export function clipShowsAt(anim: Pick<ElementAnim, 'start' | 'duration' | 'bounded'>, time: number): boolean {
+  if (!anim.bounded) return true;
+  return time >= anim.start - FRAME_TOLERANCE && time < anim.start + anim.duration - FRAME_TOLERANCE;
+}
+
 /** The resolved value of every independent property track at a given instant — the
  * single source of truth both the DOM preview (`entranceStyleAt`, below) and the
  * canvas frame renderer (`exportArtboard.ts`, for video/GIF export) read from, so a
@@ -151,6 +167,11 @@ export interface AnimVisual {
    * المسار** كي يَقدر مفتاحٌ على إحدادِ عنصرٍ مُضبَّبٍ سلفًا؛ والمجموعُ هو ما
    * يُقصَر عند الصفر، لا المفتاحُ وحده. */
   blur: number;
+  /** **«بداية الخط» و«نهاية الخط»**: كسرانِ من طول حدّ الشكل (٠..١)، والمرسومُ ما بينهما.
+   * محايدُهما ٠ و١ — الحدُّ كاملًا — فشكلٌ لا مسارَ له يُرسَم كما كان بالحرف. انظر
+   * `src/lib/pathTrim.ts`. */
+  trimStart: number;
+  trimEnd: number;
 }
 
 /** **المقياسُ الفعليُّ على كلّ محور، وهذا هو الموضعُ الوحيد لهذه الصيغة.**
@@ -279,6 +300,8 @@ export function resolveAnimAt(anim: ElementAnim, time: number): AnimVisual {
     // يحدث عند الاستهلاك في `effectiveBlur`، لا هنا. وبهذا تبقى هذه الدالّةُ تأخذ
     // `anim` وحدَه لا العنصرَ كلَّه، وهو القيدُ المُعلَن في `state/elements.ts:45`.
     blur: trackValueAt(anim.tracks.blur, m, ANIM_PROPERTY_DEFAULT.blur),
+    trimStart: trackValueAt(anim.tracks.trimStart, m, ANIM_PROPERTY_DEFAULT.trimStart),
+    trimEnd: trackValueAt(anim.tracks.trimEnd, m, ANIM_PROPERTY_DEFAULT.trimEnd),
   };
 }
 
@@ -335,14 +358,18 @@ const KF_VALUE_SCALE = 100;
 /** الخطوةُ الدقيقةُ في الوحدة **المعروضة** — سمةُ `step` على المِمسحة والحقل معًا. */
 export const KF_VALUE_STEP = 1 / KF_VALUE_SCALE;
 
-/** قيمةُ المفتاح المخزونةُ كما تُعرَض: درجاتٌ للدوران، ونسبةٌ مئويّةٌ لما سواه. */
+/** الخصائصُ التي تُعرَض بوحدتها المخزونة نفسِها: الدورانُ بالدرجات، و«الظهور» عددُ
+ * وحداتٍ (٣ = ثلاث كلمات) — ونسبةٌ مئويّةٌ منه («٣٠٠٪») لا يقرؤها أحد. */
+const RAW_DISPLAY_PROPERTIES = new Set<AnimProperty>(['rotation', 'reveal']);
+
+/** قيمةُ المفتاح المخزونةُ كما تُعرَض: درجاتٌ للدوران، وعددٌ للظهور، ونسبةٌ مئويّةٌ لما سواهما. */
 export function kfValueToDisplay(property: AnimProperty, stored: number): number {
-  return property === 'rotation' ? stored : stored * 100;
+  return RAW_DISPLAY_PROPERTIES.has(property) ? stored : stored * 100;
 }
 
 /** عكسُ `kfValueToDisplay`. */
 export function kfValueFromDisplay(property: AnimProperty, display: number): number {
-  return property === 'rotation' ? display : display / 100;
+  return RAW_DISPLAY_PROPERTIES.has(property) ? display : display / 100;
 }
 
 /** **شبكةُ القيمة، كشبكةِ الإطارات للزمن.** تُقصَر القيمةُ على مُضاعَفات

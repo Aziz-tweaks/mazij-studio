@@ -11,22 +11,24 @@ import {
   shapeGeometryFor,
   type ShapeRecipe,
 } from '../lib/shapeFactory';
-import type { ArtboardDoc, ArtboardMeta, DocSnapshot, ExportResult, HAlign, PanelId, ShapeDrawKind, StudioState, VAlign, Weight } from './types';
+import type { ArtboardDoc, ArtboardMeta, DocSnapshot, ExportResult, FontEntry, HAlign, PanelId, ShapeDrawKind, StudioState, VAlign, Weight } from './types';
 import { initialStudioState } from './types';
 // اتحادُ ثلاث رحلات مسّت هذا الملف: `newGroupId` من رحلة الحملة (التجميع)،
 // و`AnimPreset` من رحلة الفيديو (ربط الحركة بالعنصر المحدَّد)، و`withBaseLayerColor`
 // من رحلة البوست (تلوين الشكل عبر كومة المظهر لا عبر الحقل القديم). لا تعارض في
 // النيّة — ملفٌّ واحد التقت عليه ثلاثة فروع.
 import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, ImageElement, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
-import { DEFAULT_IMAGE_CROP, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
+import { DEFAULT_IMAGE_CROP, animPropertiesFor, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, motionTracks, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
 import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor, withBaseStroke, withBaseStrokeHidden, withBaseStrokeWidth } from '../lib/appearance';
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
 import type { TraceOptions } from '../lib/imageTrace';
 import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, effectiveScale, frameDuration, quantizeKfValue, resolveAnimAt, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
-import { splitAt } from '../lib/timelineEdit';
+import { moveClip, splitAt, trim } from '../lib/timelineEdit';
+import { revealUnitCount, revealValueAt, startedUnitCount } from '../lib/textStagger';
 import { fetchAndRegisterFont } from '../lib/loadFont';
+import { cssFamilyOf, fontFromBytes, isFontInstalled, loadUserFonts, pickFontFile, registerUserFont, saveUserFonts, type UserFont } from '../lib/fontsStore';
 import type { PersistedArtboard, PersistedDoc } from '../lib/persist';
 import { loadDoc, saveDoc } from '../lib/persist';
 import type { SlotFill, Template, TemplateSlot } from '../lib/templates';
@@ -50,6 +52,7 @@ import { effectiveExportScale } from '../lib/exportEstimate';
 import { pickImageFile, readImageFile, type LoadedImage } from '../lib/imageFile';
 import { pickLottieFile, readLottieFile, type LoadedLottie } from '../lib/lottieFile';
 import { pickVideoFile, readVideoFile, type LoadedVideo } from '../lib/videoFile';
+import { pickAudioFile, readAudioFile, type LoadedAudio } from '../lib/audioFile';
 import { inTauri } from '../lib/tauriEnv';
 import { startMcpBridge, stopMcpBridge } from '../lib/mcpBridge';
 import { startMcpServer, stopMcpServer } from '../lib/mcpServerControl';
@@ -89,9 +92,14 @@ import { loadApiKey } from '../lib/aiKeyStore';
  * يَحتاج صيغةَ نمطٍ `[seconds, value]` نسبةً إلى المؤشّر، وهي المرحلة ٤، ولا تُشحَن
  * نصفًا. */
 function withPreset(anim: ElementAnim, preset: AnimPreset): ElementAnim {
-  if (hasCustomAnimation(anim.tracks)) return anim;
+  // **«الظهور» ليس حركةَ الصندوق.** توقيتُ الكلمات مع الصوت يبقى كما هو تحت أيّ نمطٍ
+  // يُطبَّق على الصندوق كلِّه، ولا يجعل النصَّ «مبنيًّا باليد» فيُرفَض النمط: الحرسُ يسأل
+  // عن مسارات الحركة وحدها، والنمطُ يُعيد بناءها وحدها.
+  const reveal = anim.tracks.reveal;
+  if (hasCustomAnimation(motionTracks(anim.tracks))) return anim;
   const keyframes = anim.keyframes.length >= 2 ? anim.keyframes : defaultAnim(preset, anim.start, anim.duration, anim.easing).keyframes;
-  return { ...anim, preset, keyframes, tracks: tracksFromPreset(preset, keyframes, anim.easing, anim.bezier, anim.duration) };
+  const tracks = tracksFromPreset(preset, keyframes, anim.easing, anim.bezier, anim.duration);
+  return { ...anim, preset, keyframes, tracks: reveal ? { ...tracks, reveal } : tracks };
 }
 
 /** مفتاحٌ واحد من مستندٍ محفوظ، مرحَّلًا إن كان قديمًا.
@@ -187,6 +195,7 @@ function normalizeDoc(doc: DocSnapshot): DocSnapshot {
       ...(e.type === 'text' ? { textAnim: migrateTextAnim(e.textAnim), pathId: e.pathId ?? null } : {}),
       ...(e.type === 'lottie' ? { loop: e.loop ?? true } : {}),
       ...(e.type === 'video' ? { loop: e.loop ?? false, volume: e.volume ?? 1, muted: e.muted ?? false } : {}),
+      ...(e.type === 'audio' ? { volume: e.volume ?? 1, muted: e.muted ?? false } : {}),
     })),
   };
 }
@@ -250,6 +259,14 @@ function clampAnimPropertyValue(property: AnimProperty, v: number): number {
       return clamp(v, -1, 1);
     case 'rotation':
       return v;
+    // كسرانِ من طول الحدّ — ما وراء الطرفين لا معنى له.
+    case 'trimStart':
+    case 'trimEnd':
+      return clamp(v, 0, 1);
+    // عددُ الوحدات التي بدأت: لا سالبَ له. وحدُّه الأعلى عددُ وحدات النصّ، وهو يتغيّر مع
+    // كلّ تعديلٍ للنصّ — فلا يُقصَر هنا بل عند القراءة (قيمةٌ أكبر = الكلُّ ظاهر).
+    case 'reveal':
+      return Math.max(0, v);
   }
 }
 
@@ -703,6 +720,14 @@ export interface StudioActions {
   duplicateSelected: () => void;
   /** ⌘C / ⌘X / ⌘V — حافظةٌ داخليّة للعناصر (بقناعها ومسارها إن وُجدا). */
   copySelected: () => void;
+  /** «نسخ الحركة»: مقطعُ أوّلِ عنصرٍ محدَّد كاملًا (مساراته، وطوله وقصّه، و«يظهر في مقطعه
+   * فقط»، وتتابعُ نصّه) إلى حافظة الحركة. لا يغيّر المستند. */
+  copyAnimation: () => void;
+  /** «لصق الحركة»: على كلّ محدَّدٍ غيرِ مقفول — **من بداية مقطعه هو**: الحركةُ نفسُها
+   * تبدأ حيث يبدأ، فتسميةٌ واحدةٌ تمسح من اليمين في مشهدٍ وأخرى في مشهدٍ بعده بنسخةٍ
+   * واحدة. والخصائصُ التي لا معنى لها على الهدف تُترَك (قصُّ الخطّ لغير الشكل، و«الظهور»
+   * لغير النصّ). خطوةُ تراجعٍ واحدة. */
+  pasteAnimation: () => void;
   cutSelected: () => void;
   pasteClipboard: () => void;
   /** ⌘A — كلّ العناصر الظاهرة غير المقفلة. */
@@ -743,6 +768,19 @@ export interface StudioActions {
   /** «كل لوحة بمقاسها» — انظر `StudioState.exportArtboardOwnSize`. */
   setExportArtboardOwnSize: (on: boolean) => void;
   setElementEasing: (id: ElementId, easing: EasingId) => void;
+  /** «التوقيت» في لوح الخصائص: بدايةُ المقطع **نقلٌ** (مفاتيحُه تنتقل معه، دلالةُ سحب
+   * جسمه) ونهايتُه **تقليمٌ للحافّة الأخيرة** (دلالةُ سحبها) — لكلّ معرّفٍ في القائمة،
+   * على شبكة الإطارات، بخطوة تراجعٍ واحدةٍ مُسمّاة. وهي دلالةُ حقلَي In/Out في
+   * After Effects بعينها. المقفولُ لا يُمَسّ. */
+  setClipTiming: (ids: ElementId[], timing: { start?: number; end?: number }) => void;
+  /** «يظهر في مقطعه فقط» — انظر `ElementAnim.bounded`. خطوةُ تراجعٍ واحدة لكلّ القائمة. */
+  setClipBounded: (ids: ElementId[], bounded: boolean) => void;
+  /** «الكلمة التالية هنا»: مفتاحُ «ظهور» عند المؤشّر قيمتُه ما ظهر حتى الآن زائدًا واحدًا،
+   * بتخفيف «تثبيت» — فتظهر الوحدةُ التالية في إطار المؤشّر بالضبط. أوّلُ ضغطةٍ تزرع قبله
+   * مفتاحَ صفرٍ عند بداية المقطع كي لا يظهر شيءٌ قبل أوانه. خطوةُ تراجعٍ واحدة. */
+  revealNextAtPlayhead: (id: ElementId) => void;
+  /** يحذف مسارَ «الظهور» كلَّه فيعود التوقيتُ التلقائيّ كما كان. */
+  clearRevealTiming: (id: ElementId) => void;
   addTrackKeyframeAtPlayhead: (id: ElementId, property: AnimProperty) => void;
   deleteTrackKeyframe: (id: ElementId, property: AnimProperty, kfId: string) => void;
   /** يَكتب قيمةَ مفتاحٍ **بخطوةِ تراجعٍ واحدةٍ مُسمّاة** — لكتابةٍ مُفردةٍ ليست
@@ -958,11 +996,28 @@ export interface StudioActions {
   setVideoTrim: (id: ElementId, trimIn: number, trimOut: number) => void;
   setVideoVolume: (id: ElementId, volume: number) => void;
   setVideoMuted: (id: ElementId, muted: boolean) => void;
+  /** «صوت» ← «أضف ملف صوت»: منتقي الملفّات، ثم طبقةُ صوتٍ **عند المؤشّر** — حيث يقف
+   * المصمّم يبدأ الصوت، كما في محرّرات الفيديو. خطوةُ تراجعٍ واحدة. */
+  insertAudioTool: () => Promise<void>;
+  /** ملفُّ صوتٍ مُفلَتٌ على اللوحة أو مرفوعٌ من «ملفاتي». */
+  insertAudioFromFile: (file: File) => Promise<void>;
+  /** علوُّ صوتِ طبقة صوتٍ أو فيديو (٠..١) — خطوةُ تراجعٍ لكلّ التزام. */
+  setAudioVolume: (id: ElementId, volume: number) => void;
+  /** علوُّ الصوت أثناء سحب الشريط — حيٌّ بلا تاريخ، محاطٌ بـ`beginElementEdit`/`commitElementEdit`
+   * فتصير السحبةُ كلُّها خطوةَ تراجعٍ واحدة. */
+  liveSetAudioVolume: (id: ElementId, volume: number) => void;
+  setAudioMuted: (id: ElementId, muted: boolean) => void;
   setVideoLoop: (id: ElementId, loop: boolean) => void;
   undo: () => void;
   redo: () => void;
   setFontUrl: (url: string) => void;
   addFont: () => void;
+  /** «أضف خطًّا من جهازك»: ملفُّ ttf/otf/woff/woff2 يُسجَّل ويُحفَظ في مكتبة الخطوط فيبقى
+   * بعد إعادة التشغيل، ويُطبَّق على النصّ المحدَّد إن وُجد. */
+  addFontFromFile: () => Promise<void>;
+  /** «خطٌّ مثبّت بالاسم»: يُقاس أنه موجودٌ فعلًا في الجهاز (`isFontInstalled`) قبل أن يُضاف. */
+  addSystemFont: (name: string) => void;
+  removeUserFont: (family: string) => void;
   setPostPalette: (idx: number) => void;
   /** لونُ خلفيةٍ حرّ: طبقةٌ حقيقيّة باسم «الخلفية» خلف كلّ شيء (انظر `BACKGROUND_ID`). */
   setBackgroundColor: (color: string) => void;
@@ -1464,6 +1519,81 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       .catch(() => patch({ aiAgents: [] }));
   }, [patch]);
 
+  // مكتبةُ خطوط المستعمل: تُقرأ مرّةً عند البدء وتُسجَّل كلُّها، كما تُقرأ القوالب. وخطٌّ
+  // تعذّر تسجيلُه يبقى في القائمة بخطئه لا يختفي — ولا يُحذَف من الملف.
+  useEffect(() => {
+    let cancelled = false;
+    loadUserFonts().then(async (list) => {
+      const entries: FontEntry[] = [];
+      for (let i = 0; i < list.length; i++) {
+        const f = list[i];
+        let status: FontEntry['status'] = 'ready';
+        let error: string | undefined;
+        try {
+          await registerUserFont(f);
+        } catch (err) {
+          status = 'error';
+          error = err instanceof Error ? err.message : String(err);
+        }
+        entries.push({ id: -(i + 1), name: f.name, family: f.family, status, error, custom: true, user: true, system: !f.dataUrl });
+      }
+      if (!cancelled && entries.length) setState((s) => ({ ...s, fonts: [...entries, ...s.fonts.filter((x) => !entries.some((e) => e.family === x.family))] }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** يضيف خطًّا إلى المكتبة المحفوظة (يُقرأ الملفُّ من جديد كي لا تُطمَس إضافةٌ من نافذةٍ
+   * أخرى) ثم إلى القائمة، ويطبّقه على النصّ المحدَّد. */
+  const adoptUserFont = useCallback(async (font: UserFont) => {
+    const saved = await loadUserFonts();
+    await saveUserFonts([...saved.filter((f) => f.family !== font.family), font]).catch(() => undefined);
+    setState((s) => {
+      const entry: FontEntry = { id: Date.now(), name: font.name, family: font.family, status: 'ready', custom: true, user: true, system: !font.dataUrl };
+      const sel = s.elements.find((e) => e.id === s.selectedIds[0]);
+      const apply = s.selectedIds.length === 1 && sel?.type === 'text' && !sel.locked;
+      return {
+        ...s,
+        fonts: [entry, ...s.fonts.filter((f) => f.family !== font.family)],
+        fontError: null,
+        ...(apply
+          ? { elements: s.elements.map((e) => (e.id === sel!.id && e.type === 'text' ? { ...e, fontFamily: font.family } : e)), ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_font) }
+          : {}),
+      };
+    });
+  }, []);
+
+  const addFontFromFile = useCallback(async () => {
+    try {
+      const picked = await pickFontFile();
+      if (!picked) return;
+      const taken = new Set(stateRef.current.fonts.map((f) => f.family));
+      await adoptUserFont(await fontFromBytes(picked.bytes, picked.name, taken));
+    } catch (err) {
+      patch({ fontError: err instanceof Error ? err.message : String(err) });
+    }
+  }, [adoptUserFont, patch]);
+
+  const addSystemFont = useCallback(
+    (name: string) => {
+      const n = name.trim();
+      if (!n) return;
+      const L = stateRef.current.lang === 'ar' ? AR : EN;
+      if (!isFontInstalled(n)) {
+        patch({ fontError: L.font_not_installed(n) });
+        return;
+      }
+      void adoptUserFont({ name: n, family: cssFamilyOf(n) });
+    },
+    [adoptUserFont, patch],
+  );
+
+  const removeUserFont = useCallback((family: string) => {
+    void loadUserFonts().then((saved) => saveUserFonts(saved.filter((f) => f.family !== family)).catch(() => undefined));
+    setState((s) => ({ ...s, fonts: s.fonts.filter((f) => !(f.user && f.family === family)) }));
+  }, []);
+
   const addFont = useCallback(() => {
     const url = state.fontUrl.trim();
     if (!url) return;
@@ -1477,8 +1607,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const family = `${name.replace(/[^a-zA-Z0-9]+/g, '') || 'Custom'}-${id}`;
     patch((s) => ({ fonts: [{ id, name, family, status: 'loading' as const, custom: true }, ...s.fonts], fontUrl: '' }));
     fetchAndRegisterFont(url, family)
-      .then(() => {
-        patch((s) => ({ fonts: s.fonts.map((f) => (f.id === id ? { ...f, status: 'ready' as const } : f)) }));
+      .then(async (loaded) => {
+        patch((s) => ({ fonts: s.fonts.map((f) => (f.id === id ? { ...f, status: 'ready' as const, user: true } : f)) }));
+        // ويُحفَظ ببايتاته في مكتبة الخطوط: كان يضيع عند أوّل إعادة تشغيل.
+        const ext = (url.split('?')[0].split('.').pop() ?? 'ttf').toLowerCase();
+        let binary = '';
+        for (let i = 0; i < loaded.bytes.length; i += 0x8000) binary += String.fromCharCode(...loaded.bytes.subarray(i, i + 0x8000));
+        const saved = await loadUserFonts();
+        await saveUserFonts([...saved.filter((f) => f.family !== family), { name, family, dataUrl: `data:font/${ext};base64,${btoa(binary)}` }]).catch(() => undefined);
       })
       .catch((err: Error) => {
         patch((s) => ({ fonts: s.fonts.map((f) => (f.id === id ? { ...f, status: 'error' as const, error: err.message } : f)) }));
@@ -2077,6 +2213,61 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // الصوت: طبقةٌ لا تُرى، تبدأ عند المؤشّر وطولُها طولُ ملفّها — مقرَّبًا **إلى أعلى** على
+  // شبكة الإطارات كي لا يُقصّ من آخره شيء (ما بعد آخر الملف صمتٌ لا ضرر فيه). وتُوضَع **تحت**
+  // كلّ الطبقات (بعد الخلفيّة إن وُجدت): صفوفُ الصوت في أسفل الخطّ الزمنيّ كما في كلّ محرّر.
+  const insertLoadedAudio = useCallback((loaded: LoadedAudio) => {
+    setState((s) => {
+      const id = newElementId('audio');
+      const start = Math.max(0, snapToFrame(s.t, s.fps));
+      const duration = Math.max(1 / s.fps, Math.ceil(loaded.durationSec * s.fps - 1e-6) / s.fps);
+      const el: DocElement = {
+        id,
+        type: 'audio',
+        name: loaded.name,
+        visible: true,
+        locked: false,
+        opacity: 100,
+        maskId: null,
+        geo: { x: 0, y: 0, w: 0, h: 0, rotation: 0 },
+        src: loaded.dataUrl,
+        durationSec: loaded.durationSec,
+        volume: 1,
+        muted: false,
+        anim: { ...defaultAnim('none', start, duration), tracks: {} },
+      };
+      const at = s.elements[0]?.id === BACKGROUND_ID ? 1 : 0;
+      return {
+        ...s,
+        elements: [...s.elements.slice(0, at), el, ...s.elements.slice(at)],
+        selectedIds: [id],
+        sel: id,
+        audioError: null,
+        ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_audio_add),
+      };
+    });
+  }, []);
+
+  const insertAudioTool = useCallback(async () => {
+    try {
+      const loaded = await pickAudioFile();
+      if (loaded) insertLoadedAudio(loaded);
+    } catch (err) {
+      patch({ audioError: err instanceof Error ? err.message : String(err) });
+    }
+  }, [insertLoadedAudio, patch]);
+
+  const insertAudioFromFile = useCallback(
+    async (file: File) => {
+      try {
+        insertLoadedAudio(await readAudioFile(file));
+      } catch (err) {
+        patch({ audioError: err instanceof Error ? err.message : String(err) });
+      }
+    },
+    [insertLoadedAudio, patch],
+  );
+
   const insertVideoTool = useCallback(async (clickPointPx?: { x: number; y: number }) => {
     const loaded = await pickVideoFile().catch(() => null);
     if (loaded) insertLoadedVideo(loaded, clickPointPx);
@@ -2331,6 +2522,38 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         const sources = withDependencies(ids, s.elements);
         clipboardRef.current = { elements: sources.map((e) => ({ ...e, ...(ids.has(e.id) ? {} : { __dep: true }) }) as DocElement), pastes: 0 };
       },
+      copyAnimation: () => {
+        const s = stateRef.current;
+        const el = s.elements.find((e) => e.id === s.selectedIds[0]);
+        if (!el) return;
+        patch({ animClipboard: { anim: structuredClone(el.anim), textAnim: el.type === 'text' ? structuredClone(el.textAnim) : null, fromType: el.type } });
+      },
+      pasteAnimation: () =>
+        setState((s) => {
+          const clip = s.animClipboard;
+          if (!clip || !s.selectedIds.length) return s;
+          const ids = new Set(s.selectedIds);
+          let changed = false;
+          const elements = s.elements.map((e) => {
+            if (!ids.has(e.id) || e.locked) return e;
+            // المسموحُ يُسأل عنه بعد اللصق لا قبله: نصٌّ بلا تتابعٍ يناله الآن من المصدر،
+            // فيصير «الظهور» له معنًى — ولو سُئل قبلُ لسقط مسارُه في الطريق.
+            const textAnim = e.type === 'text' && clip.textAnim ? structuredClone(clip.textAnim) : null;
+            const allowed = new Set(animPropertiesFor(textAnim ? { ...e, textAnim } : e));
+            const tracks: PropertyTracks = {};
+            for (const [prop, track] of Object.entries(clip.anim.tracks) as [AnimProperty, PropertyKeyframe[] | undefined][]) {
+              if (track && allowed.has(prop)) tracks[prop] = track.map((k) => ({ ...k, id: newElementId('kf'), bezier: [...k.bezier] as Bezier }));
+            }
+            // البدايةُ بدايةُ الهدف، وكلُّ ما سواها من المصدر — والمفاتيحُ بزمن الحركة،
+            // فتنتقل مع البداية بلا حساب.
+            const anim: ElementAnim = { ...structuredClone(clip.anim), start: e.anim.start, tracks };
+            changed = true;
+            if (e.type === 'text' && textAnim) return { ...e, anim, textAnim };
+            return { ...e, anim };
+          });
+          if (!changed) return s;
+          return { ...s, elements, ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_paste_anim) };
+        }),
       cutSelected: () => {
         const s = stateRef.current;
         const ids = new Set(s.selectedIds);
@@ -2371,7 +2594,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       },
       selectAllElements: () =>
         patch((s) => {
-          const ids = s.elements.filter((e) => e.visible && !e.locked && e.id !== BACKGROUND_ID).map((e) => e.id);
+          // ⌘A على اللوحة يحدّد ما على اللوحة: طبقاتُ الصوت لا تُرى فيها، فلا تدخل.
+          const ids = s.elements.filter((e) => e.visible && !e.locked && e.id !== BACKGROUND_ID && e.type !== 'audio').map((e) => e.id);
           return { selectedIds: ids, sel: ids[ids.length - 1] ?? null, tool: 'select' };
         }),
       animateElement: (id, preset) =>
@@ -2606,6 +2830,86 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         commitElements((els) =>
           els.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, easing, tracks: cascadeEasingToTracks(e.anim.tracks, easing, e.anim.bezier) } } : e)),
         ),
+      setClipTiming: (ids, timing) =>
+        setState((s) => {
+          const fps = s.fps;
+          let changed = false;
+          const elements = s.elements.map((e) => {
+            if (!ids.includes(e.id) || e.locked) return e;
+            let anim = e.anim;
+            // البدايةُ نقلٌ لا تقليم: ما بُني من حركةٍ داخل المقطع ينتقل معه، فتبقى
+            // حركةُ الدخول عند بدايته كما صُمِّمت. والشبكةُ أوّلًا ثم الصفرُ أرضيّة.
+            if (typeof timing.start === 'number' && Number.isFinite(timing.start)) {
+              const target = Math.max(0, snapToFrame(timing.start, fps));
+              anim = moveClip(anim, target - anim.start).anim;
+            }
+            // والنهايةُ تقليمٌ للحافّة الأخيرة — `trim` تَحجز طولًا لا يقلّ عن إطار.
+            if (typeof timing.end === 'number' && Number.isFinite(timing.end)) {
+              const target = snapToFrame(timing.end, fps);
+              anim = trim(anim, 'out', target - (anim.start + anim.duration), { fps }).anim;
+            }
+            if (anim === e.anim) return e;
+            changed = true;
+            return { ...e, anim };
+          });
+          if (!changed) return s;
+          return { ...s, elements, ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_clip_timing) };
+        }),
+      setClipBounded: (ids, bounded) =>
+        setState((s) => {
+          let changed = false;
+          const elements = s.elements.map((e) => {
+            if (!ids.includes(e.id) || e.locked || !!e.anim.bounded === bounded) return e;
+            changed = true;
+            // `false` يُكتَب حذفًا لا قيمةً: غيابُ الحقل هو السلوكُ القائم، فعنصرٌ أُطفئ
+            // مفتاحُه يعود بايتًا ببايت إلى ما كان قبل أن يُشعَل.
+            const { bounded: _drop, ...rest } = e.anim;
+            return { ...e, anim: bounded ? { ...e.anim, bounded: true } : rest };
+          });
+          if (!changed) return s;
+          return { ...s, elements, ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_clip_bounded) };
+        }),
+      revealNextAtPlayhead: (id) =>
+        setState((s) => {
+          const el = s.elements.find((e) => e.id === id);
+          if (!el || el.type !== 'text' || el.locked || !el.textAnim.enabled) return s;
+          const total = revealUnitCount(el.text, el.textAnim.unit);
+          if (total === 0) return s;
+          const t = snapToFrame(s.t, s.fps);
+          const m = snapToFrame(animTimeAt(el.anim, t), s.fps);
+          const track = el.anim.tracks.reveal;
+          const current = revealValueAt(el.anim, t) ?? 0;
+          // `floor` لا `round`: قيمةٌ بين مفتاحين خطّيّين (٢٫٤) تعني أنّ وحدتين بدأتا، فالتالية
+          // الثالثة. والتسامحُ لقيمةٍ مخزونةٍ على شبكة ٠٫٠١ تُقرأ ٢٫٩٩٩٩٩٩٩.
+          const next = Math.min(total, Math.floor(current + 1e-6) + 1);
+          if (next <= current + 1e-6) return s;
+          const bezier = [...DEFAULT_BEZIER] as Bezier;
+          let nextTrack: PropertyKeyframe[] = track ?? [];
+          if (!track || !track.length) {
+            // مفتاحُ الصفر: عند بداية المقطع إن كان المؤشّرُ بعدها، وإلّا قبل المؤشّر بإطار —
+            // فالمسارُ يثبت على أوّل قيمه قبل أوّل مفتاح، ولولا الصفرُ لظهرت الكلمةُ قبل أوانها.
+            const startM = snapToFrame(animTimeAt(el.anim, el.anim.start), s.fps);
+            const zeroAt = startM < m ? startM : m - 1 / s.fps;
+            nextTrack = setKeyframe(nextTrack, { id: newElementId('kf'), time: zeroAt, value: 0, easing: 'hold', bezier });
+          }
+          nextTrack = setKeyframe(nextTrack, { id: newElementId('kf'), time: m, value: next, easing: 'hold', bezier: [...bezier] as Bezier });
+          return {
+            ...s,
+            elements: s.elements.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, tracks: { ...e.anim.tracks, reveal: nextTrack } } } : e)),
+            ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_reveal_next),
+          };
+        }),
+      clearRevealTiming: (id) =>
+        setState((s) => {
+          const el = s.elements.find((e) => e.id === id);
+          if (!el || el.locked || !el.anim.tracks.reveal) return s;
+          const { reveal: _drop, ...tracks } = el.anim.tracks;
+          return {
+            ...s,
+            elements: s.elements.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, tracks } } : e)),
+            ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_reveal_clear),
+          };
+        }),
       addTrackKeyframeAtPlayhead: (id, property) =>
         setState((s) => {
           const el = s.elements.find((e) => e.id === id);
@@ -2625,9 +2929,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           //
           // والقيمةُ تُقرأ **قبل** الكتابة: هي ما يراه المصمّم على الشاشة في هذه
           // اللحظة بعينها، فلا تُحدِث إضافةُ المفتاح أيّ قفزةٍ بصرية.
-          const value = resolvePropertyAt(el.anim, property, s.t);
+          //
+          // و«الظهور» بلا مسارٍ ليست قيمتُه المرسومةُ محايدَها (٠): التوقيتُ التلقائيّ يكون
+          // قد أظهر وحداتٍ عند المؤشّر، فمفتاحٌ بالصفر كان سيُخفي النصَّ كلَّه بضغطة. فالقيمةُ
+          // عددُ ما بدأ منها الآن — `startedUnitCount`، الدالّةُ التي يرسم بها الرسّامان.
+          const value =
+            property === 'reveal' && el.type === 'text' && !el.anim.tracks.reveal?.length
+              ? startedUnitCount(el.textAnim, el.anim, revealUnitCount(el.text, el.textAnim.unit), s.t)
+              : resolvePropertyAt(el.anim, property, s.t);
           const time = snapToFrame(animTimeAt(el.anim, s.t), s.fps);
-          const key: PropertyKeyframe = { id: newElementId('kf'), time, value, easing: 'easeOut' as EasingId, bezier: [...DEFAULT_BEZIER] as Bezier };
+          // و«الظهور» يولد بـ«تثبيت»: مفتاحُه توقيتُ وحدةٍ لا منحنى حركة، فالكلمةُ تظهر عنده
+          // لا في منتصف ما بينه وبين التالي. ومن أراد آلةً كاتبةً منتظمة غيّره خطّيًّا.
+          const key: PropertyKeyframe = { id: newElementId('kf'), time, value, easing: (property === 'reveal' ? 'hold' : 'easeOut') as EasingId, bezier: [...DEFAULT_BEZIER] as Bezier };
           // قُمعُ الكتابة الواحد — انظر `setKeyframe`. وهو نفسه الذي يَكتب سحبُ
           // الماسة في `Clip.tsx`، فلا يبقى مسارانِ يختلفان في معالجة التصادم.
           const nextTrack = setKeyframe(el.anim.tracks[property], key);
@@ -2941,6 +3254,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             return { ...e, trimIn: inSec, trimOut: outSec };
           }),
         ),
+      setAudioVolume: (id, volume) => commitElements((els) => els.map((e) => (e.id === id && (e.type === 'audio' || e.type === 'video') ? { ...e, volume: clamp(volume, 0, 1) } : e)), (state.lang === 'ar' ? AR : EN).undo_audio_volume),
+      setAudioMuted: (id, muted) => commitElements((els) => els.map((e) => (e.id === id && (e.type === 'audio' || e.type === 'video') ? { ...e, muted } : e)), (state.lang === 'ar' ? AR : EN).undo_audio_mute),
+      liveSetAudioVolume: (id, volume) => liveUpdateElements((els) => els.map((e) => (e.id === id && (e.type === 'audio' || e.type === 'video') ? { ...e, volume: clamp(volume, 0, 1) } : e))),
+      insertAudioTool,
+      insertAudioFromFile,
       setVideoVolume: (id, volume) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'video' ? { ...e, volume: clamp(volume, 0, 1) } : e))),
       setVideoMuted: (id, muted) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'video' ? { ...e, muted } : e))),
       setVideoLoop: (id, loop) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'video' ? { ...e, loop } : e))),
@@ -3516,6 +3834,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       redo,
       setFontUrl: (fontUrl) => patch({ fontUrl }),
       addFont,
+      addFontFromFile,
+      addSystemFont,
+      removeUserFont,
       // Roadmap #16: also mirrors onto the active artboard's own metadata (see
       // `ArtboardMeta.paletteIdx`) so a palette choice survives switching away and
       // back — the global `postPalette`/`PALETTES[...]` read everywhere else always
@@ -3727,6 +4048,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       splitAtPlayhead,
       togglePlay,
       addFont,
+      addFontFromFile,
+      addSystemFont,
+      removeUserFont,
       sendAi,
       setAiEngine,
       setAiCustomCmd,
@@ -3754,6 +4078,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       insertVideoTool,
       insertVideoFromFile,
       replaceVideo,
+      insertAudioTool,
+      insertAudioFromFile,
       persistTemplates,
       state.sizeIdx,
       state.selectedIds,
@@ -3823,6 +4149,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       }
       if (overlayOpen(st)) return;
 
+      // ⌥⌘C / ⌥⌘V — نسخُ الحركة ولصقُها (اختصارُ «نسخ الخصائص» في فيغما). قبل فرع ⌘ وحده،
+      // لأنّ ذاك يشترط غيابَ ⌥.
+      if (mod && e.altKey && !e.shiftKey && (e.code === 'KeyC' || e.code === 'KeyV')) {
+        if (!st.selectedIds.length) return;
+        e.preventDefault();
+        if (e.code === 'KeyC') a.copyAnimation();
+        else a.pasteAnimation();
+        return;
+      }
       if (mod && !e.altKey) {
         if (e.code === 'KeyD' && !e.shiftKey) {
           if (!st.selectedIds.length) return;

@@ -172,19 +172,27 @@ export function splitAt(elements: DocElement[], elementId: string, t: number, ct
   const leftAnim: ElementAnim = { ...anim, duration: cut - anim.start, tracks: { ...anim.tracks } };
   const rightAnim: ElementAnim = { ...anim, start: cut, sourceIn: cut - offset, duration: end - cut, tracks: { ...anim.tracks } };
 
-  const linear = (time: number, value: number): PropertyKeyframe => ({
+  // مفتاحُ العتبة **درجةٌ لا منحدر** (`'hold'`). كان `'linear'`، وهو صحيحٌ عند كلّ
+  // إطارٍ على الشبكة وكاذبٌ بينهما: ضبابُ الحركة يأخذ عيّناتٍ داخل فترة الإطار
+  // (`shutterSampleTimes`)، فكان آخرُ إطارٍ للنصف الأيسر يُرسَم بمتوسّط شفافيّةٍ
+  // تهبط إلى الصفر في منتصفه — طيفٌ نصفُ شفّافٍ عند كلّ قطع. والدرجةُ لا قيمةَ
+  // وسطى لها، فالإطارُ قبل القطع كاملٌ والذي عنده غائبٌ عند كلّ عيّنة.
+  const step = (time: number, value: number): PropertyKeyframe => ({
     id: ctx.newId('kf'),
     time,
     value,
-    easing: 'linear',
+    easing: 'hold',
     bezier: [...EASING_BEZIER.linear] as PropertyKeyframe['bezier'],
   });
 
   for (const property of ANIM_PROPERTIES as AnimProperty[]) {
     const track = anim.tracks[property];
     // الشفافيّةُ تُعالَج دائمًا، ولو لم يكن لها مسارٌ أصلًا — وسببُ ذلك في
-    // الفقرة الطويلة أدناه.
-    if ((!track || !track.length) && property !== 'opacity') continue;
+    // الفقرة الطويلة أدناه. **إلّا لمقطعٍ محدود** (`anim.bounded`): نافذةُ الظهور
+    // موجودةٌ له فعلًا، فكلُّ نصفٍ يغيب خارج مقطعه بنفسه، وعتبةُ الشفافيّة زائدةٌ
+    // تُلوِّث مسارَه وتُعطّل حركاتِ الدخول الجاهزة بلا سبب.
+    const needsOpacityStep = property === 'opacity' && !anim.bounded;
+    if ((!track || !track.length) && !needsOpacityStep) continue;
     const value = resolvePropertyAt(anim, property, cut);
     const inherited = easingBefore(track, animCut);
     const boundary = (): PropertyKeyframe => ({
@@ -197,7 +205,7 @@ export function splitAt(elements: DocElement[], elementId: string, t: number, ct
     const before = (track ?? []).filter((k) => k.time < animCut - 1e-9);
     const after = (track ?? []).filter((k) => k.time >= animCut - 1e-9).map((k) => ({ ...k, id: ctx.newId('kf'), bezier: [...k.bezier] as PropertyKeyframe['bezier'] }));
 
-    if (property !== 'opacity') {
+    if (!needsOpacityStep) {
       // يمرّ كلاهما بقُمع الكتابة الواحد (`setKeyframe`)، فإصابةٌ تامّةٌ عند زمن
       // القطع تُستبدَل في موضعها ويُحفَظ `id`/`easing`/`bezier` للمفتاح القائم —
       // ولا يُولَد مفتاحانِ على زمنٍ واحدٍ وأحدُهما لا يُوصَل إليه أبدًا.
@@ -236,12 +244,12 @@ export function splitAt(elements: DocElement[], elementId: string, t: number, ct
     // مقسومٌ حركتُه مُعدَّلةٌ باليد فعلًا.
     const holdValue = resolvePropertyAt(anim, property, cut - frame);
     let leftKeys = (track ?? []).filter((k) => k.time <= lastLeftFrame + 1e-9);
-    leftKeys = setKeyframe(leftKeys, linear(lastLeftFrame, holdValue));
-    leftKeys = setKeyframe(leftKeys, linear(animCut, 0));
+    leftKeys = setKeyframe(leftKeys, step(lastLeftFrame, holdValue));
+    leftKeys = setKeyframe(leftKeys, step(animCut, 0));
     leftAnim.tracks[property] = leftKeys;
 
     let rightKeys = setKeyframe(after, boundary());
-    rightKeys = setKeyframe(rightKeys, linear(lastLeftFrame, 0));
+    rightKeys = setKeyframe(rightKeys, step(lastLeftFrame, 0));
     rightAnim.tracks[property] = rightKeys;
   }
 
