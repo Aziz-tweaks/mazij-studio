@@ -23,6 +23,7 @@ import { useStudio } from '../state/StudioContext';
 import { AudioPlayback } from './stage/AudioPlayback';
 import { isAudioFile } from '../lib/audioFile';
 import { useCompact } from '../lib/useCompact';
+import { useViewInset } from './mobile/viewInset';
 
 /** الصندوق الجاري رسمه، مع أي قُطرَي الصندوق يسلكه الخطّ (يُهمَل لبقيّة الأنواع). */
 type ShapeDraft = { x: number; y: number; w: number; h: number; flipX?: boolean; flipY?: boolean };
@@ -136,7 +137,23 @@ export function Stage() {
 
   // في الجوال كلُّ بكسلٍ للّوحة: هامشُ الملاءمة ١٢ لا ٤٠.
   const padding = compact ? 12 : 40;
-  const baseFit = Math.max(0.02, Math.min((containerSize.w - padding * 2) / size.w, (containerSize.h - padding * 2) / size.h));
+  // واللوحُ السفليّ في الجوال يطفو فوق المسرح: يُلاءَم التصميمُ في المساحة الظاهرة فوقه.
+  const viewInsetRaw = useViewInset();
+  const viewInset = compact ? Math.min(viewInsetRaw, Math.max(0, containerSize.h - 140)) : 0;
+  const baseFit = Math.max(0.02, Math.min((containerSize.w - padding * 2) / size.w, (containerSize.h - viewInset - padding * 2) / size.h));
+  // تبدّلُ المساحة الظاهرة يتحرّك بانتقالٍ واحد على `transform` (لا إعادةَ تخطيط)، ثم يعود
+  // التحويلُ بلا انتقالٍ ليبقى التكبيرُ والسحبُ بالإصبع ١:١.
+  const [insetEasing, setInsetEasing] = useState(false);
+  const lastInset = useRef(viewInset);
+  useEffect(() => {
+    if (lastInset.current === viewInset) return;
+    lastInset.current = viewInset;
+    setInsetEasing(true);
+    const id = window.setTimeout(() => setInsetEasing(false), 460);
+    return () => window.clearTimeout(id);
+  }, [viewInset]);
+  const insetRef = useRef(viewInset);
+  insetRef.current = viewInset;
   const scale = baseFit * (state.zoom / 100);
 
   // **التكبيرُ بإصبعين** (الجوال): المسافةُ بين الإصبعين تكبّر وتصغّر، ومنتصفُهما يبقى
@@ -152,7 +169,7 @@ export function Stage() {
       const r = el.getBoundingClientRect();
       const a = t[0];
       const b = t[1];
-      return { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), mx: (a.clientX + b.clientX) / 2 - r.left - r.width / 2, my: (a.clientY + b.clientY) / 2 - r.top - r.height / 2 };
+      return { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), mx: (a.clientX + b.clientX) / 2 - r.left - r.width / 2, my: (a.clientY + b.clientY) / 2 - r.top - r.height / 2 + insetRef.current / 2 };
     };
     const onStart = (e: TouchEvent) => {
       if (e.touches.length !== 2) return;
@@ -1016,8 +1033,9 @@ export function Stage() {
     top: '50%',
     width: size.w,
     height: size.h,
-    transform: `translate(-50%, -50%) translate(${state.panX}px, ${state.panY}px) scale(${scale})`,
+    transform: `translate(-50%, -50%) translate(${state.panX}px, ${state.panY - viewInset / 2}px) scale(${scale})`,
     transformOrigin: '50% 50%',
+    transition: insetEasing ? 'transform 440ms cubic-bezier(.32,.72,0,1)' : undefined,
     background: pal.bg,
     color: pal.fg,
     // **حدٌّ شعريّ يبيّن حافّة اللوحة على المسرح الداكن.** الظلّ وحده لا يُرى على خلفيّةٍ
@@ -1064,6 +1082,7 @@ export function Stage() {
     height: abStyle.height,
     transform: abStyle.transform,
     transformOrigin: abStyle.transformOrigin,
+    transition: abStyle.transition,
     pointerEvents: 'none',
   };
 

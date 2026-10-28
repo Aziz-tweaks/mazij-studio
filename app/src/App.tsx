@@ -123,7 +123,7 @@ function StudioShell() {
       {!compact && state.screen === 'home' && <HomeScreen />}
 
       <CommandPalette />
-      <ExportDialog />
+      {!compact && <ExportDialog />}
       <TemplatesDialog />
       <ArtboardsDialog />
       <LocalModelsDialog />

@@ -1,0 +1,448 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * مزيج على الجوال — نظامُ التصميم (٢٨ أكتوبر ٢٠٢٦)
+ *
+ * ثلاث قواعد تحكم كلَّ ما تحت:
+ *  ١. اللوحةُ هي البطل: الواجهةُ مادّةٌ داكنةٌ شفّافةٌ تطفو فوقها، لا ألواحٌ تأكلها.
+ *  ٢. كلُّ ما يُلمَس ≥ ٤٤ نقطة، ويستجيب لحظةَ الضغط لا لحظةَ الرفع.
+ *  ٣. الحركةُ نابضٌ يُقاطَع (spring) على transform/opacity وحدهما — لا شيء يُعيد التخطيط.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+.m-root {
+  --m-bg: #0c0d10;
+  --m-elev: #16171b;
+  --m-elev2: #1e2025;
+  --m-elev3: #272a31;
+  --m-hair: rgba(255, 255, 255, 0.07);
+  --m-hair2: rgba(255, 255, 255, 0.12);
+  --m-text: #f2f3f5;
+  --m-text2: #a3a7b0;
+  --m-text3: #6e727c;
+  --m-accent: #7362ff;
+  --m-accent-text: #b8adff;
+  --m-accent-soft: rgba(115, 98, 255, 0.16);
+  --m-danger: #ff6b6b;
+  --m-material: rgba(20, 21, 25, 0.78);
+  --m-r-s: 10px;
+  --m-r: 14px;
+  --m-r-l: 20px;
+  --m-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --m-safe-t: env(safe-area-inset-top, 0px);
+  --m-safe-b: env(safe-area-inset-bottom, 0px);
+
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: none;
+}
+.m-root input,
+.m-root textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* لا أشرطةَ تمرير مرئيّة في الجوال — التمريرُ يُعرَف بالإصبع. */
+.m-root *,
+.m-root {
+  scrollbar-width: none;
+}
+.m-root *::-webkit-scrollbar {
+  display: none;
+}
+.m-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.m-hscroll {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+}
+.m-hscroll > * {
+  scroll-snap-align: start;
+}
+
+/* ───────── الضغط: الأثرُ لحظةَ اللمس ───────── */
+.m-press {
+  transition:
+    transform 120ms ease-out,
+    opacity 120ms ease-out,
+    background-color 160ms ease-out;
+  touch-action: manipulation;
+}
+.m-press:active:not(:disabled) {
+  transform: scale(0.96);
+  opacity: 0.82;
+}
+.m-press:disabled {
+  opacity: 0.35;
+}
+
+/* ───────── الطباعة ───────── */
+.m-large-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.m-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+.m-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--m-text2);
+}
+.m-caption {
+  font-size: 12px;
+  color: var(--m-text3);
+  line-height: 1.6;
+}
+
+/* ───────── الأزرار ───────── */
+.m-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--m-r);
+  background: var(--m-elev2);
+  color: var(--m-text);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.m-btn-primary {
+  background: var(--m-accent);
+  color: #fff;
+  font-weight: 700;
+}
+.m-btn-block {
+  width: 100%;
+  min-height: 52px;
+  font-size: 16px;
+}
+.m-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--m-text);
+}
+.m-icon-btn.m-filled {
+  background: var(--m-elev2);
+}
+
+/* ───────── البطاقات والصفوف ───────── */
+.m-card {
+  border: 0;
+  border-radius: var(--m-r);
+  background: var(--m-elev);
+  box-shadow: inset 0 0 0 1px var(--m-hair);
+  color: var(--m-text);
+  text-align: start;
+}
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--m-text);
+  text-align: start;
+  font-size: 15px;
+}
+.m-group {
+  border-radius: var(--m-r);
+  background: var(--m-elev2);
+  overflow: hidden;
+}
+.m-group > .m-row + .m-row {
+  box-shadow: inset 0 1px 0 var(--m-hair);
+}
+
+/* ───────── الشرائح (chips) والمفاتيح المجزّأة ───────── */
+.m-chip {
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--m-elev2);
+  color: var(--m-text2);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.m-chip[aria-pressed='true'],
+.m-chip[aria-selected='true'] {
+  background: var(--m-text);
+  color: #0c0d10;
+}
+.m-seg {
+  display: flex;
+  padding: 3px;
+  gap: 3px;
+  border-radius: 12px;
+  background: var(--m-elev2);
+}
+.m-seg > button {
+  flex: 1;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--m-text2);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 180ms var(--m-ease), color 180ms var(--m-ease);
+}
+.m-seg > button[aria-pressed='true'] {
+  background: var(--m-elev3);
+  color: var(--m-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ───────── المادّة الشفّافة: الشرائطُ العائمة فوق اللوحة ───────── */
+.m-material {
+  background: var(--m-material);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .m-material {
+    background: var(--m-elev);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* ───────── الشريط السفليّ ───────── */
+.m-dock {
+  position: relative;
+  z-index: 6;
+  flex: none;
+  padding: 6px 4px calc(4px + var(--m-safe-b));
+  box-shadow: inset 0 1px 0 var(--m-hair);
+}
+.m-dock-row {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  padding: 0 4px;
+}
+.m-tool {
+  flex: 1 0 auto;
+  min-width: 62px;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--m-text2);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.m-tool[aria-pressed='true'] {
+  color: var(--m-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+.m-tool.m-danger {
+  color: var(--m-danger);
+}
+.m-tool svg {
+  color: inherit;
+}
+.m-tool[aria-pressed='true'] svg,
+.m-tool:not(.m-danger) svg {
+  color: var(--m-text);
+}
+
+/* دخولُ صفّ الأدوات حين يتبدّل (أدوات الإضافة ↔ أدوات العنصر). */
+@keyframes m-swap {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.m-swap {
+  animation: m-swap 260ms var(--m-ease);
+}
+
+/* ───────── اللوح السفليّ ───────── */
+.m-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+.m-sheet {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--m-r-l) var(--m-r-l) 0 0;
+  background: var(--m-elev);
+  box-shadow:
+    0 -1px 0 var(--m-hair2),
+    0 -18px 48px rgba(0, 0, 0, 0.5);
+  will-change: transform;
+  contain: layout paint;
+}
+.m-sheet-grab {
+  flex: none;
+  touch-action: none;
+  padding-top: 8px;
+}
+.m-sheet-grabber {
+  width: 38px;
+  height: 5px;
+  margin: 0 auto 6px;
+  border-radius: 3px;
+  background: var(--m-hair2);
+}
+.m-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px 6px 18px;
+}
+[dir='rtl'] .m-sheet-head {
+  padding: 0 18px 6px 12px;
+}
+.m-sheet-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ───────── المنزلق ───────── */
+.m-slider {
+  position: relative;
+  height: 44px;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+}
+.m-slider-track {
+  position: absolute;
+  inset-inline: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--m-elev3);
+  overflow: hidden;
+}
+.m-slider-fill {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  background: var(--m-accent);
+  transform-origin: left center;
+}
+.m-slider-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.45),
+    0 0 0 0.5px rgba(0, 0, 0, 0.2);
+  transition: transform 120ms ease-out;
+}
+.m-slider[data-active='true'] .m-slider-thumb {
+  transform: scale(1.12);
+}
+
+/* ───────── الحقول ───────── */
+.m-field {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--m-r);
+  background: var(--m-elev2);
+  box-shadow: inset 0 0 0 1px var(--m-hair);
+  color: var(--m-text);
+  font-size: 16px; /* ١٦ لا أقلّ: iOS يكبّر الصفحة على حقلٍ أصغر */
+  outline: 0;
+}
+.m-field:focus {
+  box-shadow: inset 0 0 0 2px var(--m-accent);
+}
+
+/* ───────── المحتوى ───────── */
+@keyframes m-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.m-fade-in {
+  animation: m-in 280ms var(--m-ease) both;
+}
+.m-lazy {
+  content-visibility: auto;
+  contain-intrinsic-size: 240px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-press,
+  .m-seg > button,
+  .m-slider-thumb {
+    transition: none;
+  }
+  .m-press:active:not(:disabled) {
+    transform: none;
+  }
+  .m-swap,
+  .m-fade-in {
+    animation: none;
+  }
+}

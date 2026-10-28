@@ -1,225 +1,369 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Icon } from '../Icon';
-import { ICONS, nameOf, sizeAt } from '../../data/constants';
-import { documentDuration, formatClock } from '../../lib/animTimeline';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStudio } from '../../state/StudioContext';
+import type { DocElement, TextElement } from '../../state/elements';
+import { MEDIUM_SURFACES, nameOf, sizeAt } from '../../data/constants';
+import { documentDuration, formatClock } from '../../lib/animTimeline';
 import { Stage } from '../Stage';
-import { Timeline } from '../Timeline';
 import { PropsTab } from '../left-panel/PropsTab';
-import { LibraryTab } from '../left-panel/LibraryTab';
-import { AssetsTab } from '../left-panel/AssetsTab';
-import { AiTab } from '../left-panel/AiTab';
+import { Sheet } from './Sheet';
+import { MobileTimeline } from './MobileTimeline';
+import { MobileExport } from './MobileExport';
+import { setViewInset } from './viewInset';
+import { Glyph, IconButton, MI, Slider, ToolButton } from './ui';
+import { useM } from './strings';
+import {
+  ArrangePanel,
+  AudioPanel,
+  BackgroundPanel,
+  ColorPanel,
+  CornersPanel,
+  FontPanel,
+  FxAmountPanel,
+  FxKindPanel,
+  FxPanel,
+  LayersPanel,
+  MizoPanel,
+  MotionPanel,
+  OpacityPanel,
+  ShapesPanel,
+  SizePanel,
+  StrokePanel,
+  TextPanel,
+  VolumePanel,
+  pickFile,
+} from './panels';
+import './mobile.css';
 
-/** **المحرّرُ في الجوال** (٢٨ أكتوبر ٢٠٢٦).
+/** **المحرّرُ في الجوال** — أُعيد بناؤه من الصفر (٢٨ أكتوبر ٢٠٢٦، بطلب المالك:
+ * «الشرط السلاسة والجمالية والأداء»).
  *
- * محرّرُ سطح المكتب أربعةُ أعمدة (شريطُ الإضافة، لوحُها، اللوحة، المفتش) وخطٌّ زمنيّ
- * بعرض الشاشة؛ على ٣٩٠ بكسلًا كان المفتشُ يغطّي الشاشة واللوحةُ مقصوصة. وهنا ترتيبُ
- * تطبيقات التصميم على الجوال:
+ * التخطيطُ كتطبيقات التصميم على الجوال (محرّر فيديو شائع وأداة تصميم شائعة): شريطٌ علويّ رفيع، واللوحةُ بكلّ
+ * ما بقي، وشريطُ أدواتٍ سفليّ يتبدّل: أدواتُ **الإضافة** حين لا تحديد، وأدواتُ **العنصر
+ * المحدَّد** بحسب نوعه حين يُحدَّد (نصّ: الخط، اللون، الحجم…؛ صورة: قص، اقلب…).
  *
- *   شريطٌ علويّ مختصر ← اللوحةُ بكلّ المساحة الباقية ← شريطُ تشغيلٍ للفيديو ←
- *   شريطٌ سفليّ: أدواتُ الإضافة، أو — متى حُدِّد عنصر — أفعالُه.
- *
- * وكلُّ لوحٍ (المكتبات، الخصائص، الطبقات) **لوحٌ سفليّ** يطلع فوق الشريط ويُصغِّر اللوحة
- * ولا يغطّيها، فيرى المصمّمُ أثرَ ما يغيّره وهو يغيّره. والمحتوى نفسُه مكوّناتُ سطح
- * المكتب (`LibraryTab`، `PropsTab`، `Timeline`) — لا نسخةَ ثانيةً من أيّ منطق. */
+ * وكلُّ أداةٍ تفتح **لوحًا سفليًّا** يطفو فوق اللوحة ويُسحَب بالإصبع (`Sheet`)، والمسرحُ
+ * يُعيد ملاءمةَ التصميم في المساحة الظاهرة فوقه — فيرى المصمّم أثرَ ما يغيّره وهو يغيّره.
+ * والألواحُ مكتوبةٌ للإصبع (`panels.tsx`) لا ألواحَ سطح المكتب مضغوطة. */
 
-type Sheet = null | 'props' | 'layers';
+type SheetId =
+  | 'text'
+  | 'shapes'
+  | 'fx'
+  | 'audio'
+  | 'bg'
+  | 'mizo'
+  | 'layers'
+  | 'font'
+  | 'color'
+  | 'size'
+  | 'opacity'
+  | 'motion'
+  | 'arrange'
+  | 'stroke'
+  | 'corners'
+  | 'volume'
+  | 'fxkind'
+  | 'fxamount'
+  | 'fxfade'
+  | 'more';
+
+const ELEMENT_SHEETS: SheetId[] = ['font', 'color', 'size', 'opacity', 'motion', 'arrange', 'stroke', 'corners', 'volume', 'fxkind', 'fxamount', 'fxfade', 'more'];
 
 export function MobileEditor() {
-  const { state, actions, dict: L } = useStudio();
-  const [sheet, setSheet] = useState<Sheet>(null);
-  const timed = state.medium === 'timed';
-  const hasSel = state.selectedIds.length > 0;
-  const libraryOpen = state.panel === 'library' || state.panel === 'assets' || state.panel === 'ai';
-  const sel = hasSel ? state.elements.find((e) => e.id === state.selectedIds[0]) : undefined;
+  const { state, actions } = useStudio();
+  const M = useM();
+  const [sheet, setSheet] = useState<SheetId | null>(null);
+  const sheetNow = useRef<SheetId | null>(null);
+  sheetNow.current = sheet;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
 
-  // لوحُ المكتبة ولوحُ الخصائص لا يجتمعان: فتحُ أحدهما يُغلق الآخر.
-  useEffect(() => {
-    if (libraryOpen) setSheet(null);
-  }, [libraryOpen]);
-  // إلغاءُ التحديد يُغلق لوحَ خصائصه — لا خصائصَ لشيءٍ غيرِ محدَّد.
-  useEffect(() => {
-    if (!hasSel && sheet === 'props') setSheet(null);
-  }, [hasSel, sheet]);
+  // جدولُ الطبيعة لا شرطٌ عليها (اصطلاح `MEDIUM_SURFACES`): المستندُ الموقَّت تظهر له
+  // أدواتُ الزمن (الخط الزمنيّ، الحركة، الصوت، التأثيرات).
+  const timed = MEDIUM_SURFACES[state.medium].motionProps;
+  const sel: DocElement | undefined = state.selectedIds.length === 1 ? state.elements.find((e) => e.id === state.selectedIds[0]) : undefined;
+  const multi = state.selectedIds.length > 1;
+  const editing = !!state.editingTextId || !!state.cropEditingId;
 
-  const openSheet = (s: Sheet) => {
-    if (libraryOpen) actions.setPanel('props');
-    setSheet((cur) => (cur === s ? null : s));
+  // لوحُ العنصر يخصّ العنصر: تبديلُ التحديد أو إلغاؤه يُغلقه.
+  const selKey = state.selectedIds.join(',');
+  const lastSel = useRef(selKey);
+  useEffect(() => {
+    if (lastSel.current === selKey) return;
+    lastSel.current = selKey;
+    if (sheet && ELEMENT_SHEETS.includes(sheet)) setSheet(null);
+  }, [selKey, sheet]);
+
+  useEffect(() => () => setViewInset(0), []);
+
+  const toggle = (id: SheetId) => setSheet((cur) => (cur === id ? null : id));
+  const close = () => setSheet(null);
+
+  /** الارتفاعُ الظاهر من اللوح ← كم يغطّي من المسرح. */
+  const restFor = (id: SheetId) => (visible: number) => {
+    if (visible === 0 && sheetNow.current !== null && sheetNow.current !== id) return;
+    const root = rootRef.current?.getBoundingClientRect();
+    const st = stageRef.current?.getBoundingClientRect();
+    const gap = root && st ? root.bottom - st.bottom : 0;
+    setViewInset(Math.max(0, visible - gap));
   };
 
-  const libTitle =
-    state.panel === 'ai'
-      ? L.ai_name
-      : state.panel === 'assets'
-        ? L.rail_uploads
-        : state.libraryTool === 'text'
-          ? L.rail_text
-          : state.libraryTool === 'shape'
-            ? L.rail_elements
-            : (L[`tool_${state.libraryTool}` as keyof typeof L] as string);
-
   const size = sizeAt(state.sizeIdx, state.customW, state.customH);
-  const canUndo = state.historyPast.length > 0;
-  const canRedo = state.historyFuture.length > 0;
+  const center = () => ({ x: size.w / 2, y: size.h / 2 });
+
+  const addTools = (
+    <>
+      <ToolButton testid="m-tool-text" icon={MI.text} label={M.t_text} active={sheet === 'text'} onClick={() => toggle('text')} />
+      <ToolButton testid="m-tool-shape" icon={MI.shapes} label={M.t_shapes} active={sheet === 'shapes'} onClick={() => toggle('shapes')} />
+      <ToolButton testid="m-tool-image" icon={MI.image} label={M.t_image} onClick={() => pickFile('image/*', (f) => void actions.insertImageFromFile(f, center()))} />
+      {timed && <ToolButton testid="m-tool-video" icon={MI.video} label={M.t_video} onClick={() => pickFile('video/*,.mp4,.mov,.m4v', (f) => void actions.insertVideoFromFile(f, center()))} />}
+      {timed && <ToolButton testid="m-tool-audio" icon={MI.audio} label={M.t_audio} active={sheet === 'audio'} onClick={() => toggle('audio')} />}
+      {timed && <ToolButton testid="m-tool-fx" icon={MI.fx} label={M.t_fx} active={sheet === 'fx'} onClick={() => toggle('fx')} />}
+      <ToolButton testid="m-tool-lottie" icon={MI.sticker} label={M.t_sticker} onClick={() => pickFile('.json,.lottie,application/json', (f) => void actions.insertLottieFromFile(f, center()))} />
+      <ToolButton testid="m-tool-bg" icon={MI.color} label={M.t_bg} active={sheet === 'bg'} onClick={() => toggle('bg')} />
+      <ToolButton testid="m-tool-ai" icon={MI.mizo} label={M.t_mizo} active={sheet === 'mizo'} onClick={() => toggle('mizo')} />
+      <ToolButton testid="m-layers" icon={timed ? MI.timeline : MI.layers} label={timed ? M.s_timeline : M.t_layers} active={sheet === 'layers'} onClick={() => toggle('layers')} />
+    </>
+  );
+
+  const common = (opts: { opacity?: boolean; motion?: boolean; arrange?: boolean; more?: boolean } = {}) => (
+    <>
+      {opts.opacity !== false && <ToolButton testid="m-opacity" icon={MI.opacity} label={M.e_opacity} active={sheet === 'opacity'} onClick={() => toggle('opacity')} />}
+      {timed && opts.motion !== false && <ToolButton testid="m-motion" icon={MI.motion} label={M.e_motion} active={sheet === 'motion'} onClick={() => toggle('motion')} />}
+      {opts.arrange !== false && <ToolButton testid="m-arrange" icon={MI.order} label={M.e_arrange} active={sheet === 'arrange'} onClick={() => toggle('arrange')} />}
+      <ToolButton testid="m-duplicate" icon={MI.duplicate} label={M.e_dup} onClick={actions.duplicateSelected} />
+      <ToolButton testid="m-delete" icon={MI.trash} label={M.e_del} danger onClick={actions.deleteSelected} />
+      {opts.more !== false && <ToolButton testid="m-edit" icon={MI.more} label={M.e_more} active={sheet === 'more'} onClick={() => toggle('more')} />}
+      {timed && <ToolButton testid="m-layers" icon={MI.timeline} label={M.s_timeline} active={sheet === 'layers'} onClick={() => toggle('layers')} />}
+    </>
+  );
+
+  const elementTools = (el: DocElement) => {
+    switch (el.type) {
+      case 'text': {
+        const t = el as TextElement;
+        const nextAlign = t.halign === 'start' ? 'center' : t.halign === 'center' ? 'end' : 'start';
+        return (
+          <>
+            <ToolButton testid="m-edit-text" icon={MI.edit} label={M.e_edit} onClick={() => actions.startTextEdit(el.id)} />
+            <ToolButton testid="m-font" icon={MI.font} label={M.e_font} active={sheet === 'font'} onClick={() => toggle('font')} />
+            <ToolButton testid="m-color" icon={MI.color} label={M.e_color} active={sheet === 'color'} onClick={() => toggle('color')} />
+            <ToolButton testid="m-size" icon={MI.size} label={M.e_size} active={sheet === 'size'} onClick={() => toggle('size')} />
+            <ToolButton testid="m-align" icon={t.halign === 'center' ? MI.align : t.halign === 'end' ? MI.alignEnd : MI.alignStart} label={M.e_align} onClick={() => actions.setElementHAlign(el.id, nextAlign)} />
+            <ToolButton testid="m-bold" icon={MI.bold} label={M.e_bold} active={t.weight === 'bold'} onClick={() => actions.setElementWeight(el.id, t.weight === 'bold' ? 'regular' : 'bold')} />
+            {common()}
+          </>
+        );
+      }
+      case 'shape':
+        return (
+          <>
+            <ToolButton testid="m-color" icon={MI.color} label={M.e_color} active={sheet === 'color'} onClick={() => toggle('color')} />
+            <ToolButton testid="m-stroke" icon={MI.stroke} label={M.e_stroke} active={sheet === 'stroke'} onClick={() => toggle('stroke')} />
+            {el.shape === 'rect' && <ToolButton testid="m-corners" icon={MI.corners} label={M.e_corners} active={sheet === 'corners'} onClick={() => toggle('corners')} />}
+            {common()}
+          </>
+        );
+      case 'image':
+        return (
+          <>
+            <ToolButton testid="m-replace" icon={MI.replace} label={M.e_replace} onClick={() => void actions.replaceImage(el.id)} />
+            <ToolButton testid="m-crop" icon={MI.crop} label={M.e_crop} onClick={() => actions.startCropEdit(el.id)} />
+            <ToolButton testid="m-flip" icon={MI.flip} label={M.e_flip} onClick={() => actions.setImageFlip(el.id, 'h')} />
+            <ToolButton testid="m-corners" icon={MI.corners} label={M.e_corners} active={sheet === 'corners'} onClick={() => toggle('corners')} />
+            {common()}
+          </>
+        );
+      case 'video':
+        return (
+          <>
+            <ToolButton testid="m-volume" icon={el.muted ? MI.mute : MI.volume} label={M.e_volume} active={sheet === 'volume'} onClick={() => toggle('volume')} />
+            <ToolButton testid="m-split" icon={MI.split} label={M.e_split} onClick={() => actions.splitAtPlayhead(el.id)} />
+            <ToolButton testid="m-replace" icon={MI.replace} label={M.e_replace} onClick={() => void actions.replaceVideo(el.id)} />
+            {common()}
+          </>
+        );
+      case 'audio':
+        return (
+          <>
+            <ToolButton testid="m-volume" icon={el.muted ? MI.mute : MI.volume} label={M.e_volume} active={sheet === 'volume'} onClick={() => toggle('volume')} />
+            <ToolButton testid="m-split" icon={MI.split} label={M.e_split} onClick={() => actions.splitAtPlayhead(el.id)} />
+            {common({ opacity: false, motion: false, arrange: false })}
+          </>
+        );
+      case 'fx':
+        return (
+          <>
+            <ToolButton testid="m-fx-kind" icon={MI.fx} label={M.e_kind} active={sheet === 'fxkind'} onClick={() => toggle('fxkind')} />
+            <ToolButton testid="m-fx-amount" icon={MI.sliders} label={M.e_amount} active={sheet === 'fxamount'} onClick={() => toggle('fxamount')} />
+            <ToolButton testid="m-fx-fade" icon={MI.clock} label={M.e_fade} active={sheet === 'fxfade'} onClick={() => toggle('fxfade')} />
+            {common({ opacity: false, motion: false, arrange: false })}
+          </>
+        );
+      default:
+        return (
+          <>
+            {el.type === 'lottie' && <ToolButton testid="m-replace" icon={MI.replace} label={M.e_replace} onClick={() => void actions.replaceLottie(el.id)} />}
+            {common()}
+          </>
+        );
+    }
+  };
+
+  const dockKey = editing ? 'edit' : sel ? `el-${sel.type}` : multi ? 'multi' : 'add';
+  const titleOf: Record<SheetId, string> = {
+    text: M.s_text,
+    shapes: M.s_shapes,
+    fx: M.s_fx,
+    audio: M.s_audio,
+    bg: M.s_bg,
+    mizo: M.s_mizo,
+    layers: timed ? M.s_timeline : M.s_layers,
+    font: M.s_font,
+    color: M.s_color,
+    size: M.s_size,
+    opacity: M.s_opacity,
+    motion: M.s_motion,
+    arrange: M.s_arrange,
+    stroke: M.s_stroke,
+    corners: M.s_corners,
+    volume: M.s_volume,
+    fxkind: M.s_fx_kind,
+    fxamount: M.s_fx_amount,
+    fxfade: M.e_fade,
+    more: M.s_more,
+  };
+
+  const S = (id: SheetId, detents: number[], body: ReactNode, opts: { scroll?: boolean } = {}) => (
+    <Sheet key={id} open={sheet === id} onClose={close} title={titleOf[id]} detents={detents} testid={`m-sheet-${id}`} onRest={restFor(id)} scroll={opts.scroll}>
+      {body}
+    </Sheet>
+  );
 
   return (
-    <div data-testid="mobile-editor" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      {/* الشريط العلويّ: رجوع، اسمُ المقاس، تراجع وإعادة، تصدير. */}
-      <header style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: 'calc(6px + env(safe-area-inset-top)) 10px 6px', borderBottom: '1px solid var(--line)' }}>
-        <IconBtn testid="go-home-btn" label={L.h_greet} onClick={actions.goHome} path="M8 4l6 6-6 6" flip />
-        <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(size, state.lang)}</span>
-        <IconBtn testid="undo-btn" label="تراجع" onClick={actions.undo} disabled={!canUndo} path="M8 6L4 10l4 4M4 10h8a4 4 0 0 1 0 8h-2" data={{ 'data-history-past': state.historyPast.length }} />
-        <IconBtn testid="redo-btn" label="إعادة" onClick={actions.redo} disabled={!canRedo} path="M12 6l4 4-4 4M16 10H8a4 4 0 0 0 0 8h2" />
-        <button data-testid="export-btn" onClick={actions.openExport} style={{ height: 36, padding: '0 16px', border: 0, borderRadius: 10, background: 'var(--accent)', color: 'var(--onAccent)', fontWeight: 700, fontSize: 14, marginInlineStart: 4 }}>
-          {L.export}
-        </button>
-      </header>
+    <div ref={rootRef} data-testid="mobile-editor" className="m-root">
+      <TopBar />
 
-      {/* اللوحة: كلُّ ما بقي. `Stage` نفسُه يعرف أنه في الجوال فيُسقط زخارفه العائمة. */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div ref={stageRef} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
         <Stage />
       </div>
 
       {timed && <Transport />}
 
-      {libraryOpen && (
-        <BottomSheet title={libTitle} onClose={() => actions.setPanel('props')} testid="mobile-sheet-library">
-          {state.panel === 'library' && <LibraryTab />}
-          {state.panel === 'assets' && <AssetsTab />}
-          {state.panel === 'ai' && <AiTab />}
-        </BottomSheet>
-      )}
-      {sheet === 'props' && hasSel && (
-        <BottomSheet title={L.insp_design} onClose={() => setSheet(null)} testid="mobile-sheet-props">
-          <PropsTab />
-        </BottomSheet>
-      )}
-      {sheet === 'layers' && (
-        <BottomSheet title={L.layers} onClose={() => setSheet(null)} testid="mobile-sheet-layers" tall>
-          <Timeline timed={timed} docked={!timed} />
-        </BottomSheet>
-      )}
-
-      {/* الشريطُ السفليّ: أفعالُ المحدَّد إن وُجد، وإلا أدواتُ الإضافة. */}
-      <nav data-testid="mobile-bar" style={{ flex: 'none', display: 'flex', gap: 2, overflowX: 'auto', padding: '6px 6px calc(6px + env(safe-area-inset-bottom))', borderTop: '1px solid var(--line)', background: 'var(--surface)', scrollbarWidth: 'none' }}>
-        {hasSel ? (
-          <>
-            <BarBtn testid="m-edit" label={L.insp_design} path="M4 6h12M4 10h12M4 14h7" active={sheet === 'props'} onClick={() => openSheet('props')} />
-            {sel?.type === 'text' && <BarBtn testid="m-edit-text" label={L.m_edit_text} path="M5 15l2-6 6 6M4 4h12" onClick={() => actions.startTextEdit(sel.id)} />}
-            <BarBtn testid="m-duplicate" label={L.m_duplicate} path="M7 7h9v9H7zM4 4h9v2M4 4v9h2" onClick={actions.duplicateSelected} />
-            <BarBtn testid="m-layers" label={L.layers} path="M10 3l7 4-7 4-7-4zM3 11l7 4 7-4" active={sheet === 'layers'} onClick={() => openSheet('layers')} />
-            <BarBtn testid="m-delete" label={L.m_delete} path="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10" onClick={actions.deleteSelected} danger />
-            <BarBtn testid="m-done" label={L.m_done} path="M4 10l4 4 8-8" onClick={actions.selectNone} />
-          </>
+      <nav data-testid="mobile-bar" className="m-dock m-material">
+        {editing ? (
+          <div key="edit" className="m-swap" style={{ display: 'flex', justifyContent: 'center', padding: '4px 12px' }}>
+            <button
+              data-testid="m-edit-done"
+              className="m-btn m-btn-primary m-press"
+              style={{ minWidth: 160 }}
+              onClick={() => {
+                (document.activeElement as HTMLElement | null)?.blur();
+                if (state.cropEditingId) actions.endCropEdit();
+              }}
+            >
+              <Glyph d={MI.check} size={20} sw={2.2} />
+              {M.done}
+            </button>
+          </div>
         ) : (
-          <>
-            <BarBtn testid="m-tool-text" label={L.rail_text} path={ICONS.text} active={state.panel === 'library' && state.libraryTool === 'text'} onClick={() => actions.toggleRailPanel('library', { libraryTool: 'text' })} />
-            <BarBtn testid="m-tool-shape" label={L.rail_elements} path={ICONS.shape} active={state.panel === 'library' && state.libraryTool === 'shape'} onClick={() => actions.toggleRailPanel('library', { libraryTool: 'shape' })} />
-            <BarBtn testid="m-tool-image" label={L.rail_images} path={ICONS.image} onClick={() => actions.openToolLibrary('image')} />
-            {timed && <BarBtn testid="m-tool-video" label={L.rail_video} path={ICONS.video} onClick={() => actions.openToolLibrary('video')} />}
-            {timed && <BarBtn testid="m-tool-fx" label={L.rail_fx} path={ICONS.fx} active={state.panel === 'library' && state.libraryTool === 'fx'} onClick={() => actions.openToolLibrary('fx')} />}
-            {timed && <BarBtn testid="m-tool-audio" label={L.rail_audio} path={ICONS.audio} active={state.panel === 'library' && state.libraryTool === 'audio'} onClick={() => actions.openToolLibrary('audio')} />}
-            <BarBtn testid="m-tool-lottie" label={L.rail_stickers} path={ICONS.sticker} onClick={() => actions.openToolLibrary('lottie')} />
-            <BarBtn testid="m-tool-uploads" label={L.rail_uploads} path={ICONS.upload} active={state.panel === 'assets'} onClick={() => actions.toggleRailPanel('assets', { assetsTab: 'files' })} />
-            <BarBtn testid="m-tool-ai" label={L.ai_name} path="M10 3l1.6 4.4L16 9l-4.4 1.6L10 15l-1.6-4.4L4 9l4.4-1.6z" active={state.panel === 'ai'} onClick={() => actions.toggleRailPanel('ai')} />
-            <BarBtn testid="m-layers" label={L.layers} path="M10 3l7 4-7 4-7-4zM3 11l7 4 7-4" active={sheet === 'layers'} onClick={() => openSheet('layers')} />
-          </>
+          <div key={dockKey} className="m-swap" style={{ display: 'flex', alignItems: 'center' }}>
+            {(sel || multi) && (
+              <>
+                <button data-testid="m-done" className="m-tool m-press" aria-label={M.done} onClick={actions.selectNone} style={{ flex: 'none', minWidth: 56 }}>
+                  <span style={{ width: 34, height: 34, borderRadius: '50%', display: 'grid', placeItems: 'center', background: 'var(--m-text)', color: 'var(--m-bg)' }}>
+                    <Glyph d={MI.check} size={18} sw={2.4} style={{ color: 'var(--m-bg)' }} />
+                  </span>
+                </button>
+                <span style={{ width: 1, height: 32, background: 'var(--m-hair2)', flex: 'none', marginInline: 2 }} />
+              </>
+            )}
+            <div className="m-dock-row" style={{ flex: 1, minWidth: 0 }}>
+              {sel ? (
+                elementTools(sel)
+              ) : multi ? (
+                <>
+                  <ToolButton testid="m-group" icon={MI.grid} label={M.e_group} onClick={actions.groupSelected} />
+                  <ToolButton testid="m-duplicate" icon={MI.duplicate} label={M.e_dup} onClick={actions.duplicateSelected} />
+                  <ToolButton testid="m-delete" icon={MI.trash} label={M.e_del} danger onClick={actions.deleteSelected} />
+                </>
+              ) : (
+                addTools
+              )}
+            </div>
+          </div>
         )}
       </nav>
+
+      {/* ألواحُ الإضافة */}
+      {S('text', [0.5, 0.9], <TextPanel onDone={close} />)}
+      {S('shapes', [0.5, 0.9], <ShapesPanel onDone={close} />)}
+      {S('fx', [0.5, 0.9], <FxPanel onDone={close} />)}
+      {S('audio', [0.45, 0.9], <AudioPanel />)}
+      {S('bg', [0.5, 0.9], <BackgroundPanel />)}
+      {S('mizo', [0.6, 0.92], <MizoPanel />, { scroll: false })}
+      {S('layers', timed ? [0.5, 0.9] : [0.45, 0.9], timed ? <MobileTimeline /> : <LayersPanel />, { scroll: !timed })}
+
+      {/* ألواحُ العنصر */}
+      {sel?.type === 'text' && S('font', [0.5, 0.9], <FontPanel el={sel as TextElement} />)}
+      {sel && S('color', [400], <ColorPanel el={sel} />)}
+      {sel?.type === 'text' && S('size', [210], <SizePanel el={sel as TextElement} />)}
+      {sel && S('opacity', [170], <OpacityPanel el={sel} />)}
+      {sel && S('motion', [250], <MotionPanel el={sel} />)}
+      {sel && S('arrange', [280], <ArrangePanel el={sel} />)}
+      {sel?.type === 'shape' && S('stroke', [470], <StrokePanel el={sel} />)}
+      {(sel?.type === 'shape' || sel?.type === 'image') && S('corners', [170], <CornersPanel el={sel as DocElement & { type: 'shape' | 'image' }} />)}
+      {(sel?.type === 'audio' || sel?.type === 'video') && S('volume', [230], <VolumePanel el={sel as DocElement & { type: 'audio' | 'video' }} />)}
+      {sel?.type === 'fx' && S('fxkind', [0.55, 0.9], <FxKindPanel el={sel} />)}
+      {sel?.type === 'fx' && S('fxamount', [170], <FxAmountPanel el={sel} />)}
+      {sel?.type === 'fx' && S('fxfade', [250], <FxAmountPanel el={sel} fade />)}
+      {sel && S('more', [0.6, 0.92], <div style={{ padding: '0 4px 16px', fontSize: 14 }}>{<PropsTab />}</div>)}
+
+      <MobileExport />
     </div>
   );
 }
 
-/** شريطُ التشغيل للمستند المُوقَّت: تشغيلٌ وإيقاف، والزمن، وشريطُ سحبٍ بعرض الشاشة.
- * الخطُّ الزمنيّ الكامل (المقاطع والمفاتيح) في لوح «الطبقات». */
+function TopBar() {
+  const { state, actions } = useStudio();
+  const M = useM();
+  const rtl = state.lang === 'ar';
+  const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+  return (
+    <header style={{ position: 'relative', zIndex: 6, flex: 'none', display: 'flex', alignItems: 'center', gap: 2, padding: 'calc(4px + var(--m-safe-t)) 8px 4px', boxShadow: 'inset 0 -1px 0 var(--m-hair)' }}>
+      <IconButton testid="go-home-btn" icon={MI.back} label={M.back} onClick={actions.goHome} flip={rtl} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', lineHeight: 1.2, paddingInline: 4 }}>
+        <span style={{ fontWeight: 700, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nameOf(size, state.lang)}</span>
+        <span dir="ltr" style={{ fontSize: 11.5, color: 'var(--m-text3)', textAlign: rtl ? 'right' : 'left' }}>
+          {size.w} × {size.h}
+        </span>
+      </div>
+      <IconButton testid="undo-btn" icon={rtl ? MI.redo : MI.undo} label={M.undo} onClick={actions.undo} disabled={!state.historyPast.length} data={{ 'data-history-past': state.historyPast.length }} />
+      <IconButton testid="redo-btn" icon={rtl ? MI.undo : MI.redo} label={M.redo} onClick={actions.redo} disabled={!state.historyFuture.length} />
+      <button data-testid="export-btn" className="m-btn m-btn-primary m-press" onClick={actions.openExport} style={{ minHeight: 36, height: 36, padding: '0 14px', borderRadius: 999, fontSize: 14, marginInlineStart: 4 }}>
+        <Glyph d={MI.share} size={17} sw={2} />
+        {M.export}
+      </button>
+    </header>
+  );
+}
+
+/** شريطُ التشغيل: زرٌّ ووقتٌ ومنزلقٌ يُمسَك من أيّ نقطة. */
 function Transport() {
   const { state, actions } = useStudio();
+  const M = useM();
   const dur = Math.max(documentDuration(state.elements.map((e) => e.anim), state.fps), 1 / state.fps);
   return (
-    <div data-testid="mobile-transport" style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px', borderTop: '1px solid var(--line)', background: 'var(--bg)' }}>
-      <button
-        data-testid="m-play"
-        onClick={actions.togglePlay}
-        aria-label={state.playing ? 'إيقاف' : 'تشغيل'}
-        style={{ width: 40, height: 40, flex: 'none', borderRadius: '50%', border: 0, background: 'var(--accent)', color: 'var(--onAccent)', display: 'grid', placeItems: 'center' }}
-      >
-        <Icon size={16} strokeWidth={2.2} path={state.playing ? 'M7 5v10M13 5v10' : 'M7 5l9 5-9 5z'} />
+    <div data-testid="mobile-transport" style={{ position: 'relative', zIndex: 5, flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '2px 14px 2px 10px' }}>
+      <button data-testid="m-play" className="m-icon-btn m-press" onClick={actions.togglePlay} aria-label={state.playing ? M.pause : M.play} style={{ width: 40, height: 40 }}>
+        <Glyph d={state.playing ? MI.pause : MI.play} size={20} fill={!state.playing} sw={2.4} />
       </button>
-      <input
-        data-testid="m-scrub"
-        dir="ltr"
-        type="range"
-        min={0}
-        max={dur}
-        step={1 / state.fps}
-        value={Math.min(state.t, dur)}
-        onChange={(e) => actions.scrubTo(Number(e.target.value))}
-        style={{ flex: 1, minWidth: 0, accentColor: 'var(--accent)', height: 28 }}
-      />
-      <span dir="ltr" style={{ flex: 'none', fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+      <div dir="ltr" style={{ flex: 1, minWidth: 0 }}>
+        <Slider testid="m-scrub" value={Math.min(state.t, dur)} min={0} max={dur} step={1 / state.fps} onChange={actions.scrubTo} />
+      </div>
+      <span dir="ltr" style={{ flex: 'none', fontSize: 12, color: 'var(--m-text2)', fontVariantNumeric: 'tabular-nums', minWidth: 74, textAlign: 'end' }}>
         {formatClock(state.t)} / {formatClock(dur)}
       </span>
     </div>
-  );
-}
-
-/** لوحٌ سفليّ: يطلع فوق الشريط، يُصغِّر اللوحة ولا يغطّيها، ويُغلق بزرّه. */
-function BottomSheet({ title, onClose, children, testid, tall }: { title: string; onClose: () => void; children: ReactNode; testid: string; tall?: boolean }) {
-  return (
-    <section data-testid={testid} style={{ flex: 'none', height: tall ? '50vh' : '40vh', display: 'flex', flexDirection: 'column', background: 'var(--surface)', borderTop: '1px solid var(--line)', borderRadius: '16px 16px 0 0', boxShadow: '0 -8px 24px rgba(0,0,0,.25)' }}>
-      <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px 6px 16px' }}>
-        <span style={{ position: 'absolute', insetInlineStart: '50%', marginTop: -2, width: 36, height: 4, borderRadius: 2, background: 'var(--line)', transform: 'translateX(50%)' }} />
-        <span style={{ flex: 1, fontWeight: 700, fontSize: 15, paddingTop: 6 }}>{title}</span>
-        <button data-testid={`${testid}-close`} onClick={onClose} aria-label="إغلاق" style={{ width: 36, height: 36, border: 0, borderRadius: '50%', background: 'var(--surface2)', color: 'var(--text)', display: 'grid', placeItems: 'center' }}>
-          <Icon size={14} strokeWidth={2} path="M5 5l10 10M15 5L5 15" />
-        </button>
-      </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' } as CSSProperties}>{children}</div>
-    </section>
-  );
-}
-
-function BarBtn({ label, path, onClick, active, danger, testid }: { label: string; path: string; onClick: () => void; active?: boolean; danger?: boolean; testid: string }) {
-  return (
-    <button
-      data-testid={testid}
-      onClick={onClick}
-      style={{
-        flex: '0 0 auto',
-        minWidth: 64,
-        height: 56,
-        padding: '0 6px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4,
-        border: 0,
-        borderRadius: 12,
-        background: active ? 'var(--accentSoft)' : 'transparent',
-        color: danger ? 'var(--danger)' : active ? 'var(--accentText)' : 'var(--text)',
-        fontSize: 11.5,
-        fontWeight: active ? 700 : 500,
-      }}
-    >
-      <Icon size={20} path={path} />
-      <span style={{ whiteSpace: 'nowrap' }}>{label}</span>
-    </button>
-  );
-}
-
-function IconBtn({ label, path, onClick, disabled, testid, flip, data }: { label: string; path: string; onClick: () => void; disabled?: boolean; testid: string; flip?: boolean; data?: Record<string, number> }) {
-  const { dir } = useStudio();
-  return (
-    <button
-      data-testid={testid}
-      {...data}
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      style={{ width: 38, height: 38, flex: 'none', border: 0, borderRadius: 10, background: 'transparent', color: disabled ? 'var(--muted)' : 'var(--text)', opacity: disabled ? 0.45 : 1, display: 'grid', placeItems: 'center' }}
-    >
-      <Icon size={20} path={path} style={{ transform: flip && dir === 'ltr' ? 'scaleX(-1)' : undefined }} />
-    </button>
   );
 }
