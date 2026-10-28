@@ -1,4 +1,4 @@
-import { inTauri } from './tauriEnv';
+import { hasDesktopSidecars as inTauri } from './tauriEnv';
 import { MCP_BRIDGE_PORT } from '../data/constants';
 
 /** Roadmap #20 security fix — the *listener's* lifetime, as opposed to the

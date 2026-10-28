@@ -106,7 +106,7 @@ async function main() {
     await page.waitForTimeout(80);
     await page.locator('[data-testid="export-submit"]').click();
     body = await page.locator('body').innerText();
-    assert(body.includes('يحتاج تطبيق سطح المكتب'), `${fmt}: browser preview shows the honest "needs the desktop app" message immediately`);
+    assert(body.includes('للحين في تطبيق الماك'), `${fmt}: browser preview shows the honest "needs the desktop app" message immediately`);
     assert(!body.includes('جاري التصدير'), `${fmt}: no "exporting…" busy state is ever shown — nothing to encode with in the browser`);
     assert(!body.includes('تم التصدير'), `${fmt}: no fake "exported" success state`);
     // The dialog stays open and interactive after "unavailable" (same idle/unavailable/

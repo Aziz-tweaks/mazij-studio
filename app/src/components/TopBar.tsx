@@ -1,3 +1,4 @@
+import { hasDesktopSidecars, onMobile } from '../lib/tauriEnv';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Icon } from './Icon';
@@ -6,7 +7,8 @@ import { useStudio } from '../state/StudioContext';
 
 const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().includes('MAC');
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-const appWindow = inTauri ? getCurrentWindow() : null;
+// الجوالُ لا نوافذَ فيه تُسحَب أو تُصغَّر: لا أزرارَ نافذة ولا سحبَ من الشريط.
+const appWindow = inTauri && !onMobile ? getCurrentWindow() : null;
 
 // Hand the gesture to the native window server instead of tracking pointermove and
 // calling setPosition ourselves.
@@ -42,7 +44,8 @@ export function TopBar() {
   const isEditor = state.screen === 'editor';
   const undoLabel = state.historyLabels[state.historyPast.length - 1] ?? '';
   const redoLabel = state.historyFutureLabels[0] ?? '';
-  const cmdKeyLabel = isMac ? '⌘K' : 'Ctrl K';
+  // لا لوحةَ مفاتيح في الجوال، فلا اختصارَ يُعرض.
+  const cmdKeyLabel = onMobile ? '' : isMac ? '⌘K' : 'Ctrl K';
   const size = sizeAt(state.sizeIdx, state.customW, state.customH);
   const mizoOn = state.panel === 'ai';
 
@@ -64,8 +67,8 @@ export function TopBar() {
         // macOS شريطَ العنوان كلّه، فتنزل الأزرارُ الثلاثة يمينًا — فوق شعار «مزيج»
         // مباشرةً (لقطة جولة ٢٤ أكتوبر ٢٠٢٦ على جهازِ الاختبار). ولا تكشف الواجهةُ عن
         // اتّجاه النظام بثقة، فتُحجَز المساحةُ على الحافّتين معًا.
-        paddingLeft: isMac ? 84 : 12,
-        paddingRight: isMac ? 84 : 150,
+        paddingLeft: isMac && !onMobile ? 84 : 12,
+        paddingRight: isMac && !onMobile ? 84 : onMobile ? 12 : 150,
         background: 'var(--bg)',
         borderBottom: isEditor ? '1px solid var(--line)' : '0px solid var(--line)',
       }}
@@ -74,7 +77,7 @@ export function TopBar() {
           Overlay). That also restores native window dragging — a decorationless window
           with a drag region could not be moved between displays. The left padding above
           reserves their space. */}
-      {isMac ? null : (
+      {isMac || onMobile ? null : (
         <div dir="ltr" style={{ position: 'absolute', right: 0, top: 0, height: 46, display: 'flex' }}>
           <WinButton path="M1 6h10" onClick={() => appWindow?.minimize()} />
           <WinButton path="M1.5 1.5h9v9h-9z" onClick={() => appWindow?.toggleMaximize()} />
@@ -160,7 +163,7 @@ export function TopBar() {
       >
         <Icon path="M9 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM13.5 13.5L17 17" />
         <span style={{ flex: 1, minWidth: 0, textAlign: 'start', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{L.search}</span>
-        <kbd dir="ltr" style={{ fontFamily: 'inherit', fontSize: 11, padding: '1px 6px', borderRadius: 5, background: 'var(--surface2)', color: 'var(--muted)', whiteSpace: 'nowrap', flex: 'none' }}>{cmdKeyLabel}</kbd>
+        {cmdKeyLabel && <kbd dir="ltr" style={{ fontFamily: 'inherit', fontSize: 11, padding: '1px 6px', borderRadius: 5, background: 'var(--surface2)', color: 'var(--muted)', whiteSpace: 'nowrap', flex: 'none' }}>{cmdKeyLabel}</kbd>}
       </button>
 
       {!isEditor && <div style={{ flex: 1 }} />}
@@ -337,11 +340,12 @@ function MoreToolsMenu() {
             </span>
           </button>
           <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />
-          <button role="menuitem" data-testid="open-refvideo-btn" style={item} onClick={() => { setOpen(false); actions.openRefVideo(); }}>{L.refvideo_btn}</button>
+          {/* قراءةُ بنية المقطع المرجعيّ وخادمُ الأدوات يحتاجان سطحَ المكتب — لا يُعرَضان في الجوال. */}
+          {hasDesktopSidecars && <button role="menuitem" data-testid="open-refvideo-btn" style={item} onClick={() => { setOpen(false); actions.openRefVideo(); }}>{L.refvideo_btn}</button>}
           <button role="menuitem" data-testid="open-local-models-btn" style={item} onClick={() => { setOpen(false); actions.openLocalModels(); }}>{L.local_models_btn}</button>
           <button role="menuitem" data-testid="open-cmd-interpreter-btn" style={item} onClick={() => { setOpen(false); actions.openCmdInterpreter(); }}>{L.nl_cmd_btn}</button>
-          <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />
-          <button role="menuitem" data-testid="open-mcp-btn" style={item} onClick={() => { setOpen(false); actions.openMcp(); }}>{L.mcp_btn}</button>
+          {hasDesktopSidecars && <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />}
+          {hasDesktopSidecars && <button role="menuitem" data-testid="open-mcp-btn" style={item} onClick={() => { setOpen(false); actions.openMcp(); }}>{L.mcp_btn}</button>}
         </div>
       )}
     </div>

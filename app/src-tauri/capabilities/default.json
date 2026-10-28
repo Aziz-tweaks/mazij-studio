@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -12,10 +14,24 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$HOME/Mazij" },
-        { "path": "$HOME/Mazij/**" },
-        { "path": "$APPDATA" },
-        { "path": "$APPDATA/**" }
+        {
+          "path": "$HOME/Mazij"
+        },
+        {
+          "path": "$HOME/Mazij/**"
+        },
+        {
+          "path": "$APPDATA"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$DOCUMENT/Exports"
+        },
+        {
+          "path": "$DOCUMENT/Exports/**"
+        }
       ]
     },
     "fs:allow-mkdir",
@@ -25,22 +41,46 @@
     "fs:allow-read-text-file",
     "fs:allow-read-file",
     "fs:allow-remove",
+    "fs:allow-read-dir",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://**" }, { "url": "http://**" }]
+      "allow": [
+        {
+          "url": "https://**"
+        },
+        {
+          "url": "http://**"
+        }
+      ]
     },
     {
       "identifier": "shell:allow-execute",
       "allow": [
-        { "name": "binaries/ffmpeg", "sidecar": true, "args": true },
-        { "name": "binaries/livephoto", "sidecar": true, "args": true }
+        {
+          "name": "binaries/ffmpeg",
+          "sidecar": true,
+          "args": true
+        },
+        {
+          "name": "binaries/livephoto",
+          "sidecar": true,
+          "args": true
+        }
       ]
     },
     {
       "identifier": "shell:allow-spawn",
       "allow": [
-        { "name": "binaries/ffmpeg", "sidecar": true, "args": true },
-        { "name": "binaries/livephoto", "sidecar": true, "args": true }
+        {
+          "name": "binaries/ffmpeg",
+          "sidecar": true,
+          "args": true
+        },
+        {
+          "name": "binaries/livephoto",
+          "sidecar": true,
+          "args": true
+        }
       ]
     }
   ]

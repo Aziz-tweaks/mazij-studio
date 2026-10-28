@@ -1,4 +1,4 @@
-import { inTauri } from './tauriEnv';
+import { hasDesktopSidecars, inTauri } from './tauriEnv';
 
 export interface LoadedVideo {
   dataUrl: string;
@@ -126,7 +126,8 @@ async function probeAndThumbnailViaFfmpeg(filePath: string, tmpDir: string): Pro
 export async function decodeVideoBytes(bytes: Uint8Array, filename: string): Promise<LoadedVideo> {
   const dataUrl = bytesToDataUrl(bytes, mimeFromExt(filename));
 
-  if (inTauri) {
+  // الفحصُ ببرنامج الترميز في سطح المكتب وحده؛ الجوالُ يقرأ المقطعَ بمشغّله المدمج (أدناه).
+  if (hasDesktopSidecars) {
     const { homeDir, join } = await import('@tauri-apps/api/path');
     const { mkdir, writeFile, remove } = await import('@tauri-apps/plugin-fs');
     const home = await homeDir();

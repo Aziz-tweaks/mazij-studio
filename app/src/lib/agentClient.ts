@@ -1,4 +1,4 @@
-import { inTauri } from './tauriEnv';
+import { hasDesktopSidecars as inTauri, onMobile } from './tauriEnv';
 
 /** مِزو عبر وكيلٍ خارجيّ — الواجهةُ الأماميّة لـ `src-tauri/src/agents.rs`.
  *
@@ -69,7 +69,9 @@ interface AiPrefs {
 export function loadAiPrefs(): AiPrefs {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PREFS_KEY) : null;
-    return raw ? (JSON.parse(raw) as AiPrefs) : {};
+    const prefs = raw ? (JSON.parse(raw) as AiPrefs) : {};
+    // الجوالُ لا وكلاءَ فيه ولا أوامرَ مخصّصة: المحرّكُ المحلّيّ وحده.
+    return onMobile ? { ...prefs, engine: 'local' } : prefs;
   } catch {
     return {};
   }

@@ -30,7 +30,7 @@ import { revealUnitCount, revealValueAt, startedUnitCount } from '../lib/textSta
 import { fetchAndRegisterFont } from '../lib/loadFont';
 import { cssFamilyOf, fontFromBytes, isFontInstalled, loadUserFonts, pickFontFile, registerUserFont, saveUserFonts, type UserFont } from '../lib/fontsStore';
 import type { PersistedArtboard, PersistedDoc } from '../lib/persist';
-import { loadDoc, saveDoc } from '../lib/persist';
+import { listProjects, loadDoc, loadProject, loadedProjectId, markCurrentProject, newProjectId, saveDoc } from '../lib/persist';
 import type { SlotFill, Template, TemplateSlot } from '../lib/templates';
 import { applyMotionStructure, createTemplate, extractMotionStructure, fillTemplate } from '../lib/templates';
 import { loadTemplates, saveTemplates } from '../lib/templatesStore';
@@ -54,7 +54,7 @@ import { pickImageFile, readImageFile, type LoadedImage } from '../lib/imageFile
 import { pickLottieFile, readLottieFile, type LoadedLottie } from '../lib/lottieFile';
 import { pickVideoFile, readVideoFile, type LoadedVideo } from '../lib/videoFile';
 import { pickAudioFile, readAudioFile, type LoadedAudio } from '../lib/audioFile';
-import { inTauri } from '../lib/tauriEnv';
+import { hasDesktopSidecars } from '../lib/tauriEnv';
 import { startMcpBridge, stopMcpBridge } from '../lib/mcpBridge';
 import { startMcpServer, stopMcpServer } from '../lib/mcpServerControl';
 import { interpretAndRun } from '../lib/commandInterpreter';
@@ -616,6 +616,63 @@ function rendersNothingAt(anim: DocElement['anim'], time: number): boolean {
   return v.opacity <= 0 || sx === 0 || sy === 0;
 }
 
+/** الملفُّ المحفوظ (بعد `migrateToDocFile`) → حالةُ المستند المفتوح. واحدةٌ لفتح البرنامج
+ * ولفتح مشروعٍ من المكتبة، فلا يختلف ما يُستعاد بين الطريقين. */
+function loadedFileToState(file: PersistedDoc, projectId: string): Partial<StudioState> {
+    const normalized = file.artboards.map((a) => ({ ...a, doc: normalizeDoc(a.doc) }));
+    // كان هنا شرطُ `if (!normalized.some((a) => a.doc.elements.length)) return;` —
+    // أي أن مستندًا محفوظًا بلا عناصر كان يُطرَح بصمت. أُزيل في ١٨ أكتوبر ٢٠٢٦
+    // لأن اللوحة الفارغة صارت مستندًا من الدرجة الأولى: من يختار «ابدأ من فراغ»
+    // بمقاس ستوري ثم يُعيد التحميل كان يفقد مقاسه ويجد نفسه في شاشة البداية من
+    // جديد. الفراغ ليس تلفًا؛ التلف وحده (`!file` أعلاه) هو ما يُطرَح.
+    const active = normalized.find((a) => a.id === file.activeArtboardId) ?? normalized[0];
+    const artboardDocs: Record<string, ArtboardDoc> = {};
+    for (const a of normalized) {
+      if (a.id === active.id) continue;
+      artboardDocs[a.id] = { doc: a.doc, historyPast: [], historyFuture: [] };
+    }
+    return {
+      elements: active.doc.elements,
+      anim: active.doc.anim,
+      sizeIdx: active.doc.sizeIdx,
+      customW: active.doc.customW,
+      customH: active.doc.customH,
+      // تُسرَد كل حقول `DocSnapshot` هنا واحدًا واحدًا (لا `...active.doc`)، فأيّ
+      // حقلٍ يُضاف إلى المستند لاحقًا ولا يُضاف إلى هذا السطر يُستعاد بقيمته
+      // الافتراضيّة بصمت عند أوّل إعادة تحميل. وقد وقع ذلك بعينه في هذه الدفعة:
+      // اختيارُ الزخرفة كان يُحفَظ على القرص فعلًا ثم يُطرَح عند القراءة.
+      decorAccent: active.doc.decorAccent,
+      // والحقلان الجديدان على القائمة نفسها. والتعليقُ أعلاه ليس تحذيرًا نظريًّا:
+      // سَهوُهما هنا أخفى الخطَّ الزمنيَّ عن كلّ مستندٍ مُوقَّتٍ بعد أوّل إعادة
+      // تحميل — إذ يَرجع `medium` إلى `'still'` من الحالة الابتدائية بصمت.
+      // ظهر ذلك في `qa/timeline.spec.mjs` §٦ وحدها، وتكرّر، فأُصلِح هنا.
+      fps: active.doc.fps,
+      medium: active.doc.medium,
+      // **وأهدافُ التصدير تُبذَر هنا كذلك، ولهذا سببٌ مختلفٌ عن كلّ ما فوقه.**
+      // كلُّ سطرٍ أعلاه يَستعيد حقلًا مكتوبًا في `DocSnapshot`؛ و`targets`
+      // **ليست** فيه ولا تُحفَظ، فهي حالةُ جلسةٍ تَرجع إلى قيمة
+      // `initialStudioState` عند كلّ إعادة تحميل. فمستندُ «بوست عمودي» يُبذَر
+      // صحيحًا في `startDoc`، ثم يُعاد تحميلُ الصفحة، فتَرجع الأهدافُ إلى مقاسِ
+      // ما-قبل-الاختيار بصمتٍ — عطلٌ آخرُ بالأثر نفسِه من طريقٍ آخر. قِيس في
+      // `qa/export-default-target.spec.mjs` §٣.
+      targets: defaultTargetsFor(active.doc.sizeIdx),
+      historyPast: [],
+      historyFuture: [],
+      historyLabels: [],
+      historyFutureLabels: [],
+      dirty: false,
+      activeArtboardId: active.id,
+      postPalette: active.paletteIdx,
+      artboards: normalized.map((a): ArtboardMeta => ({ id: a.id, name: a.name, paletteIdx: a.paletteIdx })),
+      artboardDocs,
+      // المستند مُحمَّل في الحالة، لكن الشاشة تبقى `home`: شاشة البداية تعرض
+      // بطاقة «متابعة» بارزة، ونقرةٌ واحدة عليها تفتح هذا المستند بعينه. فلا
+      // المُنتقي مفروض على العائد، ولا العمل المحفوظ مخفيّ عنه.
+      openDoc: 'open',
+    projectId,
+    };
+}
+
 function startDoc(s: StudioState, doc: DocSnapshot, opts?: { paletteIdx?: number; sel?: ElementId | null }): StudioState {
   const id = newArtboardId();
   const sel = opts?.sel ?? null;
@@ -655,6 +712,9 @@ function startDoc(s: StudioState, doc: DocSnapshot, opts?: { paletteIdx?: number
     // صار هناك مشروعٌ مفتوح: شاشة البداية تعرض «متابعة» من الآن، وتصفه من
     // الحالة الحيّة — فالرجوع للشاشة ثم النقر على المتابعة يعود إلى *هذا*.
     openDoc: 'open',
+    // **ومشروعٌ جديدٌ ملفُّه جديد.** كان كلُّ مستندٍ يُكتَب في ملفٍّ واحد، فقالبٌ يُفتح
+    // للتجربة يمسح المشروعَ الذي قبله. انظر «مكتبة المشاريع» في `persist.ts`.
+    projectId: newProjectId(),
   };
 }
 
@@ -695,6 +755,10 @@ export interface StudioActions {
    * الإقلاع، أو بدأه المستخدم في هذه الجلسة)، فهذه نقلةُ شاشةٍ فقط — وهي الغرض
    * كله: ألّا يُجبَر العائد على المرور بالمُنتقي ليصل إلى عمله. */
   resumeOpenProject: () => void;
+  /** يقرأ مكتبةَ المشاريع من القرص إلى `projects` — تناديه شاشةُ البداية عند ظهورها. */
+  refreshProjects: () => Promise<void>;
+  /** يفتح مشروعًا من المكتبة. يحفظ المفتوحَ أوّلًا إن كان فيه ما لم يُحفظ. */
+  openProject: (id: string) => Promise<void>;
   toggleLang: () => void;
   /** `keepSelection` للمسارات التي تُعيد الأداةَ إلى «تحديد» **بعد إنشاء عنصر**،
    * فالعنصرُ الجديدُ محدَّدٌ لتوّه ونزعُه عنه يُفقِد قدرةً. انظر `armTool`. */
@@ -1270,58 +1334,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         setState((s) => ({ ...s, openDoc: 'none' }));
         return;
       }
-      const normalized = file.artboards.map((a) => ({ ...a, doc: normalizeDoc(a.doc) }));
-      // كان هنا شرطُ `if (!normalized.some((a) => a.doc.elements.length)) return;` —
-      // أي أن مستندًا محفوظًا بلا عناصر كان يُطرَح بصمت. أُزيل في ١٨ أكتوبر ٢٠٢٦
-      // لأن اللوحة الفارغة صارت مستندًا من الدرجة الأولى: من يختار «ابدأ من فراغ»
-      // بمقاس ستوري ثم يُعيد التحميل كان يفقد مقاسه ويجد نفسه في شاشة البداية من
-      // جديد. الفراغ ليس تلفًا؛ التلف وحده (`!file` أعلاه) هو ما يُطرَح.
-      const active = normalized.find((a) => a.id === file.activeArtboardId) ?? normalized[0];
-      const artboardDocs: Record<string, ArtboardDoc> = {};
-      for (const a of normalized) {
-        if (a.id === active.id) continue;
-        artboardDocs[a.id] = { doc: a.doc, historyPast: [], historyFuture: [] };
-      }
-      setState((s) => ({
-        ...s,
-        elements: active.doc.elements,
-        anim: active.doc.anim,
-        sizeIdx: active.doc.sizeIdx,
-        customW: active.doc.customW,
-        customH: active.doc.customH,
-        // تُسرَد كل حقول `DocSnapshot` هنا واحدًا واحدًا (لا `...active.doc`)، فأيّ
-        // حقلٍ يُضاف إلى المستند لاحقًا ولا يُضاف إلى هذا السطر يُستعاد بقيمته
-        // الافتراضيّة بصمت عند أوّل إعادة تحميل. وقد وقع ذلك بعينه في هذه الدفعة:
-        // اختيارُ الزخرفة كان يُحفَظ على القرص فعلًا ثم يُطرَح عند القراءة.
-        decorAccent: active.doc.decorAccent,
-        // والحقلان الجديدان على القائمة نفسها. والتعليقُ أعلاه ليس تحذيرًا نظريًّا:
-        // سَهوُهما هنا أخفى الخطَّ الزمنيَّ عن كلّ مستندٍ مُوقَّتٍ بعد أوّل إعادة
-        // تحميل — إذ يَرجع `medium` إلى `'still'` من الحالة الابتدائية بصمت.
-        // ظهر ذلك في `qa/timeline.spec.mjs` §٦ وحدها، وتكرّر، فأُصلِح هنا.
-        fps: active.doc.fps,
-        medium: active.doc.medium,
-        // **وأهدافُ التصدير تُبذَر هنا كذلك، ولهذا سببٌ مختلفٌ عن كلّ ما فوقه.**
-        // كلُّ سطرٍ أعلاه يَستعيد حقلًا مكتوبًا في `DocSnapshot`؛ و`targets`
-        // **ليست** فيه ولا تُحفَظ، فهي حالةُ جلسةٍ تَرجع إلى قيمة
-        // `initialStudioState` عند كلّ إعادة تحميل. فمستندُ «بوست عمودي» يُبذَر
-        // صحيحًا في `startDoc`، ثم يُعاد تحميلُ الصفحة، فتَرجع الأهدافُ إلى مقاسِ
-        // ما-قبل-الاختيار بصمتٍ — عطلٌ آخرُ بالأثر نفسِه من طريقٍ آخر. قِيس في
-        // `qa/export-default-target.spec.mjs` §٣.
-        targets: defaultTargetsFor(active.doc.sizeIdx),
-        historyPast: [],
-        historyFuture: [],
-        historyLabels: [],
-        historyFutureLabels: [],
-        dirty: false,
-        activeArtboardId: active.id,
-        postPalette: active.paletteIdx,
-        artboards: normalized.map((a): ArtboardMeta => ({ id: a.id, name: a.name, paletteIdx: a.paletteIdx })),
-        artboardDocs,
-        // المستند مُحمَّل في الحالة، لكن الشاشة تبقى `home`: شاشة البداية تعرض
-        // بطاقة «متابعة» بارزة، ونقرةٌ واحدة عليها تفتح هذا المستند بعينه. فلا
-        // المُنتقي مفروض على العائد، ولا العمل المحفوظ مخفيّ عنه.
-        openDoc: 'open',
-      }));
+      const patchFromFile = loadedFileToState(file, loadedProjectId() ?? newProjectId());
+      setState((s) => ({ ...s, ...patchFromFile }));
     });
     return () => {
       cancelled = true;
@@ -1360,7 +1374,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     patch({ saveState: 'saving' });
     saveTimerRef.current = setTimeout(() => {
-      saveDoc({ artboards: allArtboardEntries(state), activeArtboardId: state.activeArtboardId })
+      saveDoc({ artboards: allArtboardEntries(state), activeArtboardId: state.activeArtboardId }, state.projectId)
         .then(() => patch({ dirty: false, saveState: 'saved', savedAt: Date.now() }))
         .catch(() => patch({ saveState: 'error' }));
     }, 700);
@@ -1707,7 +1721,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     // The sidecar that encodes mp4/gif/livephoto only exists inside the built
     // Tauri app — in the plain browser preview there is no process to shell out
     // to, so this stays an honest "unavailable" rather than a fake success.
-    if ((isVideo || isLivePhoto) && !inTauri) {
+    if ((isVideo || isLivePhoto) && !hasDesktopSidecars) {
       patch({ exportState: 'unavailable', exportError: null });
       return;
     }
@@ -2478,6 +2492,25 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // المستند، فكان «كمّل» بعد إعادة تشغيل البرنامج يفتح على t=0 — قبل دخول أيّ
       // عنصر — فتظهر اللوحة خلفيةً فارغة والطبقاتُ كلّها في القائمة. ولا مسطرةَ
       // في الساكن يُحرَّك منها المؤشّر، فلا مخرجَ للمصمّم من ذلك.
+      refreshProjects: async () => {
+        const projects = await listProjects();
+        patch({ projects });
+      },
+      openProject: async (id) => {
+        const cur = stateRef.current;
+        if (cur.openDoc === 'open' && cur.dirty) {
+          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+          await saveDoc({ artboards: allArtboardEntries(cur), activeArtboardId: cur.activeArtboardId }, cur.projectId).catch(() => undefined);
+        }
+        const file = migrateToDocFile(await loadProject(id), cur.lang);
+        if (!file) return;
+        const next = loadedFileToState(file, id);
+        void markCurrentProject(id);
+        setState((s) => {
+          const opened = { ...s, ...next, screen: 'editor' as const, cmdOpen: false };
+          return { ...opened, ...(opened.medium !== 'timed' ? { t: settledTime(opened.elements, opened.fps ?? DEFAULT_DOC_FPS) } : {}) };
+        });
+      },
       resumeOpenProject: () =>
         patch((s) => ({
           screen: 'editor',

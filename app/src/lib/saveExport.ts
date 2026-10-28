@@ -1,4 +1,4 @@
-import { inTauri } from './tauriEnv';
+import { inTauri, onMobile } from './tauriEnv';
 
 /** Writes a PNG blob to ~/Mazij/Exports when running inside Tauri (real file on
  * disk via the fs plugin). In the plain browser/dev preview, where there is no
@@ -8,9 +8,10 @@ export async function saveExportedFile(fileName: string, blob: Blob): Promise<st
 
   if (inTauri) {
     const { writeFile, mkdir } = await import('@tauri-apps/plugin-fs');
-    const { homeDir, join } = await import('@tauri-apps/api/path');
-    const home = await homeDir();
-    const dir = await join(home, 'Mazij', 'Exports');
+    const { homeDir, documentDir, join } = await import('@tauri-apps/api/path');
+    // في الجوال: مجلّدُ مستندات التطبيق، وهو ما يعرضه تطبيقُ «الملفات» في الآيفون
+    // (`Info.ios.plist`). مجلّدُ المستخدم في الجوال صندوقٌ مغلق لا يراه أحد.
+    const dir = onMobile ? await join(await documentDir(), 'Exports') : await join(await homeDir(), 'Mazij', 'Exports');
     await mkdir(dir, { recursive: true });
     const filePath = await join(dir, fileName);
     await writeFile(filePath, bytes);

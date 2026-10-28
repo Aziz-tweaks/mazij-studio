@@ -53,7 +53,7 @@ export interface Dictionary {
   h_medium_all: string; h_medium_still: string; h_medium_timed: string;
   h_still: string; h_timed: string;
   h_no_results: (q: string) => string;
-  h_resume: string; h_resume_blank: string; h_resume_cta: string;
+  h_resume: string; h_resume_blank: string; h_resume_cta: string; h_projects: string; h_project_age: (ms: number) => string;
   h_elements: (n: number) => string; h_artboards: (n: number) => string;
   h_projects_soon: string; h_custom_start: string;
   sel_head: string; sel_badge: string;
@@ -251,7 +251,7 @@ export const AR: Dictionary = {
   select_all: 'تحديد الكل', quality: 'الجودة', q_high: 'عالية', q_med: 'متوسطة', scale: 'الدقة',
   transparent: 'خلفية شفافة', exporting: 'جاري التصدير…', ex_done: 'تم التصدير',
   open_folder: 'فتح المجلد', cancel: 'إلغاء',
-  ex_unavailable: 'تصدير الفيديو يحتاج تطبيق سطح المكتب — غير متوفر في معاينة المتصفح', ex_error: 'فشل التصدير', ex_results: 'النتائج',
+  ex_unavailable: 'تصدير الفيديو للحين في تطبيق الماك بس — قريبًا في الجوال والمتصفح', ex_error: 'فشل التصدير', ex_results: 'النتائج',
   font_error: 'فشل التحميل', reveal_folder: '~/Mazij/Exports',
   exportN: (n) => (n === 0 ? 'اختر مقاساً' : n === 1 ? 'تصدير ملف واحد' : n === 2 ? 'تصدير ملفين' : `تصدير ${n} ملفات`),
   ex_fps: 'معدّل الإطارات', ex_mp4_no_alpha: 'MP4 لا يدعم خلفية شفافة — استخدم GIF',
@@ -268,7 +268,8 @@ export const AR: Dictionary = {
   h_medium_all: 'الكل', h_medium_still: 'صورة', h_medium_timed: 'فيديو',
   h_still: 'صورة', h_timed: 'فيديو',
   h_no_results: (q) => `ما فيه نتائج لـ«${q}»`,
-  h_resume: 'مشروعك المفتوح', h_resume_blank: 'لوحة فاضية', h_resume_cta: 'كمّل',
+  h_resume: 'مشروعك المفتوح', h_resume_blank: 'لوحة فاضية', h_resume_cta: 'كمّل', h_projects: 'مشاريعك',
+  h_project_age: (ms) => { const m = Math.floor(ms / 60000); if (m < 1) return 'الحين'; if (m < 60) return `قبل ${m} د`; const h = Math.floor(m / 60); if (h < 24) return `قبل ${h} س`; const d = Math.floor(h / 24); return d === 1 ? 'أمس' : `قبل ${d} يوم`; },
   h_elements: (n) => (n === 0 ? 'بدون عناصر' : n === 1 ? 'عنصر واحد' : n === 2 ? 'عنصران' : `${n} عناصر`),
   h_artboards: (n) => (n === 1 ? 'لوحة واحدة' : n === 2 ? 'لوحتان' : `${n} لوحات`),
   h_projects_soon: 'مشاريع متعددة ومكتبة أعمال',
@@ -538,7 +539,7 @@ export const EN: Dictionary = {
   select_all: 'Select all', quality: 'Quality', q_high: 'High', q_med: 'Medium', scale: 'Scale',
   transparent: 'Transparent background', exporting: 'Exporting…', ex_done: 'Exported',
   open_folder: 'Open folder', cancel: 'Cancel',
-  ex_unavailable: 'Video export needs the desktop app — not available in the browser preview', ex_error: 'Export failed', ex_results: 'Results',
+  ex_unavailable: 'Video export is Mac-only for now — coming to mobile and the browser', ex_error: 'Export failed', ex_results: 'Results',
   font_error: 'Failed to load', reveal_folder: '~/Mazij/Exports',
   exportN: (n) => (n === 0 ? 'Pick a size' : `Export ${n} file${n === 1 ? '' : 's'}`),
   ex_fps: 'Frame rate', ex_mp4_no_alpha: 'MP4 has no transparency — use GIF instead',
@@ -556,7 +557,8 @@ export const EN: Dictionary = {
   h_medium_all: 'All', h_medium_still: 'Image', h_medium_timed: 'Video',
   h_still: 'Image', h_timed: 'Video',
   h_no_results: (q) => `No results for “${q}”`,
-  h_resume: 'Your open project', h_resume_blank: 'Empty artboard', h_resume_cta: 'Continue',
+  h_resume: 'Your open project', h_resume_blank: 'Empty artboard', h_resume_cta: 'Continue', h_projects: 'Your projects',
+  h_project_age: (ms) => { const m = Math.floor(ms / 60000); if (m < 1) return 'just now'; if (m < 60) return `${m}m ago`; const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`; const d = Math.floor(h / 24); return d === 1 ? 'yesterday' : `${d}d ago`; },
   h_elements: (n) => (n === 0 ? 'No elements' : `${n} element${n === 1 ? '' : 's'}`),
   h_artboards: (n) => `${n} artboard${n === 1 ? '' : 's'}`,
   h_projects_soon: 'Multiple projects and a work library',

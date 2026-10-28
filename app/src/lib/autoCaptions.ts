@@ -1,4 +1,4 @@
-import { inTauri } from './tauriEnv';
+import { hasDesktopSidecars } from './tauriEnv';
 import { WHISPER_REPO_ID, getModelPartsMap, modelById, type LocalModelInfo } from './localModels';
 
 import { DEFAULT_BEZIER, type Bezier } from './easing';
@@ -174,7 +174,7 @@ async function extractAudioViaWebAudio(videoDataUrl: string, trimIn: number, tri
 
 export async function extractAudioSamples(video: Pick<VideoElement, 'src' | 'trimIn' | 'trimOut'>): Promise<Float32Array> {
   if (!video.src) throw new Error('لا يوجد ملف فيديو');
-  return inTauri ? extractAudioViaFfmpeg(video.src, video.trimIn, video.trimOut) : extractAudioViaWebAudio(video.src, video.trimIn, video.trimOut);
+  return hasDesktopSidecars ? extractAudioViaFfmpeg(video.src, video.trimIn, video.trimOut) : extractAudioViaWebAudio(video.src, video.trimIn, video.trimOut);
 }
 
 // ---- Transcription ------------------------------------------------------------

@@ -10,7 +10,7 @@
 // فلا يحمل المستندُ صورَ فيديو كاملٍ لا يُعرَض منها شيء. وفي المعاينة (بلا FFmpeg) يُحفَظ
 // الملفُّ كما هو، ومشغّلُ الصوت يقرأ مسارَ صوته ويترك الصورة.
 
-import { inTauri } from './tauriEnv';
+import { hasDesktopSidecars, inTauri } from './tauriEnv';
 
 export interface LoadedAudio {
   dataUrl: string;
@@ -110,7 +110,7 @@ async function extractViaFfmpeg(bytes: Uint8Array, filename: string): Promise<{ 
 /** بايتاتُ ملفٍّ مختار → صوتٌ جاهزٌ للطبقة. */
 export async function decodeAudioBytes(bytes: Uint8Array, filename: string): Promise<LoadedAudio> {
   const name = baseName(filename);
-  if (inTauri) {
+  if (hasDesktopSidecars) {
     const out = await extractViaFfmpeg(bytes, filename);
     return { dataUrl: bytesToDataUrl(out.bytes, 'audio/mp4'), durationSec: out.durationSec, name };
   }

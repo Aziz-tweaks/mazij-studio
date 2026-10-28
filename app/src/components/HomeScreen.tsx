@@ -294,6 +294,13 @@ export function HomeScreen() {
   // وصف المشروع السابق على بطاقةٍ تفتح المشروع الجديد.
   const openSize = sizeAt(state.sizeIdx, state.customW, state.customH);
   const openElementCount = state.elements.length;
+  // المكتبةُ تُقرأ كلَّما ظهرت الشاشة: الرجوعُ من المحرّر يُري المشروعَ الذي حُفظ للتوّ.
+  useEffect(() => {
+    void actions.refreshProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const now = Date.now();
+  const others = state.projects.filter((p) => !(state.openDoc === 'open' && p.id === state.projectId));
   const openArtboardCount = state.artboards.length;
 
   const mediumTabs: Array<{ id: MediumFilter; label: string }> = [
@@ -359,6 +366,35 @@ export function HomeScreen() {
             </span>
             <span style={{ flex: 'none', height: 34, padding: '0 16px', borderRadius: 'var(--rs)', background: 'var(--accent)', color: 'var(--onAccent)', fontWeight: 700, fontSize: 13, display: 'grid', placeItems: 'center' }}>{L.h_resume_cta}</span>
           </button>
+        )}
+
+        {/* **مشاريعك** — كلُّ مشروعٍ في ملفّه (`persist.ts`)، فالمشروعُ الجديد لا يمسح ما قبله،
+            وما قبله يُفتح من هنا بنقرة. المفتوحُ الآن في البطاقة أعلاه، فلا يتكرّر هنا. */}
+        {others.length > 0 && (
+          <section data-testid="project-library" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>{L.h_projects}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+              {others.map((p) => {
+                const size = sizeAt(p.sizeIdx, p.customW, p.customH);
+                return (
+                  <button
+                    key={p.id}
+                    data-testid={`project-${p.id}`}
+                    onClick={() => void actions.openProject(p.id)}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 12, border: '1px solid var(--line)', borderRadius: 'var(--r)', background: 'var(--surface)', color: 'var(--text)', textAlign: 'start' }}
+                  >
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{nameOf(size, state.lang)}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <span dir="ltr">{dimsOf(size)}</span>
+                      <span>{L.h_elements(p.elementCount)}</span>
+                      {p.updatedAt > 0 && <span>·</span>}
+                      {p.updatedAt > 0 && <span>{L.h_project_age(now - p.updatedAt)}</span>}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {/* صندوق نيّة مِزو — موجود أصلًا ويعمل (`startFromPrompt`)، وهو نظير صندوق

@@ -269,7 +269,7 @@ async function main() {
   await page.locator('[data-testid="export-submit"]').click();
   await page.waitForTimeout(150);
   body = await page.locator('body').innerText();
-  assert(body.includes('يحتاج تطبيق سطح المكتب'), 'export: MP4 in the browser preview shows an honest "needs the desktop app" message instead of a fake progress bar');
+  assert(body.includes('للحين في تطبيق الماك'), 'export: MP4 in the browser preview shows an honest "needs the desktop app" message instead of a fake progress bar');
   assert(!body.includes('تم التصدير'), 'export: no fake "exported" success state is shown for the unavailable video path');
 
   await page.keyboard.press('Escape');

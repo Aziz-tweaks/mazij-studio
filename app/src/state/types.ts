@@ -1,3 +1,4 @@
+import { newProjectId, type ProjectSummary } from '../lib/persist';
 import type { Lang } from '../i18n/strings';
 import type { SizeMedium, ToolId } from '../data/constants';
 import { defaultTargetsFor } from '../data/constants';
@@ -432,6 +433,11 @@ export interface StudioState {
    * اللقطة المجمّدة كانت تكذب: من يبدأ مشروعًا جديدًا ثم يرجع للشاشة كان يرى
    * بطاقةً تصف المشروع **السابق**، بينما النقر عليها يفتح المشروع الجديد. */
   openDoc: 'checking' | 'none' | 'open';
+  /** معرّفُ المشروع المفتوح في مكتبة المشاريع (`src/lib/persist.ts`) — الحفظُ التلقائيّ
+   * يكتب في ملفّه وحده، وكلُّ مستندٍ جديد (`startDoc`) يأخذ معرّفًا جديدًا. */
+  projectId: string;
+  /** المشاريعُ المحفوظة، الأحدثُ أوّلًا — تعرضها شاشةُ البداية. */
+  projects: ProjectSummary[];
 }
 
 /** مقاسُ الحالة الابتدائيّة، ثابتًا مُسمًّى لا رقمًا مكتوبًا مرّتين: يَقرؤه
@@ -570,4 +576,6 @@ export const initialStudioState: StudioState = {
   exportAllArtboards: false,
   exportArtboardOwnSize: false,
   openDoc: 'checking',
+  projectId: newProjectId(),
+  projects: [],
 };
