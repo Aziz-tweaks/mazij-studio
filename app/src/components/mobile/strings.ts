@@ -134,6 +134,20 @@ const AR = {
   x_video_soon: 'تصدير الفيديو للحين في تطبيق الماك — قريب على الجوال.',
   x_pick_one: 'اختر مقاس واحد على الأقل',
   close: 'إغلاق',
+  mz_local: 'مِزو',
+  mz_welcome_llm: (p: string) => `هلا! أنا مِزو متصل بـ${p}. قل لي وش تبي أصمم أو أغيّر وأسويه على اللوحة مباشرة.`,
+  mz_working: (p: string) => `${p} يشتغل على تصميمك…`,
+  mz_key_saved: (p: string) => `متصل بمفتاحك من ${p}`,
+  mz_key_change: 'تغيير المفتاح',
+  mz_key_title: (p: string) => `اربط مِزو بـ${p}`,
+  mz_key_body: (p: string) => `الصق مفتاح API من حسابك في ${p}. ينحفظ في جوالك بس، والطلبات تروح من جوالك للمزوّد مباشرة، والتكلفة على حسابك عندهم.`,
+  mz_key_label: 'مفتاح API',
+  mz_model: 'النموذج',
+  mz_save: 'تحقّق واحفظ',
+  mz_checking: 'يتحقّق…',
+  mz_cancel: 'إلغاء',
+  mz_stop: 'إيقاف',
+  mz_offline: 'ما فيه اتصال بالنت — تأكّد من الشبكة.',
 };
 
 const EN: typeof AR = {
@@ -264,6 +278,20 @@ const EN: typeof AR = {
   x_video_soon: 'Video export is in the Mac app for now — coming to mobile soon.',
   x_pick_one: 'Pick at least one size',
   close: 'Close',
+  mz_local: 'Mizo',
+  mz_welcome_llm: (p: string) => `Hi! I'm Mizo, connected to ${p}. Tell me what to design or change and I'll do it on the canvas.`,
+  mz_working: (p: string) => `${p} is working on your design…`,
+  mz_key_saved: (p: string) => `Connected with your ${p} key`,
+  mz_key_change: 'Change key',
+  mz_key_title: (p: string) => `Connect Mizo to ${p}`,
+  mz_key_body: (p: string) => `Paste an API key from your ${p} account. It stays on this phone, requests go straight to the provider, and usage is billed to your account.`,
+  mz_key_label: 'API key',
+  mz_model: 'Model',
+  mz_save: 'Verify & save',
+  mz_checking: 'Checking…',
+  mz_cancel: 'Cancel',
+  mz_stop: 'Stop',
+  mz_offline: 'No connection — check your network.',
 };
 
 export type MobileDict = typeof AR;

@@ -34,6 +34,9 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* `clip` لا `hidden`: تركيزُ حقلٍ داخل لوحٍ مُزاح كان يُمرِّر الواجهةَ كلَّها لفوق
+     (الصندوقُ المخفيّ قابلٌ للتمرير برمجيًّا، والمقصوصُ لا). */
+  overflow: clip;
   background: var(--m-bg);
   color: var(--m-text);
   font-size: 15px;
@@ -316,7 +319,9 @@
 .m-sheet {
   position: absolute;
   inset-inline: 0;
-  bottom: 0;
+  /* لوحةُ المفاتيح: اللوحُ يرتفع فوقها فيبقى حقلُ الكتابة ظاهرًا (`--m-kb` من MobileEditor). */
+  bottom: var(--m-kb, 0px);
+  transition: bottom 250ms var(--m-ease);
   z-index: 21;
   display: flex;
   flex-direction: column;

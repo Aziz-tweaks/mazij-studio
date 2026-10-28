@@ -29,7 +29,16 @@ export function MobileHome() {
   const others = state.projects.filter((p) => !(state.openDoc === 'open' && p.id === state.projectId));
   const now = Date.now();
   const ar = state.lang === 'ar';
-  const colW = Math.floor((Math.min(window.innerWidth, 560) - 32 - 12) / 2);
+  // الآيبادُ عموديًّا أعرض: ثلاثةُ أعمدةٍ للقوالب وصفٌّ واحدٌ للمقاسات الثمانية.
+  const [vw, setVw] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const on = () => setVw(window.innerWidth);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  const wide = vw >= 700;
+  const cols = wide ? 3 : 2;
+  const colW = Math.floor((vw - 32 - 12 * (cols - 1)) / cols);
 
   return (
     <div data-testid="start-screen" data-compact="true" className="m-root">
@@ -78,7 +87,7 @@ export function MobileHome() {
         </div>
 
         <Section title={M.newProject}>
-          <div data-testid="mobile-formats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: '0 16px' }}>
+          <div data-testid="mobile-formats" style={{ display: 'grid', gridTemplateColumns: `repeat(${wide ? 8 : 4}, 1fr)`, gap: 10, padding: '0 16px' }}>
             {FORMATS.map((id) => {
               const idx = sizeIdxOf(id);
               if (idx < 0) return null;
@@ -132,7 +141,7 @@ export function MobileHome() {
               </button>
             ))}
           </div>
-          <div data-testid="template-strip" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '0 16px', alignItems: 'start' }}>
+          <div data-testid="template-strip" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12, padding: '0 16px', alignItems: 'start' }}>
             {templates.map((tp) => {
               const size = SIZES[tp.sizeIdx];
               const h = Math.round(Math.min(colW * 1.6, Math.max(colW * 0.7, (colW * size.h) / size.w)));

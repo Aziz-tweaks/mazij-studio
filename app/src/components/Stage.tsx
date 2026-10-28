@@ -22,7 +22,7 @@ import type { ShapeDrawKind } from '../state/types';
 import { useStudio } from '../state/StudioContext';
 import { AudioPlayback } from './stage/AudioPlayback';
 import { isAudioFile } from '../lib/audioFile';
-import { useCompact } from '../lib/useCompact';
+import { useCompact, useTouch } from '../lib/useCompact';
 import { useViewInset } from './mobile/viewInset';
 
 /** الصندوق الجاري رسمه، مع أي قُطرَي الصندوق يسلكه الخطّ (يُهمَل لبقيّة الأنواع). */
@@ -92,6 +92,7 @@ export function Stage() {
   // في الجوال: اللوحةُ بملء المساحة، وأدواتُها في شريط المحرّر السفليّ (`MobileEditor`)
   // لا عائمةً فوقها — فلا شريطَ مقاسٍ ولا حبّةَ أدوات ولا هوامشَ واسعة.
   const compact = useCompact();
+  const touch = useTouch();
   const { state, actions, dict: L } = useStudio();
   const lang = state.lang;
   /** المسك البسيط على الصورة: النصّ كما في الأداة الشائعة. والاحترافي: كما في أداة المتّجهات. */
@@ -1143,7 +1144,7 @@ export function Stage() {
         overflow: 'hidden',
         padding: compact ? '16px 12px' : '54px 24px 72px',
         // اللمسُ كلُّه للّوحة: لا تمريرَ للصفحة ولا تكبيرَ لها تحت الإصبع.
-        touchAction: compact ? 'none' : undefined,
+        touchAction: compact || touch ? 'none' : undefined,
         cursor: spaceDown ? 'grab' : CURSOR_BY_TOOL[state.tool] || 'default',
       }}
       className="mz-stage"

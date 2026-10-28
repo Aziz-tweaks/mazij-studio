@@ -1,4 +1,4 @@
-import { useCompact } from '../../lib/useCompact';
+import { useCompact, useTouch } from '../../lib/useCompact';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { HANDLE_POS, type HandleId, type ResizeHandleId } from '../../lib/geometry';
 import type { Geometry } from '../../state/elements';
@@ -83,7 +83,8 @@ export function Handles({ geo, scale, size, onHandleDown, onDoubleClick, handles
   // 1 artboard px * px = 1 screen px
   const px = 1 / scale;
   // في الجوال: الإصبعُ أعرضُ من المؤشّر — مقبضٌ مرسومٌ ١٤ وإصابةٌ ٤٤ (حدُّ أبل لهدف اللمس).
-  const compact = useCompact();
+  const touch = useTouch();
+  const compact = useCompact() || touch;
   const PAINT_PX = compact ? 14 : PAINT_PX_DESKTOP;
   const HIT_PX = compact ? 44 : HIT_PX_DESKTOP;
 

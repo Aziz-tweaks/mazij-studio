@@ -63,6 +63,7 @@ import { saveUiPrefs } from '../lib/uiPrefs';
 import { BACKGROUND_ID, backgroundLayer, decorLayer, type McpCtx } from '../lib/mcpTools';
 import { describeAiError, providerById } from '../lib/aiProviders';
 import { loadApiKey } from '../lib/aiKeyStore';
+import { LLM_PROVIDERS, loadModel, runLlm } from '../lib/llmAgent';
 
 /** Switches one clip to an entrance preset **and rebuilds its property tracks** from
  * it, which is the half that used to be missing: `tracks` is the only thing
@@ -1476,6 +1477,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   // الأمر، لا لقطةٌ من لحظة الإنشاء"). لا تأخيرَ مصطنعًا (`setTimeout`) ولا ردًّا
   // مُخمَّنًا بمطابقة كلمات: `aiTyping` ينعكس الآن على انتظارٍ حقيقيٍّ لوعدٍ حقيقي،
   // والردُّ هو نصُّ `interpretAndRun` نفسه — بما فيه مسار "لم أفهم" الصادق.
+  const llmAbortRef = useRef<AbortController | null>(null);
   const sendAi = useCallback(
     (text?: string) => {
       const txt = (text ?? '').trim();
@@ -1492,9 +1494,46 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // ChatGPT أو Claude بمفتاح المستخدم: من الجهاز إلى المزوّد مباشرةً، والأدواتُ
+      // تُنفَّذ هنا على المستند الحيّ (`llmAgent.ts`).
+      if (st.aiEngine === 'openai' || st.aiEngine === 'anthropic') {
+        const provider = st.aiEngine;
+        const abort = new AbortController();
+        llmAbortRef.current = abort;
+        void (async () => {
+          try {
+            const key = await loadApiKey(LLM_PROVIDERS[provider].keyId);
+            if (!key) {
+              reply(ar ? `أضف مفتاح ${LLM_PROVIDERS[provider].label} أول من إعدادات مِزو.` : `Add your ${LLM_PROVIDERS[provider].label} key in Mizo settings first.`);
+              return;
+            }
+            const ctx: McpCtx = { getState: () => mcpStateRef.current, actions: mcpLiveActionsRef.current };
+            const text = await runLlm({
+              provider,
+              apiKey: key,
+              model: loadModel(provider),
+              system: agentSystemPrompt(st.lang, st.selectedIds),
+              history: st.aiMsgs,
+              prompt: txt,
+              ctx,
+              lang: st.lang,
+              signal: abort.signal,
+            });
+            reply(text || (ar ? 'تم.' : 'Done.'));
+          } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') reply(ar ? 'وقّفت.' : 'Stopped.');
+            else if (err instanceof TypeError) reply(ar ? 'ما فيه اتصال بالنت — تأكّد من الشبكة.' : 'No connection — check your network.');
+            else reply(err instanceof Error ? err.message : String(err));
+          } finally {
+            if (llmAbortRef.current === abort) llmAbortRef.current = null;
+          }
+        })();
+        return;
+      }
+
       // وكيلٌ خارجيّ: يحتاج خادمَ MCP المحلّيّ وجسرَ النافذة. إن لم يكن المستخدم قد
       // شغّله بنفسه شغّلناه لهذا الطلب وحده، ثم أطفأناه — كي لا يبقى منفذٌ مفتوح لم يطلبه.
-      const engine = st.aiEngine;
+      const engine = st.aiEngine as 'claude' | 'codex' | 'custom';
       void (async () => {
         let startedHere = false;
         try {
@@ -1531,6 +1570,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }, [patch]);
 
   const cancelAi = useCallback(() => {
+    llmAbortRef.current?.abort();
     void cancelAgent();
   }, []);
 

@@ -96,6 +96,22 @@ export function MobileEditor() {
 
   useEffect(() => () => setViewInset(0), []);
 
+  // لوحةُ مفاتيح iOS تُصغِّر المنفذَ المرئيّ ولا تُصغِّر الصفحة: نقيس الفرق ونرفع الألواح بقدره.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const on = () => {
+      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      rootRef.current?.style.setProperty('--m-kb', `${kb > 80 ? kb : 0}px`);
+    };
+    vv.addEventListener('resize', on);
+    vv.addEventListener('scroll', on);
+    return () => {
+      vv.removeEventListener('resize', on);
+      vv.removeEventListener('scroll', on);
+    };
+  }, []);
+
   const toggle = (id: SheetId) => setSheet((cur) => (cur === id ? null : id));
   const close = () => setSheet(null);
 

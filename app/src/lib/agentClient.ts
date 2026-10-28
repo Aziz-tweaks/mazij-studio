@@ -8,7 +8,9 @@ import { hasDesktopSidecars as inTauri, onMobile } from './tauriEnv';
  *   أدواتِ مزيج عبر خادم MCP المحلّيّ، فتظهر تعديلاتُها على اللوحة لحظةَ تنفيذها.
  * - `custom`: أيُّ وكيلٍ آخر يقبل أمرًا نصّيًّا (أداةُ سطرِ أوامر، Gemini CLI…)، بقالب أمرٍ
  *   يكتبه المستخدم. يجد الوكيلُ رابطَ MCP ورمزه في `MAZIJ_MCP_URL`/`MAZIJ_MCP_TOKEN`. */
-export type AiEngine = 'local' | 'claude' | 'codex' | 'custom';
+// و`openai` / `anthropic` (٢٨ أكتوبر ٢٠٢٦): ChatGPT أو Claude بمفتاح المستخدم نفسه، من
+// الجهاز مباشرةً (`llmAgent.ts`) — يعملان في الجوال أيضًا لأنهما لا يحتاجان برنامجًا مرافقًا.
+export type AiEngine = 'local' | 'claude' | 'codex' | 'custom' | 'openai' | 'anthropic';
 
 export interface AgentInfo {
   id: 'claude' | 'codex';
@@ -28,7 +30,7 @@ export async function detectAgents(): Promise<AgentInfo[]> {
   return await invoke<AgentInfo[]>('agent_detect');
 }
 
-export async function runAgent(agent: Exclude<AiEngine, 'local'>, prompt: string, system: string, customCmd?: string): Promise<AgentReply> {
+export async function runAgent(agent: 'claude' | 'codex' | 'custom', prompt: string, system: string, customCmd?: string): Promise<AgentReply> {
   if (!inTauri) throw new Error('الوكلاءُ الخارجيّون يعملون داخل تطبيق مزيج على الجهاز فقط.');
   const { invoke } = await import('@tauri-apps/api/core');
   return await invoke<AgentReply>('agent_run', { agent, prompt, system, customCmd: customCmd ?? null });
@@ -70,8 +72,9 @@ export function loadAiPrefs(): AiPrefs {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(PREFS_KEY) : null;
     const prefs = raw ? (JSON.parse(raw) as AiPrefs) : {};
-    // الجوالُ لا وكلاءَ فيه ولا أوامرَ مخصّصة: المحرّكُ المحلّيّ وحده.
-    return onMobile ? { ...prefs, engine: 'local' } : prefs;
+    // الجوالُ لا وكلاءَ فيه ولا أوامرَ مخصّصة: المحلّيّ، أو ChatGPT/Claude بمفتاح المستخدم.
+    const keyEngine = prefs.engine === 'openai' || prefs.engine === 'anthropic';
+    return onMobile && prefs.engine && !keyEngine ? { ...prefs, engine: 'local' } : prefs;
   } catch {
     return {};
   }

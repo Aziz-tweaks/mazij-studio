@@ -1,4 +1,7 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { AiEngine } from '../../lib/agentClient';
+import { loadApiKey, saveApiKey } from '../../lib/aiKeyStore';
+import { LLM_PROVIDERS, loadModel, saveModel, testKey, type LlmProvider } from '../../lib/llmAgent';
 import { useStudio } from '../../state/StudioContext';
 import type { DocElement, TextElement } from '../../state/elements';
 import type { AnimPreset } from '../../state/elements';
@@ -268,48 +271,168 @@ export function BackgroundPanel() {
 export function MizoPanel() {
   const { state, actions } = useStudio();
   const M = useM();
+  const ar = state.lang === 'ar';
   const listRef = useRef<HTMLDivElement>(null);
+  const engine = state.aiEngine === 'openai' || state.aiEngine === 'anthropic' ? state.aiEngine : 'local';
+  const provider = engine === 'local' ? null : LLM_PROVIDERS[engine];
+  const [hasKey, setHasKey] = useState<boolean | null>(null);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!provider) return;
+    let dead = false;
+    setHasKey(null);
+    void loadApiKey(provider.keyId).then((k) => !dead && setHasKey(!!k));
+    return () => {
+      dead = true;
+    };
+  }, [provider]);
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [state.aiMsgs.length, state.aiTyping]);
+
+  const needsKey = !!provider && (hasKey === false || editing);
   return (
     <div data-testid="mizo-panel" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div ref={listRef} className="m-scroll" style={{ flex: 1, minHeight: 0, padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {!state.aiMsgs.length && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <span style={{ width: 32, height: 32, flex: 'none', borderRadius: 11, display: 'grid', placeItems: 'center', background: 'var(--m-accent-soft)', color: 'var(--m-accent-text)' }}>
-              <Glyph d={MI.mizo} size={18} />
-            </span>
-            <div style={{ padding: '10px 14px', borderRadius: 16, borderStartStartRadius: 6, background: 'var(--m-elev2)', fontSize: 15 }}>{M.s_mizo_welcome}</div>
-          </div>
-        )}
-        {state.aiMsgs.map((m, i) => (
-          <div key={i} className="m-fade-in" style={{ alignSelf: m.role === 'u' ? 'flex-start' : 'flex-end', maxWidth: '85%', padding: '10px 14px', borderRadius: 18, background: m.role === 'u' ? 'var(--m-accent)' : 'var(--m-elev2)', color: m.role === 'u' ? '#fff' : 'var(--m-text)', fontSize: 15, whiteSpace: 'pre-wrap' }}>
-            {m.text}
-          </div>
-        ))}
-        {state.aiTyping && <div style={{ alignSelf: 'flex-end', padding: '10px 14px', borderRadius: 18, background: 'var(--m-elev2)', color: 'var(--m-text2)' }}>…</div>}
+      <div style={{ flex: 'none', padding: '0 16px 10px' }}>
+        <Seg
+          testid="mizo-engine"
+          value={engine}
+          options={[
+            { id: 'local', label: M.mz_local, testid: 'mizo-engine-local' },
+            { id: 'openai', label: 'ChatGPT', testid: 'mizo-engine-openai' },
+            { id: 'anthropic', label: 'Claude', testid: 'mizo-engine-anthropic' },
+          ]}
+          onChange={(id) => {
+            setEditing(false);
+            actions.setAiEngine(id as AiEngine);
+          }}
+        />
       </div>
-      <div className="m-hscroll" style={{ flex: 'none', gap: 8, padding: '0 16px 10px' }}>
-        {M.s_mizo_tries.map((t) => (
-          <button key={t} className="m-chip m-press" onClick={() => actions.sendAi(t)}>
-            {t}
+
+      {needsKey && engine !== 'local' ? (
+        <KeyForm provider={engine} onSaved={() => { setHasKey(true); setEditing(false); }} onCancel={hasKey ? () => setEditing(false) : undefined} />
+      ) : (
+        <>
+          <div ref={listRef} className="m-scroll" style={{ flex: 1, minHeight: 0, padding: '4px 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {!state.aiMsgs.length && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ width: 32, height: 32, flex: 'none', borderRadius: 11, display: 'grid', placeItems: 'center', background: 'var(--m-accent-soft)', color: 'var(--m-accent-text)' }}>
+                  <Glyph d={MI.mizo} size={18} />
+                </span>
+                <div style={{ padding: '10px 14px', borderRadius: 16, borderStartStartRadius: 6, background: 'var(--m-elev2)', fontSize: 15 }}>
+                  {provider ? M.mz_welcome_llm(provider.label) : M.s_mizo_welcome}
+                </div>
+              </div>
+            )}
+            {state.aiMsgs.map((m, i) => (
+              <div key={i} className="m-fade-in" style={{ alignSelf: m.role === 'u' ? 'flex-start' : 'flex-end', maxWidth: '85%', padding: '10px 14px', borderRadius: 18, background: m.role === 'u' ? 'var(--m-accent)' : 'var(--m-elev2)', color: m.role === 'u' ? '#fff' : 'var(--m-text)', fontSize: 15, whiteSpace: 'pre-wrap' }}>
+                {m.text}
+              </div>
+            ))}
+            {state.aiTyping && (
+              <div data-testid="mizo-typing" style={{ alignSelf: 'flex-end', padding: '10px 14px', borderRadius: 18, background: 'var(--m-elev2)', color: 'var(--m-text2)' }}>
+                {provider ? M.mz_working(provider.label) : '…'}
+              </div>
+            )}
+          </div>
+          {provider && hasKey && (
+            <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px 8px' }}>
+              <span className="m-caption" style={{ flex: 1 }}>{M.mz_key_saved(provider.label)}</span>
+              <button data-testid="mizo-key-edit" className="m-chip m-press" style={{ height: 30, fontSize: 12.5 }} onClick={() => setEditing(true)}>
+                {M.mz_key_change}
+              </button>
+            </div>
+          )}
+          <div className="m-hscroll" style={{ flex: 'none', gap: 8, padding: '0 16px 10px' }}>
+            {M.s_mizo_tries.map((t) => (
+              <button key={t} className="m-chip m-press" disabled={state.aiTyping} onClick={() => actions.sendAi(t)}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (state.aiInput.trim()) actions.sendAi(state.aiInput);
+            }}
+            style={{ flex: 'none', display: 'flex', gap: 8, padding: '0 16px 8px' }}
+          >
+            <input data-testid="mizo-input" className="m-field" value={state.aiInput} onChange={(e) => actions.setAiInput(e.target.value)} placeholder={M.s_mizo_ph} enterKeyHint="send" style={{ borderRadius: 999 }} />
+            {state.aiTyping ? (
+              <button type="button" data-testid="mizo-stop" aria-label={M.mz_stop} className="m-icon-btn m-press" onClick={actions.cancelAi} style={{ width: 48, height: 48, background: 'var(--m-elev3)', color: 'var(--m-text)' }}>
+                <Glyph d="M6 6h8v8H6z" size={18} fill />
+              </button>
+            ) : (
+              <button type="submit" data-testid="mizo-send" aria-label="إرسال" className="m-icon-btn m-press" disabled={!state.aiInput.trim()} style={{ width: 48, height: 48, background: 'var(--m-accent)', color: '#fff' }}>
+                <Glyph d={MI.send} size={20} style={{ transform: ar ? 'scaleX(-1)' : undefined }} />
+              </button>
+            )}
+          </form>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** لصقُ المفتاح: يُفحَص بطلبٍ صغير قبل الحفظ، ويُحفظ في الجهاز وحده. */
+function KeyForm({ provider, onSaved, onCancel }: { provider: LlmProvider; onSaved: () => void; onCancel?: () => void }) {
+  const { state } = useStudio();
+  const M = useM();
+  const info = LLM_PROVIDERS[provider];
+  const [key, setKey] = useState('');
+  const [model, setModel] = useState(() => loadModel(provider));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async () => {
+    const k = key.trim();
+    if (!k) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await testKey(provider, k, state.lang);
+      await saveApiKey(info.keyId, k);
+      saveModel(provider, model || info.defaultModel);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof TypeError ? M.mz_offline : e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div data-testid="mizo-key-form" className="m-scroll" style={{ flex: 1, minHeight: 0, padding: '4px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 12, padding: 14, borderRadius: 16, background: 'var(--m-elev2)' }}>
+        <span style={{ width: 36, height: 36, flex: 'none', borderRadius: 12, display: 'grid', placeItems: 'center', background: 'var(--m-accent-soft)', color: 'var(--m-accent-text)' }}>
+          <Glyph d={MI.lock} size={18} />
+        </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontWeight: 700 }}>{M.mz_key_title(info.label)}</span>
+          <span className="m-caption" style={{ fontSize: 13 }}>{M.mz_key_body(info.label)}</span>
+        </div>
+      </div>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span className="m-section-title">{M.mz_key_label}</span>
+        <input data-testid="mizo-key-input" className="m-field" dir="ltr" type="password" autoComplete="off" autoCapitalize="off" spellCheck={false} placeholder={`${info.keyPrefix}…`} value={key} onChange={(e) => setKey(e.target.value)} />
+        <span dir="ltr" className="m-caption" style={{ textAlign: state.lang === 'ar' ? 'right' : 'left' }}>
+          {info.keyUrl}
+        </span>
+      </label>
+      {err && <div data-testid="mizo-key-error" style={{ padding: 12, borderRadius: 14, background: 'rgba(255,107,107,.12)', color: 'var(--m-danger)', fontSize: 14 }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 10 }}>
+        {onCancel && (
+          <button className="m-btn m-press" onClick={onCancel} style={{ flex: 1 }}>
+            {M.mz_cancel}
           </button>
-        ))}
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (state.aiInput.trim()) actions.sendAi();
-        }}
-        style={{ flex: 'none', display: 'flex', gap: 8, padding: '0 16px 8px' }}
-      >
-        <input data-testid="mizo-input" className="m-field" value={state.aiInput} onChange={(e) => actions.setAiInput(e.target.value)} placeholder={M.s_mizo_ph} enterKeyHint="send" style={{ borderRadius: 999 }} />
-        <button type="submit" aria-label="إرسال" className="m-icon-btn m-press" disabled={!state.aiInput.trim()} style={{ width: 48, height: 48, background: 'var(--m-accent)', color: '#fff' }}>
-          <Glyph d={MI.send} size={20} style={{ transform: state.lang === 'ar' ? 'scaleX(-1)' : undefined }} />
+        )}
+        <button data-testid="mizo-key-save" className="m-btn m-btn-primary m-press" disabled={busy || !key.trim()} onClick={() => void save()} style={{ flex: 2 }}>
+          {busy ? M.mz_checking : M.mz_save}
         </button>
-      </form>
+      </div>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+        <span className="m-section-title">{M.mz_model}</span>
+        <input data-testid="mizo-model-input" className="m-field" dir="ltr" autoCapitalize="off" spellCheck={false} value={model} onChange={(e) => setModel(e.target.value)} />
+      </label>
     </div>
   );
 }

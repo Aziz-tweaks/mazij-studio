@@ -69,6 +69,10 @@ function StudioShell() {
     // فالقيدُ يَنزل إلى صاحبه: المحرِّرُ يَحمله كما كان بالضبط — فسلوكُه لم
     // يتغيّر بتّةً — وشاشةُ البداية تُترَك تَنساب.
     ...(state.screen === 'editor' && !compact ? { minWidth: 880 } : null),
+    // الآيباد بواجهة سطح المكتب: الشريطُ العلويّ لا يدخل تحت شريط حالة النظام، والخطُّ
+    // الزمنيّ لا يدخل تحت خطّ الرجوع للشاشة الرئيسيّة. (واجهةُ الجوال تحسب حوافّها بنفسها.)
+    // وعلى سطح المكتب القيمتان صفر.
+    ...(compact ? null : { paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }),
     background: 'var(--bg)',
     color: 'var(--text)',
     fontFamily: 'var(--font)',

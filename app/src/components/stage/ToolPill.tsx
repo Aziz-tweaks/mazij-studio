@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { Icon } from '../Icon';
 import { ICONS, PILL_TOOLS, TOOLS } from '../../data/constants';
 import { useStudio } from '../../state/StudioContext';
+import { useTouch } from '../../lib/useCompact';
 
 /** حبّة الأدوات العائمة أسفل اللوحة — أدوات الرسم بحروفها، ثمّ التكبير.
  *
@@ -16,6 +17,8 @@ import { useStudio } from '../../state/StudioContext';
  * وأزرار التكبير نصوصٌ (`−` و`+` و«ملاءمة») بقصد: تُعرَف بأعينها، وهي أسماؤها التي
  * تجدها بها الاختبارات منذ بُنيت. */
 export function ToolPill() {
+  // على اللمس لا لوحةَ مفاتيح غالبًا: حرفُ الاختصار تحت الأداة ضجيجٌ لا تلميح.
+  const touch = useTouch();
   const { state, actions, dict: L } = useStudio();
   const keyOf = (id: string) => TOOLS.find((t) => t.id === id)?.key ?? '';
 
@@ -74,7 +77,7 @@ export function ToolPill() {
             }}
           >
             <Icon size={18} path={ICONS[id]} fill={id === 'select' ? 'currentColor' : 'none'} />
-            {key && <span aria-hidden="true" style={keyBadge(active)}>{key}</span>}
+            {key && !touch && <span aria-hidden="true" style={keyBadge(active)}>{key}</span>}
           </button>
         );
       })}
