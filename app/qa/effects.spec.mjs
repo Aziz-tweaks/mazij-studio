@@ -219,12 +219,24 @@ async function main() {
   const exBl = await exportAt(page, 1.5, [P_EDGE]);
   assert(dist(bl[0], exBl[0]) <= 14, `الضبابيّةُ على حافّة المستطيل: معاينة ${fmt(bl[0])} / تصدير ${fmt(exBl[0])}`);
 
+  // ═══════════════ ٨ب. يُرى فورًا عند مؤشّرٍ ليس على إطار ═══════════════
+  // رُصد في التجربة اليدويّة: المؤشّرُ المنقور بين إطارين، والبدايةُ كانت تُقرَّب للإطار
+  // التالي، فلا يظهر للمؤثّر أثرٌ لحظةَ إضافته.
+  const tOdd = await parkPlayhead(page, 3.71);
+  await page.locator('[data-testid="fx-card-bw"]').click();
+  await page.waitForTimeout(250);
+  const d4b = await doc(page);
+  const bw3 = d4b.elements.filter((e) => e.type === 'fx' && e.fx === 'bw').pop();
+  assert(bw3 && bw3.anim.start <= tOdd + 1e-9, `البدايةُ لا تتجاوز المؤشّر (مؤشّر ${tOdd}، بداية ${bw3 && bw3.anim.start})`);
+  const now = await previewAt(page, [P_RECT], 'fx-08-odd-playhead');
+  assert(isGray(now[0]), `ويظهر أثرُه على اللوحة في اللحظة نفسها (${fmt(now[0])})`);
+
   // ═══════════════ ٩. الحفظ ═══════════════
   await page.waitForTimeout(900);
   await page.reload({ waitUntil: "networkidle" });
   await resumeAfterReload(page);
   const d5 = await doc(page);
-  assert(d5.elements.filter((e) => e.type === 'fx').length === 3, 'طبقاتُ المؤثّرات تبقى بعد إعادة التحميل');
+  assert(d5.elements.filter((e) => e.type === 'fx').length === 4, 'طبقاتُ المؤثّرات تبقى بعد إعادة التحميل');
   assert((await persisted(page)).schemaVersion === 6, 'نسخةُ المخطّط ٦');
 
   assert(pageErrors.length === 0, `لا أخطاءَ في الصفحة (${pageErrors.join(' | ')})`);

@@ -92,7 +92,10 @@ const IDENTITY: FxResolved = { blur: 0, ops: [], zoom: 1, dx: 0, dy: 0, overlays
 
 /** ظرفُ الزمن عند اللحظة المحلّيّة `u` (ثوانٍ من بداية المقطع) لمقطعٍ طوله `d`. */
 export function fxEnvelope(cat: FxCategory, u: number, d: number, fadeIn: number, fadeOut: number): number {
-  if (d <= 0 || u < 0 || u > d) return 0;
+  if (d <= 0) return 0;
+  // البوّابةُ على المقطع هي `clipShowsAt` بتسامحها؛ وهنا يُقصَر الزمنُ إلى المقطع فقط، كي
+  // لا يُطفئ فرقُ جزءٍ من إطارٍ مؤثّرًا يقول المقطعُ إنه ظاهر.
+  u = Math.min(d, Math.max(0, u));
   if (cat === 'transition') {
     // قمّةٌ واحدة في المنتصف: صفرٌ عند الحافّتين، فلا قفزةَ عند دخول المقطع أو خروجه.
     const p = u / d;

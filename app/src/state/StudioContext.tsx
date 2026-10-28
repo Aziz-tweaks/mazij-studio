@@ -2269,8 +2269,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const frame = 1 / s.fps;
       const duration = Math.max(frame, Math.round(spec.defaultDuration * s.fps) / s.fps);
       // الانتقالُ يُوسَّط على المؤشّر: يقف المصمّمُ عند القطع ويضغط، فتقع القمّةُ عليه.
+      // **وإلى الإطار السابق لا الأقرب.** المؤشّرُ المنقور على المسطرة لا يقع على إطار؛
+      // والتقريبُ للأقرب كان يضع البدايةَ بعد المؤشّر بجزءٍ من إطار، فيضغط المصمّمُ البطاقةَ
+      // ولا يرى شيئًا على اللوحة (رُصد بالتجربة اليدويّة في البرنامج: المؤشّر ٠٫٢٥ والبداية ٠٫٢٧).
       const rawStart = spec.cat === 'transition' ? s.t - duration / 2 : s.t;
-      const start = Math.max(0, snapToFrame(rawStart, s.fps));
+      const start = Math.max(0, Math.floor(rawStart * s.fps + 1e-6) / s.fps);
       const el: DocElement = {
         id,
         type: 'fx',
