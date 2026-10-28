@@ -1,4 +1,5 @@
 import type { Palette, SizePreset } from '../data/constants';
+import { applyFxToCanvas, fxStrengthAt, resolveFx } from './effects';
 import type { DocElement, ShapeElement, TextElement } from '../state/elements';
 import { firstBaselineShift, lineHeightOf, pivotOffsetFrac, resolveShapeLabelColor, resolveTextColor } from '../state/elements';
 import type { Lang } from '../i18n/strings';
@@ -412,6 +413,14 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     // العنصرُ المحدودُ بمقطعه غائبٌ خارجه — `clipShowsAt` الواحدة التي تقرؤها
     // المعاينةُ وSVG، وغيرُ المحدود (كلُّ مستندٍ قائم) يمرّ كما كان.
     if (!clipShowsAt(el.anim, time)) continue;
+    // **طبقةُ المؤثّر**: تُطبَّق على كلّ ما رُسم حتى الآن (الخلفيّةُ والزخرفةُ وما تحتها)،
+    // نظيرَ غلاف المعاينة في `Stage.tsx`، بالصيغة الواحدة `fxStrengthAt`/`resolveFx`.
+    if (el.type === 'fx') {
+      const fv = entranceVisualAt(el.anim, time);
+      const { s, u } = fxStrengthAt(el, el.anim, time, fv.opacity);
+      if (s > 0) applyFxToCanvas(ctx, resolveFx(el.fx, s, u));
+      continue;
+    }
     const x = el.geo.x * w;
     const y = el.geo.y * h;
     const bw = el.geo.w * w;
@@ -1045,6 +1054,8 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
   for (const el of spec.elements) {
     if (!el.visible) continue;
     if (el.type === 'audio') continue; // لا صورةَ للصوت.
+    // المؤثّراتُ للقُماش والفيديو وحدهما؛ ملفُّ SVG ساكنٌ لا زمنَ فيه — قيدٌ مُعلَن.
+    if (el.type === 'fx') continue;
     // SVG لا يحمل حركةً (انظر التعليق على `svgBlurPx`)، لكنّ **الظهورَ** ليس حركة:
     // عنصرٌ محدودٌ بمقطعه غائبٌ عن هذه اللحظة غائبٌ عن الملفّ، كما في PNG.
     if (!clipShowsAt(el.anim, svgTime)) continue;

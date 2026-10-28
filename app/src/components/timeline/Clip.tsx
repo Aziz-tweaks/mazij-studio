@@ -6,6 +6,7 @@ import { useAudioPeaks, waveformPath } from '../../lib/audioPeaks';
 import { hitTest, type ClipEdge, type Hit, type HitClipRow } from '../../lib/timelineHit';
 import { moveClip, trim } from '../../lib/timelineEdit';
 import { useStudio } from '../../state/StudioContext';
+import { elementDisplayName } from '../../lib/layerNames';
 
 export interface SelectedKf {
   elId: string;
@@ -317,7 +318,7 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
               pointerEvents: 'none',
             }}
           >
-            {L[`anim_${anim.preset}` as keyof typeof L] as string}
+            {el.type === 'fx' ? elementDisplayName(el, L) : (L[`anim_${anim.preset}` as keyof typeof L] as string)}
           </div>
         )}
         {property === 'opacity' && (

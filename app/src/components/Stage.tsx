@@ -1,4 +1,4 @@
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArtboardSizeMenu } from './stage/ArtboardSizeMenu';
 import { ToolPill } from './stage/ToolPill';
@@ -12,7 +12,8 @@ import { geoToPx, pxToGeo, resizeBox, rotatePoint, computeSnap, boundsOfBoxes, c
 import { computeImageCropLayout } from '../lib/imageCrop';
 import { commandsToSvgPath, pathElementCommands } from '../lib/pathGeometry';
 import { closestTOnSegment, fitSmoothPath } from '../lib/pathSmoothing';
-import { clipShowsAt, entranceStyleAt } from '../lib/animTimeline';
+import { clipShowsAt, entranceStyleAt, entranceVisualAt } from '../lib/animTimeline';
+import { fxCss, fxStrengthAt, overlayCss, resolveFx } from '../lib/effects';
 import type { DocElement } from '../state/elements';
 import { defaultAnim, defaultTextStagger } from '../state/elements';
 import { NEW_TEXT_PLACEHOLDER, isPlaceholderText } from '../lib/textPresets';
@@ -1000,7 +1001,7 @@ export function Stage() {
   const soleSelected = selected.length === 1 ? state.elements.find((e) => e.id === selected[0]) : undefined;
   /** العنصر الذي تُرسم مقابضُه — وخطُّ تحديده معها في طبقة المقابض (انظرها أدناه). */
   // والصوتُ لا صندوقَ له على اللوحة: لا مقابض ولا خطَّ تحديد — يُحدَّد ويُحرَّر من صفّه.
-  const handlesFor = soleSelected && soleSelected.type !== 'audio' && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id ? soleSelected : undefined;
+  const handlesFor = soleSelected && soleSelected.type !== 'audio' && soleSelected.type !== 'fx' && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id ? soleSelected : undefined;
   const handlesLayerStyle: CSSProperties = {
     position: 'absolute',
     left: abStyle.left,
@@ -1012,7 +1013,7 @@ export function Stage() {
     pointerEvents: 'none',
   };
 
-  const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id) && e.type !== 'audio') && !state.pendingEditSnapshot && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
+  const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id) && e.type !== 'audio' && e.type !== 'fx') && !state.pendingEditSnapshot && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
 
   // المسودّة كشكل مسار كامل الهيئة، بإحداثيات المستند (لا كسور صندوق) — فالمعاينة
   // تمرّ بنفس مُصيِّر الهندسة الذي سيرسم العنصر النهائي بعد `penFinish`.
@@ -1099,23 +1100,53 @@ export function Stage() {
             المصدَّر، وهو عطلٌ سبق أن وقع هنا بعينه). كان الشرط عدد العناصر، فكانت
             الدائرة تُفرَض على كل مستندٍ فيه شيء: لا تُحدَّد ولا تُحذَف ولا يُسأل
             عنها أحد — انظر `DocSnapshot.decorAccent`. */}
-        {state.decorAccent && (
-          /* `left` صريحة لا `insetInlineStart`: الخاصّية المنطقيّة تُحلّ حسب اتجاه
-             الكتابة، وهندسةُ المستند ليست نصًّا — والتصدير لا يعرف اتجاهًا أصلًا.
-             وبـ`insetInlineStart: '-14%'` كانت الزخرفة تهبط في الزاوية **اليسرى**
-             من المعاينة (مركزها عند س=٩٧ من ١٠٨٠) بينما يرسمها التصدير في
-             **اليمنى** (س=٩٨٣) — صورتان متعاكستان للمستند نفسه، لا ينكشف فرقهما
-             إلا عند أوّل تصدير، بعد أن يكون المصمم قد أنهى تنسيقه حول الموضع
-             الخطأ. والقيم هنا هي معادلة `renderArtboardCanvas`/`renderArtboardSvg`
-             نفسها: مركزٌ عند 0.68w + (0.46w)/2 = 0.91w، وأعلى عند ‑0.16h. */
-          <div style={{ position: 'absolute', left: '68%', top: '-16%', width: '46%', aspectRatio: '1', borderRadius: '50%', background: pal.ac, pointerEvents: 'none' }} />
-        )}
+        {/* **الطبقاتُ، ملفوفةً بطبقات المؤثّرات.** طبقةُ المؤثّر (`type: 'fx'`) لا ترسم
+            نفسها؛ تلفّ كلَّ ما **تحتها** — الخلفيّةَ والزخرفةَ والعناصرَ — في غلافٍ يحمل
+            `filter`/`transform` المؤثّر، وتضع فوقه طبقاتِ التغطية (تعتيم، وميض، حبيبات).
+            وهو ما يفعله التصدير على القُماش (`applyFxToCanvas`) بالصيغة نفسها.
 
-        {/* العنصرُ المحدودُ بمقطعه لا يُرسَم خارجه — `clipShowsAt` نفسُها التي يقرؤها
-            التصدير. والمراجعُ (القناعُ والمسارُ) تُطلَب من `state.elements` كلِّها
-            لا من هذه القائمة، فقناعٌ خارج مقطعه يبقى قناعًا. */}
-        {state.elements.filter((el) => clipShowsAt(el.anim, t)).map((el: DocElement) => (
-          <ElementView
+            والغلافُ **يُبنى لكلّ طبقة مؤثّرٍ في المستند ولو كانت خارج مقطعها**، بقيمٍ محايدة:
+            شجرةٌ ثابتةُ البنية لا يُعاد فيها تركيبُ العناصر (ولا يُعاد تحميلُ فيديو) كلّما
+            دخل المؤشّرُ مقطعَ مؤثّرٍ أو خرج منه.
+
+            والعنصرُ المحدودُ بمقطعه لا يُرسَم خارجه — `clipShowsAt` نفسُها التي يقرؤها
+            التصدير. والمراجعُ (القناعُ والمسارُ) تُطلَب من `state.elements` كلِّها. */}
+        {(() => {
+          let nodes: ReactNode[] = [];
+          if (state.decorAccent) {
+            nodes.push(
+              /* `left` صريحة لا `insetInlineStart` — هندسةُ المستند ليست نصًّا؛ والقيمُ معادلةُ
+                 `renderArtboardCanvas` نفسُها (مركزٌ عند 0.91w، وأعلى عند ‑0.16h). */
+              <div key="decor" style={{ position: 'absolute', left: '68%', top: '-16%', width: '46%', aspectRatio: '1', borderRadius: '50%', background: pal.ac, pointerEvents: 'none' }} />,
+            );
+          }
+          let firstWrap = true;
+          for (const el of state.elements) {
+            if (el.type === 'fx') {
+              const live = el.visible && clipShowsAt(el.anim, t);
+              const fv = live ? entranceVisualAt(el.anim, t) : null;
+              const st = fv ? fxStrengthAt(el, el.anim, t, fv.opacity) : { s: 0, u: 0 };
+              const r = st.s > 0 ? resolveFx(el.fx, st.s, st.u) : null;
+              const css = r ? fxCss(r) : {};
+              nodes = [
+                <div
+                  key={`fxw-${el.id}`}
+                  data-fx-wrap={el.id}
+                  data-fx-active={r ? 'true' : undefined}
+                  style={{ position: 'absolute', inset: 0, filter: css.filter, transform: css.transform, background: firstWrap ? pal.bg : undefined }}
+                >
+                  {nodes}
+                </div>,
+                ...(r ? r.overlays : []).map((o, i) => (
+                  <div key={`fxo-${el.id}-${i}`} data-fx-overlay={el.id} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', ...overlayCss(o) }} />
+                )),
+              ];
+              firstWrap = false;
+              continue;
+            }
+            if (!clipShowsAt(el.anim, t)) continue;
+            nodes.push(
+              <ElementView
             key={el.id}
             el={el}
             pal={pal}
@@ -1145,8 +1176,11 @@ export function Stage() {
             editRef={(node) => {
               editRef.current = node;
             }}
-          />
-        ))}
+          />,
+            );
+          }
+          return nodes;
+        })()}
 
         <GuideLines guides={guides} size={size} />
 

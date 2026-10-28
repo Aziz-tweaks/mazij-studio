@@ -12,6 +12,7 @@
 
 import type { DocElement } from '../state/elements';
 import type { Dictionary } from '../i18n/strings';
+import { fxSpec } from './effects';
 
 /** أطول اسمٍ مشتقٍّ من المحتوى قبل القطع. السطر في قائمة الطبقات عرضه ١٥٠ بكسل
  * ويقصّه CSS بـ`ellipsis` على أي حال؛ القطع هنا يمنع حمل نصٍّ من فقرةٍ كاملة في
@@ -67,6 +68,11 @@ export function elementDisplayName(el: DocElement, L: Dictionary): string {
     // اسمُ الملف يُكتب في `name` عند الاستيراد فيسبق هذا الفرع؛ وهذا لطبقةٍ بلا اسم.
     case 'audio':
       return L.audio_layer;
+    // المؤثّرُ يُعرَف باسم نوعه: «أبيض وأسود» أوضحُ من «مؤثّر ٣».
+    case 'fx': {
+      const spec = fxSpec(el.fx);
+      return L.fx_layer === 'Effect' ? spec.en : spec.ar;
+    }
     default:
       return L.ln_element;
   }

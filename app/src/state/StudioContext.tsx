@@ -39,6 +39,7 @@ import type { ReferenceVideoStructure } from '../lib/referenceVideo';
 import { buildReferenceVideoTemplate } from '../lib/referenceVideo';
 import { renderArtboardPng, renderArtboardSvg } from '../lib/exportArtboard';
 import { DEFAULT_SHUTTER_ANGLE } from '../lib/motionBlur';
+import { fxSpec, isFxKind, type FxKind } from '../lib/effects';
 import { shapeTextOnCurve } from '../lib/textOnPath';
 import { justifySvgTextElement } from '../lib/kashidaJustify';
 import { LIVE_PHOTO_DEFAULT_DURATION } from '../lib/livePhotoExport';
@@ -196,6 +197,7 @@ function normalizeDoc(doc: DocSnapshot): DocSnapshot {
       ...(e.type === 'lottie' ? { loop: e.loop ?? true } : {}),
       ...(e.type === 'video' ? { loop: e.loop ?? false, volume: e.volume ?? 1, muted: e.muted ?? false } : {}),
       ...(e.type === 'audio' ? { volume: e.volume ?? 1, muted: e.muted ?? false } : {}),
+      ...(e.type === 'fx' ? { fx: isFxKind(e.fx) ? e.fx : 'bw', amount: clamp(Number.isFinite(e.amount) ? e.amount : 1, 0, 1), fadeIn: Math.max(0, e.fadeIn ?? 0), fadeOut: Math.max(0, e.fadeOut ?? 0) } : {}),
     })),
   };
 }
@@ -1012,6 +1014,13 @@ export interface StudioActions {
    * فتصير السحبةُ كلُّها خطوةَ تراجعٍ واحدة. */
   liveSetAudioVolume: (id: ElementId, volume: number) => void;
   setAudioMuted: (id: ElementId, muted: boolean) => void;
+  /** «تأثيرات» ← بطاقة: طبقةُ مؤثّرٍ **عند المؤشّر** فوق كلّ الطبقات، محدودةٌ بمقطعها،
+   * محدَّدةٌ فورًا. والانتقالُ يُوسَّط على المؤشّر (قمّتُه عند القطع). خطوةُ تراجعٍ واحدة. */
+  insertFx: (kind: FxKind) => void;
+  /** خصائصُ طبقة المؤثّر (النوع، القوّة، التلاشي) — خطوةُ تراجعٍ لكلّ التزام. */
+  setFxProps: (id: ElementId, patch: Partial<{ fx: FxKind; amount: number; fadeIn: number; fadeOut: number }>) => void;
+  /** القوّةُ أثناء سحب الشريط — حيٌّ بلا تاريخ، بين `beginElementEdit`/`commitElementEdit`. */
+  liveSetFxProps: (id: ElementId, patch: Partial<{ amount: number; fadeIn: number; fadeOut: number }>) => void;
   setVideoLoop: (id: ElementId, loop: boolean) => void;
   undo: () => void;
   redo: () => void;
@@ -2253,6 +2262,39 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const insertFx = useCallback((kind: FxKind) => {
+    setState((s) => {
+      const spec = fxSpec(kind);
+      const id = newElementId('fx');
+      const frame = 1 / s.fps;
+      const duration = Math.max(frame, Math.round(spec.defaultDuration * s.fps) / s.fps);
+      // الانتقالُ يُوسَّط على المؤشّر: يقف المصمّمُ عند القطع ويضغط، فتقع القمّةُ عليه.
+      const rawStart = spec.cat === 'transition' ? s.t - duration / 2 : s.t;
+      const start = Math.max(0, snapToFrame(rawStart, s.fps));
+      const el: DocElement = {
+        id,
+        type: 'fx',
+        visible: true,
+        locked: false,
+        opacity: 100,
+        maskId: null,
+        geo: { x: 0, y: 0, w: 0, h: 0, rotation: 0 },
+        fx: kind,
+        amount: 1,
+        fadeIn: 0,
+        fadeOut: 0,
+        anim: { ...defaultAnim('none', start, duration), tracks: {}, bounded: true },
+      };
+      return {
+        ...s,
+        elements: [...s.elements, el],
+        selectedIds: [id],
+        sel: id,
+        ...pushHistory(s, (s.lang === 'ar' ? AR : EN).undo_fx_add),
+      };
+    });
+  }, []);
+
   const insertAudioTool = useCallback(async () => {
     try {
       const loaded = await pickAudioFile();
@@ -2603,7 +2645,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       selectAllElements: () =>
         patch((s) => {
           // ⌘A على اللوحة يحدّد ما على اللوحة: طبقاتُ الصوت لا تُرى فيها، فلا تدخل.
-          const ids = s.elements.filter((e) => e.visible && !e.locked && e.id !== BACKGROUND_ID && e.type !== 'audio').map((e) => e.id);
+          const ids = s.elements.filter((e) => e.visible && !e.locked && e.id !== BACKGROUND_ID && e.type !== 'audio' && e.type !== 'fx').map((e) => e.id);
           return { selectedIds: ids, sel: ids[ids.length - 1] ?? null, tool: 'select' };
         }),
       animateElement: (id, preset) =>
@@ -3288,6 +3330,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       liveSetAudioVolume: (id, volume) => liveUpdateElements((els) => els.map((e) => (e.id === id && (e.type === 'audio' || e.type === 'video') ? { ...e, volume: clamp(volume, 0, 1) } : e))),
       insertAudioTool,
       insertAudioFromFile,
+      insertFx,
+      setFxProps: (id, p) =>
+        commitElements(
+          (els) => els.map((e) => (e.id === id && e.type === 'fx' ? { ...e, ...p, ...(p.amount !== undefined ? { amount: clamp(p.amount, 0, 1) } : {}) } : e)),
+          (state.lang === 'ar' ? AR : EN).undo_fx_edit,
+        ),
+      liveSetFxProps: (id, p) =>
+        liveUpdateElements((els) => els.map((e) => (e.id === id && e.type === 'fx' ? { ...e, ...p, ...(p.amount !== undefined ? { amount: clamp(p.amount, 0, 1) } : {}) } : e))),
       setVideoVolume: (id, volume) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'video' ? { ...e, volume: clamp(volume, 0, 1) } : e))),
       setVideoMuted: (id, muted) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'video' ? { ...e, muted } : e))),
       setVideoLoop: (id, loop) => commitElements((els) => els.map((e) => (e.id === id && e.type === 'video' ? { ...e, loop } : e))),
@@ -4109,6 +4159,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       replaceVideo,
       insertAudioTool,
       insertAudioFromFile,
+      insertFx,
       persistTemplates,
       state.sizeIdx,
       state.selectedIds,

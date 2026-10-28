@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { FX_CATALOG, fxSpec, type FxKind } from '../../lib/effects';
 import { Icon } from '../Icon';
 import { ICONS, MEDIUM_SURFACES, PALETTES, sizeAt, seg } from '../../data/constants';
 import type { HAlign, VAlign } from '../../state/types';
@@ -168,6 +169,13 @@ export function PropsTab() {
               {MEDIUM_SURFACES[state.medium].motionProps && <TimingSection />}
             </>
           )}
+          {/* **طبقةُ المؤثّر لا صندوقَ لها**: نوعُه وقوّتُه وتلاشيه وتوقيتُه وحدها. */}
+          {el.type === 'fx' && (
+            <>
+              <FxProps el={el} />
+              {MEDIUM_SURFACES[state.medium].motionProps && <TimingSection />}
+            </>
+          )}
           {el.type === 'text' && <TextProps el={el} />}
           {el.type === 'shape' && <ShapeProps el={el} />}
           {el.type === 'image' && <ImageProps el={el} />}
@@ -180,7 +188,7 @@ export function PropsTab() {
           {/* كانت هذه كلّها خلف «احترافي». ألغى المالك الوضعين (٢٤ أكتوبر ٢٠٢٦):
               «العمق يُطلب ولا يُفرض» — فالأقسام حاضرة، والمفاتيح الزمنيّة وحدها
               تنتظر مستندًا له زمن. */}
-            {el.type !== 'audio' && <>
+            {el.type !== 'audio' && el.type !== 'fx' && <>
               {state.selectedIds.length === 1 && <AppearanceSection el={el} />}
               <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -253,6 +261,68 @@ export function PropsTab() {
         </>
       )}
     </div>
+  );
+}
+
+/** لوحُ طبقة المؤثّر: النوعُ (تبديلٌ بلا حذفٍ وإعادة)، والقوّةُ (سحبةٌ = خطوةُ تراجعٍ
+ * واحدة)، والتلاشي دخولًا وخروجًا للفلاتر والمؤثّرات. والانتقالُ لا تلاشيَ له: قمّتُه في
+ * منتصف مقطعه بالبناء. */
+function FxProps({ el }: { el: DocElement & { type: 'fx' } }) {
+  const { state, actions, dict: L } = useStudio();
+  const spec = fxSpec(el.fx);
+  const isTr = spec.cat === 'transition';
+  const slider = (key: 'amount' | 'fadeIn' | 'fadeOut', label: string, max: number, step: number, fmt: (v: number) => string) => {
+    const v = el[key];
+    return (
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{label}</span>
+        <input
+          data-testid={`fx-${key}-${el.id}`}
+          dir="ltr"
+          type="range"
+          min={0}
+          max={max}
+          step={step}
+          value={v}
+          onChange={(e) => {
+            actions.beginElementEdit(L.undo_fx_edit);
+            actions.liveSetFxProps(el.id, { [key]: Number(e.target.value) });
+          }}
+          onPointerUp={() => actions.commitElementEdit()}
+          onKeyUp={() => actions.commitElementEdit()}
+          onBlur={() => actions.commitElementEdit()}
+          style={{ flex: 1.4, accentColor: 'var(--accent)' }}
+        />
+        <span dir="ltr" style={{ color: 'var(--muted)', fontSize: 11, minWidth: 38, textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>{fmt(v)}</span>
+      </label>
+    );
+  };
+  const maxFade = Math.max(0.1, Math.round((el.anim.duration / 2) * 10) / 10);
+  return (
+    <section data-testid={`fx-props-${el.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{L.sec_fx}</div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+        <span style={{ color: 'var(--muted)', flex: 1 }}>{L.fx_kind}</span>
+        <select
+          data-testid={`fx-kind-${el.id}`}
+          value={el.fx}
+          onChange={(e) => actions.setFxProps(el.id, { fx: e.target.value as FxKind })}
+          style={{ flex: 1.4, height: 28, border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', color: 'var(--text)', fontSize: 12 }}
+        >
+          {(['filter', 'effect', 'transition'] as const).map((c) => (
+            <optgroup key={c} label={c === 'filter' ? L.fx_cat_filter : c === 'effect' ? L.fx_cat_effect : L.fx_cat_transition}>
+              {FX_CATALOG.filter((f) => f.cat === c).map((f) => (
+                <option key={f.id} value={f.id}>{state.lang === 'ar' ? f.ar : f.en}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      {slider('amount', L.fx_amount, 1, 0.01, (v) => `${Math.round(v * 100)}%`)}
+      {!isTr && slider('fadeIn', L.fx_fade_in, maxFade, 0.05, (v) => `${v.toFixed(2)}s`)}
+      {!isTr && slider('fadeOut', L.fx_fade_out, maxFade, 0.05, (v) => `${v.toFixed(2)}s`)}
+      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: 'var(--muted)' }}>{isTr ? L.fx_peak_hint : L.fx_scope_hint}</p>
+    </section>
   );
 }
 

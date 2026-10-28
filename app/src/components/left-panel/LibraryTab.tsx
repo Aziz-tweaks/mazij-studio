@@ -3,6 +3,7 @@ import { useStudio } from '../../state/StudioContext';
 import { ShapesLibrary } from './ShapesLibrary';
 import { TextLibrary } from './TextLibrary';
 import { AudioLibrary } from './AudioLibrary';
+import { FxLibrary } from './FxLibrary';
 
 /** لوح محتوى الأداة المختارة.
  *
@@ -26,6 +27,7 @@ export function LibraryTab() {
   if (status === 'ready' && tool === 'shape') return <ShapesLibrary />;
   if (status === 'ready' && tool === 'text') return <TextLibrary />;
   if (status === 'ready' && tool === 'audio') return <AudioLibrary />;
+  if (status === 'ready' && tool === 'fx') return <FxLibrary />;
 
   return (
     <div data-testid={`library-soon-${tool}`} style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>

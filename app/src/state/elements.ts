@@ -4,6 +4,7 @@ import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
 import type { StrokeWidthProfile } from '../lib/variableStroke';
+import type { FxKind } from '../lib/effects';
 
 export type ElementId = string;
 export type ElementKind = 'text' | 'shape' | 'image' | 'lottie';
@@ -93,6 +94,8 @@ const TRIM_PROPERTIES = new Set<AnimProperty>(['trimStart', 'trimEnd']);
 export function animPropertiesFor(el: { type: string; textAnim?: { enabled: boolean } }): AnimProperty[] {
   // الصوتُ لا يُرى، فلا خاصّيّةَ مرئيّةَ تُحرَّك عليه — صفُّه صفُّ المقطع وحده.
   if (el.type === 'audio') return [];
+  // طبقةُ المؤثّر لا صندوقَ لها: شفافيّتُها وحدها لها معنى — وهي «قوّتُه» المتحرّكة.
+  if (el.type === 'fx') return ['opacity'];
   return ANIM_PROPERTIES.filter((p) => {
     if (TRIM_PROPERTIES.has(p)) return el.type === 'shape';
     if (p === 'reveal') return el.type === 'text' && !!el.textAnim?.enabled;
@@ -800,7 +803,26 @@ export interface AudioElement extends ElementBase {
   muted: boolean;
 }
 
-export type DocElement = TextElement | ShapeElement | ImageElement | LottieElement | VideoElement | AudioElement;
+/** **طبقةُ مؤثّر** — فلترٌ أو مؤثّرٌ أو انتقال (٢٨ أكتوبر ٢٠٢٦).
+ *
+ * لا صورةَ لها: تُغيّر كلَّ ما **تحتها** في الطبقات طوال مقطعها، كطبقة التعديل في برامج
+ * الفيديو. وهي طبقةٌ لا قائمةٌ موازية للسبب نفسه الذي جعل الصوتَ طبقة (`AudioElement`):
+ * النقلُ والقصّ من الحافّتين والقفلُ والإخفاءُ والتسميةُ والحذفُ والتراجع قائمةٌ كلُّها.
+ * و`anim.bounded` دائمًا `true`: المؤثّرُ موجودٌ بين نقطتَي دخوله وخروجه فقط.
+ *
+ * والقوّةُ = `amount` × ظرفُ التلاشي × شفافيّةُ الطبقة (ومفاتيحُها إن رُسمت) — والصيغةُ
+ * الواحدة في `fxStrengthAt` (`src/lib/effects.ts`) تقرؤها المعاينةُ والتصدير. */
+export interface FxElement extends ElementBase {
+  type: 'fx';
+  fx: FxKind;
+  /** ٠..١ — شدّةُ المؤثّر. */
+  amount: number;
+  /** ثوانٍ: تلاشي دخولٍ وخروج داخل المقطع (لا معنى لهما للانتقالات، فقمّتُها في المنتصف). */
+  fadeIn: number;
+  fadeOut: number;
+}
+
+export type DocElement = TextElement | ShapeElement | ImageElement | LottieElement | VideoElement | AudioElement | FxElement;
 
 export function resolvePaletteToken(pal: Palette, token: PaletteToken): string {
   return token === 'bg' ? pal.bg : token === 'fg' ? pal.fg : pal.ac;

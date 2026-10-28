@@ -525,6 +525,8 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
   // الصوتُ طبقةٌ لا تُرى: لا عقدةَ على اللوحة، فلا نقرةَ تصيبها ولا صندوقَ يُرسَم لها.
   // يُحدَّد من صفّه في قائمة الطبقات، ويُسمَع من `AudioPlayback`.
   if (el.type === 'audio') return null;
+  // طبقةُ المؤثّر لا ترسم نفسها: أثرُها غلافٌ حول ما تحتها يبنيه `Stage.tsx`.
+  if (el.type === 'fx') return null;
 
   // shape
   // Roadmap #17 — rect/ellipse get the full multi-layer treatment: every fill layer

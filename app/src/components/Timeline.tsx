@@ -751,7 +751,10 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                     title={labelFor(el)}
                     style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 10px', border: 0, background: 'transparent', color: 'var(--text)', fontSize: 12, textAlign: 'start', opacity: el.visible ? 1 : 0.45 }}
                   >
-                    {el.type === 'audio' ? (
+                    {el.type === 'fx' ? (
+                      // طبقةُ المؤثّر تُعرف بنجمتها: لا لونَ لها على اللوحة.
+                      <Icon size={12} path={ICONS.fx} style={{ color, flex: 'none' }} />
+                    ) : el.type === 'audio' ? (
                       // طبقةُ الصوت تُعرف بموجتها لا بمربّع لون: لا شيءَ على اللوحة يحمل لونها.
                       <Icon size={12} path="M3 8v4M6.5 5v10M10 3v14M13.5 6v8M17 8.5v3" style={{ color, flex: 'none' }} />
                     ) : (
