@@ -234,12 +234,11 @@ async function main() {
   // simply out of place on a still. The geometry assertions above deliberately ran
   // first, on the default 1080×1080 artboard they are about.
   await switchToTimed(page);
-  for (const tool of ['fx']) {
-    await page.locator(`[data-tool="${tool}"]`).click();
-    await page.waitForTimeout(90);
-    const shown = await page.locator(`[data-testid="library-soon-${tool}"]`).count();
-    assert(shown === 1, `pressing "${tool}" opens a panel that names the tool and declares «قريبًا» — never silence`);
-  }
+  // «تأثيرات» خرج من «قريبًا» (٢٨ أكتوبر ٢٠٢٦): لوحُ فلاترَ ومؤثّراتٍ وانتقالات (`FxLibrary`).
+  // والقرارُ نفسُه باقٍ: الزرّ لا يصمت — كان يقول «قريبًا»، وصار يفتح ما بُني.
+  await page.locator('[data-tool="fx"]').click();
+  await page.waitForTimeout(90);
+  assert((await page.locator('[data-testid="fx-library"]').count()) === 1 && (await page.locator('[data-testid="library-soon-fx"]').count()) === 0, 'pressing "fx" opens the real effects panel — never silence, and no longer «قريبًا»');
   // «صوت» خرج من «قريبًا» (٢٥ أكتوبر ٢٠٢٦): صار له لوحٌ حقيقيّ — استيرادُ ملفٍّ عند المؤشّر
   // وأصواتُ المشروع (`AudioLibrary`). والقرارُ الذي يقيسه هذا الفحص باقٍ كما هو: الزرّ لا
   // يصمت أبدًا — كان يقول «قريبًا»، وصار يفتح ما بُني.

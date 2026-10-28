@@ -1,0 +1,42 @@
+// لقطاتُ مزيج بمقاس آيفون ولمسٍ على محرّك WebKit — أداةُ تصميمٍ لا فحص.
+// node qa/helpers/phone-shots.mjs <url> <outDir>
+import { webkit, devices } from 'playwright';
+import fs from 'node:fs';
+
+const [url = 'http://localhost:1461', out = '/tmp/phone'] = process.argv.slice(2);
+fs.rmSync(out, { recursive: true, force: true });
+fs.mkdirSync(out, { recursive: true });
+const browser = await webkit.launch();
+const ctx = await browser.newContext({ ...devices['iPhone 15 Pro'], locale: 'ar' });
+const page = await ctx.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+await page.goto(url, { waitUntil: 'networkidle' });
+await page.evaluate(() => localStorage.clear());
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(800);
+let n = 0;
+const shot = async (name) => { await page.waitForTimeout(350); await page.screenshot({ path: `${out}/${String(++n).padStart(2, '0')}-${name}.png` }); };
+const tap = async (sel) => { await page.locator(sel).first().tap(); };
+await shot('home');
+console.log('overflow', await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth, [...document.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1 && !e.closest('[data-testid="template-strip"],[data-testid="mobile-formats"],[data-testid="project-library"],[role=tablist]')).slice(0, 5).map((e) => e.tagName + '.' + (e.getAttribute('data-testid') || '') + ':' + Math.round(e.getBoundingClientRect().right))]));
+await page.locator('[data-testid="start-screen"]').evaluate((e) => e.scrollTo(0, 520)); await shot('home-scrolled'); await page.locator('[data-testid="start-screen"]').evaluate((e) => e.scrollTo(0, 0));
+await tap('[data-testid="starter-demo-poster"]'); await shot('editor');
+await tap('[data-testid="m-done"]');
+await tap('[data-testid="m-tool-text"]'); await shot('text-sheet');
+await page.locator('[data-testid="mobile-sheet-library"] button').nth(1).tap(); await shot('text-added');
+await tap('[data-testid="m-edit"]'); await shot('props-sheet');
+await tap('[data-testid="mobile-sheet-props-close"]');
+await tap('[data-testid="m-edit-text"]'); await page.keyboard.type(' جديد'); await shot('typing');
+await page.locator('[data-testid="mobile-bar"]').tap({ position: { x: 5, y: 5 } }).catch(() => {});
+await tap('[data-testid="export-btn"]'); await shot('export'); await page.locator('[data-testid="start-export"], button:has-text("تصدير ملف")').first().tap().catch(() => {}); await page.waitForTimeout(1500); await shot('exported'); await page.mouse.click(5, 5);
+await page.waitForTimeout(300);
+await tap('[data-testid="m-done"]'); await shot('deselected');
+await tap('[data-testid="go-home-btn"]');
+await tap('[data-testid="format-row-ig-reel"]'); await shot('reel-blank');
+await tap('[data-testid="m-tool-fx"]'); await shot('fx-sheet');
+await tap('[data-testid="fx-card-cinema"]'); await shot('fx-added');
+await tap('[data-testid="m-layers"]'); await shot('layers');
+if (errors.length) console.log('errors:', errors.join(' | '));
+await browser.close();
+console.log('ok', n);

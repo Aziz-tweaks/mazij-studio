@@ -22,6 +22,7 @@ import type { ShapeDrawKind } from '../state/types';
 import { useStudio } from '../state/StudioContext';
 import { AudioPlayback } from './stage/AudioPlayback';
 import { isAudioFile } from '../lib/audioFile';
+import { useCompact } from '../lib/useCompact';
 
 /** الصندوق الجاري رسمه، مع أي قُطرَي الصندوق يسلكه الخطّ (يُهمَل لبقيّة الأنواع). */
 type ShapeDraft = { x: number; y: number; w: number; h: number; flipX?: boolean; flipY?: boolean };
@@ -87,6 +88,9 @@ interface DragSession {
 const CANVA_TEXT_HANDLES: readonly ResizeHandleId[] = ['e', 'w', 'nw', 'ne', 'se', 'sw'];
 
 export function Stage() {
+  // في الجوال: اللوحةُ بملء المساحة، وأدواتُها في شريط المحرّر السفليّ (`MobileEditor`)
+  // لا عائمةً فوقها — فلا شريطَ مقاسٍ ولا حبّةَ أدوات ولا هوامشَ واسعة.
+  const compact = useCompact();
   const { state, actions, dict: L } = useStudio();
   const lang = state.lang;
   /** المسك البسيط على الصورة: النصّ كما في الأداة الشائعة. والاحترافي: كما في أداة المتّجهات. */
@@ -130,9 +134,59 @@ export function Stage() {
     return () => ro.disconnect();
   }, []);
 
-  const padding = 40;
+  // في الجوال كلُّ بكسلٍ للّوحة: هامشُ الملاءمة ١٢ لا ٤٠.
+  const padding = compact ? 12 : 40;
   const baseFit = Math.max(0.02, Math.min((containerSize.w - padding * 2) / size.w, (containerSize.h - padding * 2) / size.h));
   const scale = baseFit * (state.zoom / 100);
+
+  // **التكبيرُ بإصبعين** (الجوال): المسافةُ بين الإصبعين تكبّر وتصغّر، ومنتصفُهما يبقى
+  // على النقطة نفسِها من التصميم — المعادلةُ نفسُها التي يحسبها `onWheel` للمؤشّر.
+  // ومعه سحبٌ بالإصبعين ينقل اللوحة. مستمعٌ أصليٌّ غيرُ سلبيّ ليمنع تكبيرَ الصفحة نفسها.
+  const pinchLive = useRef({ zoom: state.zoom, panX: state.panX, panY: state.panY, baseFit });
+  pinchLive.current = { zoom: state.zoom, panX: state.panX, panY: state.panY, baseFit };
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    let start: { d: number; mx: number; my: number; zoom: number; panX: number; panY: number } | null = null;
+    const geom = (t: TouchList) => {
+      const r = el.getBoundingClientRect();
+      const a = t[0];
+      const b = t[1];
+      return { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), mx: (a.clientX + b.clientX) / 2 - r.left - r.width / 2, my: (a.clientY + b.clientY) / 2 - r.top - r.height / 2 };
+    };
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      const g = geom(e.touches);
+      start = { ...g, zoom: pinchLive.current.zoom, panX: pinchLive.current.panX, panY: pinchLive.current.panY };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || e.touches.length !== 2) return;
+      e.preventDefault();
+      const g = geom(e.touches);
+      const bf = pinchLive.current.baseFit;
+      const oldScale = bf * (start.zoom / 100);
+      const zoom = clamp((start.zoom * g.d) / Math.max(1, start.d), 10, 400);
+      const newScale = bf * (zoom / 100);
+      const docX = (start.mx - start.panX) / oldScale;
+      const docY = (start.my - start.panY) / oldScale;
+      actions.setZoom(zoom);
+      actions.setPan(g.mx - docX * newScale, g.my - docY * newScale);
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) start = null;
+    };
+    el.addEventListener('touchstart', onStart, { passive: false });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [actions]);
 
   // --- space-to-pan، وأثناء رسم شكل: إزاحة الشكل الجاري ---
   //
@@ -996,7 +1050,7 @@ export function Stage() {
   const entranceByTool: Record<string, { opacity?: number; transform?: string; filter?: string }> = {};
   for (const el of state.elements) entranceByTool[el.id] = entranceStyleAt(el.anim, t, el.blur ?? 0, el.pivot);
 
-  const hintKey = HINT_KEYS[state.tool];
+  const hintKey = compact && !['text', 'shape', 'pen'].includes(state.tool) ? undefined : HINT_KEYS[state.tool];
   const selected = state.selectedIds;
   const soleSelected = selected.length === 1 ? state.elements.find((e) => e.id === selected[0]) : undefined;
   /** العنصر الذي تُرسم مقابضُه — وخطُّ تحديده معها في طبقة المقابض (انظرها أدناه). */
@@ -1068,7 +1122,9 @@ export function Stage() {
         flex: 1,
         minHeight: 0,
         overflow: 'hidden',
-        padding: '54px 24px 72px',
+        padding: compact ? '16px 12px' : '54px 24px 72px',
+        // اللمسُ كلُّه للّوحة: لا تمريرَ للصفحة ولا تكبيرَ لها تحت الإصبع.
+        touchAction: compact ? 'none' : undefined,
         cursor: spaceDown ? 'grab' : CURSOR_BY_TOOL[state.tool] || 'default',
       }}
       className="mz-stage"
@@ -1076,13 +1132,15 @@ export function Stage() {
       {/* صفّ اللوحة العلويّ: المقاس واللوحات على البداية، والشريط السياقي للمحدَّد على
           النهاية. الصفّ نفسه لا يلتقط النقرات (فراغه لوحة)، وأزراره تلتقطها. */}
       <div data-stage-overlay style={{ position: 'absolute', top: 12, insetInlineStart: 12, insetInlineEnd: 12, zIndex: 4, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 8, pointerEvents: 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto', flex: 'none' }}>
-          <ArtboardSizeMenu />
-          <ArtboardsChip />
-        </div>
+        {!compact && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'auto', flex: 'none' }}>
+            <ArtboardSizeMenu />
+            <ArtboardsChip />
+          </div>
+        )}
         {/* هامشٌ تلقائيّ لا فاصلٌ مرن: إن ضاق المسرح (لوح الإضافة مفتوح) نزل الشريط سطرًا
             وبقي على النهاية، بدل أن يخرج من حافّة اللوحة. */}
-        {showContextBar && (
+        {showContextBar && !compact && (
           <div style={{ marginInlineStart: 'auto', display: 'flex', pointerEvents: 'none' }}>
             <ContextBar />
           </div>
@@ -1271,7 +1329,7 @@ export function Stage() {
           اختيار النوع إلى لوح «العناصر» (`ShapesLibrary.tsx`) حيث يراه الوضع
           البسيط أيضًا. والنوع المسلَّح يظهر في اللوح ببطاقته المُبرَزة. */}
 
-      <ToolPill />
+      {!compact && <ToolPill />}
       {stageMenu && <StageMenu x={stageMenu.x} y={stageMenu.y} onElement={stageMenu.onElement} onClose={closeStageMenu} />}
     </div>
   );

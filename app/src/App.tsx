@@ -17,11 +17,17 @@ import { McpServerDialog } from './components/McpServerDialog';
 import { CommandInterpreterDialog } from './components/CommandInterpreterDialog';
 import { AiGenerateDialog } from './components/AiGenerateDialog';
 import { HomeScreen } from './components/HomeScreen';
+import { MobileHome } from './components/mobile/MobileHome';
+import { MobileEditor } from './components/mobile/MobileEditor';
+import { useCompact } from './lib/useCompact';
 import { THEME } from './theme/theme';
 import './App.css';
 
 function StudioShell() {
   const { state, dir } = useStudio();
+  // **الجوال واجهةٌ ثانيةٌ للمكوّنات نفسها** (`components/mobile/`): شاشتا بدايةٍ ومحرّرٍ
+  // مرتّبتان للإبهام، والمنطقُ كلُّه هو هو.
+  const compact = useCompact();
 
   // **لا قائمة متصفّحٍ عند الزرّ الأيمن.** قائمة WebKit الأصليّة في برنامجٍ مكتبيّ ليس فيها
   // غير «Reload» بالإنجليزيّة — ونقرةٌ واحدة عليها تُعيد تحميل البرنامج ويضيع سجلّ التراجع
@@ -45,7 +51,7 @@ function StudioShell() {
     display: 'flex',
     flexDirection: 'column',
     width: '100%',
-    height: '100vh',
+    height: '100dvh',
     // **أرضيّةُ العرض صفةُ المحرِّر وحده، لا صفةُ القشرة.**
     //
     // الثمانمئةٌ وثمانون أرضيّةٌ للمحرِّر فعلًا: شريطُ الأدوات ولوحُ الخصائص
@@ -62,7 +68,7 @@ function StudioShell() {
     //
     // فالقيدُ يَنزل إلى صاحبه: المحرِّرُ يَحمله كما كان بالضبط — فسلوكُه لم
     // يتغيّر بتّةً — وشاشةُ البداية تُترَك تَنساب.
-    ...(state.screen === 'editor' ? { minWidth: 880 } : null),
+    ...(state.screen === 'editor' && !compact ? { minWidth: 880 } : null),
     background: 'var(--bg)',
     color: 'var(--text)',
     fontFamily: 'var(--font)',
@@ -73,9 +79,12 @@ function StudioShell() {
 
   return (
     <div dir={dir} lang={state.lang} style={rootStyle}>
-      <TopBar />
+      {!compact && <TopBar />}
 
-      {state.screen === 'editor' && (
+      {compact && state.screen === 'editor' && <MobileEditor />}
+      {compact && state.screen === 'home' && <MobileHome />}
+
+      {!compact && state.screen === 'editor' && (
         // **لوحة واحدة، ثلاثة أعماق** — التخطيط المعتمد في ٢٤ أكتوبر ٢٠٢٦: شريط
         // الإضافة ولوحه على البداية (الأداة الشائعة)، اللوحة في الوسط بأكبر مساحة وحبّة
         // الأدوات فوقها (أداة المتّجهات)، المفتش على النهاية، والخطّ الزمنيّ بعرض
@@ -111,7 +120,7 @@ function StudioShell() {
         </div>
       )}
 
-      {state.screen === 'home' && <HomeScreen />}
+      {!compact && state.screen === 'home' && <HomeScreen />}
 
       <CommandPalette />
       <ExportDialog />

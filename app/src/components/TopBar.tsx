@@ -1,4 +1,4 @@
-import { hasDesktopSidecars, onMobile } from '../lib/tauriEnv';
+import { onMobile } from '../lib/tauriEnv';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Icon } from './Icon';
@@ -341,11 +341,11 @@ function MoreToolsMenu() {
           </button>
           <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />
           {/* قراءةُ بنية المقطع المرجعيّ وخادمُ الأدوات يحتاجان سطحَ المكتب — لا يُعرَضان في الجوال. */}
-          {hasDesktopSidecars && <button role="menuitem" data-testid="open-refvideo-btn" style={item} onClick={() => { setOpen(false); actions.openRefVideo(); }}>{L.refvideo_btn}</button>}
+          {!onMobile && <button role="menuitem" data-testid="open-refvideo-btn" style={item} onClick={() => { setOpen(false); actions.openRefVideo(); }}>{L.refvideo_btn}</button>}
           <button role="menuitem" data-testid="open-local-models-btn" style={item} onClick={() => { setOpen(false); actions.openLocalModels(); }}>{L.local_models_btn}</button>
           <button role="menuitem" data-testid="open-cmd-interpreter-btn" style={item} onClick={() => { setOpen(false); actions.openCmdInterpreter(); }}>{L.nl_cmd_btn}</button>
-          {hasDesktopSidecars && <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />}
-          {hasDesktopSidecars && <button role="menuitem" data-testid="open-mcp-btn" style={item} onClick={() => { setOpen(false); actions.openMcp(); }}>{L.mcp_btn}</button>}
+          {!onMobile && <div style={{ height: 1, margin: '3px 6px', background: 'var(--line)' }} />}
+          {!onMobile && <button role="menuitem" data-testid="open-mcp-btn" style={item} onClick={() => { setOpen(false); actions.openMcp(); }}>{L.mcp_btn}</button>}
         </div>
       )}
     </div>

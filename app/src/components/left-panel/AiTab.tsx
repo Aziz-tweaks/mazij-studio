@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { AiEngine } from '../../lib/agentClient';
 import { Icon } from '../Icon';
 import { useStudio } from '../../state/StudioContext';
-import { hasDesktopSidecars } from '../../lib/tauriEnv';
+import { onMobile } from '../../lib/tauriEnv';
 import type { Dictionary } from '../../i18n/strings';
 
 const SUGGESTIONS: Array<keyof Dictionary> = ['sug1', 'sug2', 'sug3', 'sug4'];
@@ -19,11 +19,11 @@ export function AiTab() {
     // أثناء الاكتشاف تظهر الشريحتان معطّلتين في مكانهما، لا تُضافان لاحقًا: إضافتُهما
     // بعد ثانيتين كانت تزيح بقيّة الشرائح تحت المؤشّر، فتقع النقرةُ على غير ما قُصد.
     // الوكلاءُ والأمرُ المخصّص برامجُ على الجهاز — في الجوال يبقى المحرّكُ المحلّيّ وحده.
-    ...(!hasDesktopSidecars ? [] : state.aiAgents ?? [
+    ...(onMobile ? [] : state.aiAgents ?? [
       { id: 'claude' as const, label: 'Claude', path: null, version: null },
       { id: 'codex' as const, label: 'Codex', path: null, version: null },
     ]).map((a) => ({ id: a.id, label: a.label, available: !!a.path, title: a.path ? a.version ?? a.path : state.aiAgents === null ? '…' : L.ai_missing })),
-    ...(hasDesktopSidecars ? [{ id: 'custom' as const, label: L.ai_eng_custom, available: true }] : []),
+    ...(!onMobile ? [{ id: 'custom' as const, label: L.ai_eng_custom, available: true }] : []),
     { id: 'local', label: L.ai_eng_local, available: true },
   ];
   const note = state.aiEngine === 'local' ? L.ai_note : state.aiEngine === 'custom' ? L.ai_note_custom : L.ai_note_agent;

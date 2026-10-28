@@ -163,7 +163,7 @@ export interface Dictionary {
   tool_direct: string; tool_hand: string; hint_direct: string; hint_hand: string;
   rail_templates: string; rail_text: string; rail_elements: string; rail_images: string; rail_stickers: string;
   rail_video: string; rail_audio: string; rail_uploads: string; rail_brand: string; rail_fx: string; rail_label: string;
-  insp_design: string; insp_open: string; insp_close: string; layers_toggle: string;
+  insp_design: string; insp_open: string; insp_close: string; layers_toggle: string; m_edit_text: string; m_duplicate: string; m_delete: string; m_done: string;
   txt_heading: string; txt_subheading: string; txt_body: string; txt_styles: string; txt_hint: string;
   zoom_in: string; zoom_out: string; zoom_fit: string; tools_label: string;
   sc_title: string; sc_hint: string; sc_general: string; sc_design: string; sc_motion: string; sc_open: string;
@@ -451,7 +451,7 @@ export const AR: Dictionary = {
   tool_direct: 'تحديد مباشر', tool_hand: 'يد', hint_direct: 'انقر على مسار لتحرير نقاطه', hint_hand: 'اسحب لتحريك اللوحة',
   rail_templates: 'قوالب', rail_text: 'نصوص', rail_elements: 'عناصر', rail_images: 'صور', rail_stickers: 'ملصقات',
   rail_video: 'فيديو', rail_audio: 'صوت', rail_uploads: 'ملفاتي', rail_brand: 'علامتي', rail_fx: 'تأثيرات', rail_label: 'أضف',
-  insp_design: 'التصميم', insp_open: 'افتح الخصائص', insp_close: 'اطوِ الخصائص', layers_toggle: 'الطبقات',
+  insp_design: 'التصميم', insp_open: 'افتح الخصائص', insp_close: 'اطوِ الخصائص', layers_toggle: 'الطبقات', m_edit_text: 'اكتب', m_duplicate: 'تكرار', m_delete: 'حذف', m_done: 'تم',
   txt_heading: 'أضف عنوان', txt_subheading: 'أضف عنوان فرعي', txt_body: 'أضف نص', txt_styles: 'أنماط جاهزة', txt_hint: 'انقر ويطلع في وسط اللوحة',
   zoom_in: 'كبّر', zoom_out: 'صغّر', zoom_fit: 'ملء الشاشة', tools_label: 'الأدوات',
   sc_title: 'الاختصارات', sc_hint: 'نفس اختصارات أداة المتّجهات والأداة الشائعة ومحرّر الفيديو الشائع، وتشتغل حتى والكيبورد عربي.', sc_general: 'عام', sc_design: 'تصميم ورسم', sc_motion: 'حركة وفيديو', sc_open: 'الاختصارات',
@@ -731,7 +731,7 @@ export const EN: Dictionary = {
   tool_direct: 'Direct select', tool_hand: 'Hand', hint_direct: 'Click a path to edit its points', hint_hand: 'Drag to pan the canvas',
   rail_templates: 'Templates', rail_text: 'Text', rail_elements: 'Elements', rail_images: 'Images', rail_stickers: 'Stickers',
   rail_video: 'Video', rail_audio: 'Audio', rail_uploads: 'Uploads', rail_brand: 'Brand', rail_fx: 'Effects', rail_label: 'Add',
-  insp_design: 'Design', insp_open: 'Show properties', insp_close: 'Hide properties', layers_toggle: 'Layers',
+  insp_design: 'Design', insp_open: 'Show properties', insp_close: 'Hide properties', layers_toggle: 'Layers', m_edit_text: 'Type', m_duplicate: 'Duplicate', m_delete: 'Delete', m_done: 'Done',
   txt_heading: 'Add a heading', txt_subheading: 'Add a subheading', txt_body: 'Add body text', txt_styles: 'Ready styles', txt_hint: 'Click to add at the centre',
   zoom_in: 'Zoom in', zoom_out: 'Zoom out', zoom_fit: 'Fit', tools_label: 'Tools',
   sc_title: 'Shortcuts', sc_hint: 'The same keys as أداة متّجهات, أداة تصميم شائعة and محرّر فيديو شائع — they work on an Arabic keyboard too.', sc_general: 'General', sc_design: 'Design & drawing', sc_motion: 'Motion & video', sc_open: 'Shortcuts',

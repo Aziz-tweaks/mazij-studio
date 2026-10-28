@@ -1,3 +1,4 @@
+import { useCompact } from '../lib/useCompact';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Icon } from './Icon';
 import { PALETTES, SIZES, PLATFORM_GROUPS, MEDIUM_CHIP, ICONS, FPS_OPTIONS, CUSTOM_SIZE_IDX, sizeAt, dimsOf, glyphStyle, nameOf, seg } from '../data/constants';
@@ -75,6 +76,7 @@ function qBtnStyle(active: boolean): CSSProperties {
 }
 
 export function ExportDialog() {
+  const compact = useCompact();
   const { state, actions, dict: L } = useStudio();
 
   // **السطحُ الثالث من الثلاثة التي يتفرّع عليها `medium`.** وجهاتُ التصدير:
@@ -181,7 +183,7 @@ export function ExportDialog() {
   const thumbStyle = {
     position: 'relative' as const,
     aspectRatio: `${size.w}/${size.h}`,
-    ...(tall ? { height: '300px' } : { width: '244px' }),
+    ...(compact ? (tall ? { height: '140px' } : { width: '200px' }) : tall ? { height: '300px' } : { width: '244px' }),
     background: state.exportTransparent ? 'transparent' : pal.bg,
     overflow: 'hidden',
     borderRadius: 4,
@@ -216,12 +218,18 @@ export function ExportDialog() {
   const noAlpha = !!noAlphaReason;
 
   return (
-    <div onClick={actions.closeExport} style={{ position: 'absolute', inset: 0, zIndex: 30, background: 'var(--overlay)', display: 'grid', placeItems: 'center' }}>
+    <div onClick={actions.closeExport} style={{ position: 'absolute', inset: 0, zIndex: 30, background: 'var(--overlay)', display: 'grid', placeItems: compact ? 'end stretch' : 'center' }}>
+      {/* في الجوال: لوحٌ سفليٌّ بعمودٍ واحدٍ يُمرَّر، والمعاينةُ مصغّرةٌ فوقه — لا نافذةَ
+          بعمودين ٨٠٠ بكسل تُقصّ نصفُها. */}
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 800, maxWidth: '94vw', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'calc(var(--r) + 2px)', boxShadow: '0 30px 80px rgba(0,0,0,.35)', overflow: 'hidden', display: 'grid', gridTemplateColumns: '300px minmax(0,1fr)' }}
+        style={
+          compact
+            ? { width: '100%', maxHeight: '92dvh', overflowY: 'auto', background: 'var(--surface)', borderRadius: '18px 18px 0 0', paddingBottom: 'env(safe-area-inset-bottom)', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)' }
+            : { width: 800, maxWidth: '94vw', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 'calc(var(--r) + 2px)', boxShadow: '0 30px 80px rgba(0,0,0,.35)', overflow: 'hidden', display: 'grid', gridTemplateColumns: '300px minmax(0,1fr)' }
+        }
       >
-        <div style={{ background: 'var(--canvas)', display: 'grid', placeItems: 'center', padding: 28, borderInlineEnd: '1px solid var(--line)' }}>
+        <div style={{ background: 'var(--canvas)', display: 'grid', placeItems: 'center', padding: compact ? 14 : 28, borderInlineEnd: compact ? undefined : '1px solid var(--line)', maxHeight: compact ? 170 : undefined }}>
           <div data-testid="export-preview" data-preview-ready={previewUrl ? 'true' : 'false'} style={thumbStyle}>
             {previewUrl && <img data-testid="export-preview-image" src={previewUrl} alt={L.ex_preview_alt} style={{ display: 'block', width: '100%', height: '100%' }} />}
           </div>

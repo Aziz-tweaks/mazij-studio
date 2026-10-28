@@ -99,7 +99,7 @@ function matches(z: SizePreset, q: string): boolean {
 
 /** شارة الطبيعة — تظهر على **كل** صفّ، لا على المُوقَّت وحده: «صورة» معلومةٌ
  * بقدر «فيديو»، وإظهار إحداهما فقط يجعل الأخرى استنتاجًا من الغياب. */
-function MediumBadge({ kind, label }: { kind: 'still' | 'timed'; label: string }) {
+export function MediumBadge({ kind, label }: { kind: 'still' | 'timed'; label: string }) {
   const timed = kind === 'timed';
   return (
     <span

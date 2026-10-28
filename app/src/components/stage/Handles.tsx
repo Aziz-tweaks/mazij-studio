@@ -1,3 +1,4 @@
+import { useCompact } from '../../lib/useCompact';
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { HANDLE_POS, type HandleId, type ResizeHandleId } from '../../lib/geometry';
 import type { Geometry } from '../../state/elements';
@@ -43,7 +44,7 @@ export interface HandlesProps {
 }
 
 /** حجم المقبض **المرسوم** على الشاشة. لم يتغيّر — هو ما يراه المصمم. */
-const PAINT_PX = 10;
+const PAINT_PX_DESKTOP = 10;
 
 /** سقف حجم **منطقة الإصابة** على الشاشة.
  *
@@ -55,7 +56,7 @@ const PAINT_PX = 10;
  *
  * ومقابض مزيج كانت 10 بكسل (رُفعت حديثًا عن 3.76 غير القابلة للاستخدام)، وهي 10
  * **رسمًا وإصابةً معًا** لأنها كانت عنصرًا واحدًا. */
-const HIT_PX = 32;
+const HIT_PX_DESKTOP = 32;
 
 /** Resize + rotate handles for the current selection, positioned in the stage's
  * handles layer — a sibling of the artboard with the artboard's own size and zoom/pan
@@ -81,6 +82,10 @@ const HIT_PX = 32;
 export function Handles({ geo, scale, size, onHandleDown, onDoubleClick, handles, pivot }: HandlesProps) {
   // 1 artboard px * px = 1 screen px
   const px = 1 / scale;
+  // في الجوال: الإصبعُ أعرضُ من المؤشّر — مقبضٌ مرسومٌ ١٤ وإصابةٌ ٤٤ (حدُّ أبل لهدف اللمس).
+  const compact = useCompact();
+  const PAINT_PX = compact ? 14 : PAINT_PX_DESKTOP;
+  const HIT_PX = compact ? 44 : HIT_PX_DESKTOP;
 
   const wScreen = geo.w * size.w * scale;
   const hScreen = geo.h * size.h * scale;
