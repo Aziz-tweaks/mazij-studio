@@ -72,6 +72,37 @@ export function clampTrim(anim: ElementAnim, edge: ClipEdge, delta: number, ctx:
  * المشترك يُطرَح من نفسه حسابًا، فالزمنُ المحلولُ **لا يتغيّر ولا في آخر بتّة** —
  * وهذا ما يجعل المعيار B2 يقول «بالضبط» ويعنيه.
  */
+/**
+ * **حركةُ الخروج تتبع نهايةَ المقطع** (٢٩ أكتوبر ٢٠٢٦، بالنقر الحقيقيّ). كان مدُّ نهاية مقطعٍ
+ * يُبقي مفاتيحَ خروجه مكانها، فيختفي العنصرُ في الوقت نفسه ويبقى الجزءُ الممدود فارغًا — والمصمّمُ
+ * مدّه ليبقى أطول. فكما في محرّرات الفيديو: **ما بعد آخر ثباتٍ في المسار هو الخروج**، وينتقل مع
+ * حافّة النهاية. والثباتُ مفتاحان متتاليان بالقيمة نفسها (ظهورٌ ← بقاءٌ ← اختفاء)؛ ومسارٌ بلا ثباتٍ
+ * (تلاشٍ داخلٌ فقط، أو انزلاقٌ ممتدٌّ إلى النهاية) لا خروجَ فيه فلا يُمسّ. وحافّةُ البداية على عقدها
+ * القائم: ما تحت الخطّ الزمنيّ لا يتغيّر (معيار B2).
+ */
+function anchorExitKeys(anim: ElementAnim, applied: number): ElementAnim {
+  const tracks: ElementAnim['tracks'] = { ...anim.tracks };
+  let changed = false;
+  for (const prop of Object.keys(anim.tracks) as AnimProperty[]) {
+    const track = anim.tracks[prop];
+    if (!track || track.length < 3) continue;
+    const sorted = [...track].sort((x, y) => x.time - y.time);
+    let holdEnd = -1;
+    for (let i = sorted.length - 2; i >= 0; i--) {
+      if (Math.abs(sorted[i].value - sorted[i + 1].value) < 1e-9) {
+        holdEnd = i + 1;
+        break;
+      }
+    }
+    if (holdEnd < 0 || holdEnd === sorted.length - 1) continue;
+    const floor = sorted[holdEnd].time;
+    const exitIds = new Set(sorted.slice(holdEnd + 1).map((k) => k.id));
+    tracks[prop] = track.map((k) => (exitIds.has(k.id) ? { ...k, time: Math.max(k.time + applied, floor) } : k));
+    changed = true;
+  }
+  return changed ? { ...anim, tracks } : anim;
+}
+
 export function trim(anim: ElementAnim, edge: ClipEdge, delta: number, ctx: TrimContext): { anim: ElementAnim; applied: number } {
   const applied = clampTrim(anim, edge, delta, ctx);
   if (applied === 0) return { anim, applied: 0 };
@@ -81,7 +112,7 @@ export function trim(anim: ElementAnim, edge: ClipEdge, delta: number, ctx: Trim
       applied,
     };
   }
-  return { anim: { ...anim, duration: anim.duration + applied }, applied };
+  return { anim: anchorExitKeys({ ...anim, duration: anim.duration + applied }, applied), applied };
 }
 
 /** نقلُ المقطع: `start` يتغيّر و`sourceIn` لا — فالمفاتيح تتحرّك **مع** المقطع.

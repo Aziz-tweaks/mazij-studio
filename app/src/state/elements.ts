@@ -238,8 +238,12 @@ export interface ElementAnim {
  * the legacy simple-mode storage and stays one) while `PropertyKeyframe.time` is
  * seconds — so the conversion `time = t × duration` happens exactly here, at the one
  * boundary between the two conventions. */
-export function tracksFromPreset(preset: AnimPreset, keyframes: AnimKeyframe[], easing: EasingId, bezier: Bezier, duration: number): PropertyTracks {
-  const at = (k: AnimKeyframe) => k.t * duration;
+/** مدّةُ حركة الدخول الجاهزة بالثواني — ثابتةٌ لا تتمدّد مع المقطع (كما في محرّرات الفيديو):
+ * نصٌّ مقطعُه ٣ ثوانٍ يظهر في ٠٫٦ث ثم يبقى، لا يتلاشى على امتداد الثلاث كلّها. */
+export const PRESET_ENTRANCE_SECONDS = 0.6;
+
+export function tracksFromPreset(preset: AnimPreset, keyframes: AnimKeyframe[], easing: EasingId, bezier: Bezier, duration: number, span: number = duration): PropertyTracks {
+  const at = (k: AnimKeyframe) => k.t * span;
   switch (preset) {
     case 'fade':
       return { opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })) };

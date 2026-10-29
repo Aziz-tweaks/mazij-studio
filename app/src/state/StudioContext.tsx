@@ -18,7 +18,7 @@ import { initialStudioState } from './types';
 // من رحلة البوست (تلوين الشكل عبر كومة المظهر لا عبر الحقل القديم). لا تعارض في
 // النيّة — ملفٌّ واحد التقت عليه ثلاثة فروع.
 import type { AnimPreset, AnimProperty, AppearanceFillLayer, AppearanceShadowLayer, AppearanceStrokeLayer, DocElement, ElementAnim, ElementId, Geometry, ImageElement, LegacyFractionKeyframe, PropertyKeyframe, PropertyTracks, TextElement, TextStaggerAnim } from './elements';
-import { DEFAULT_IMAGE_CROP, DEFAULT_LINE_HEIGHT, animPropertiesFor, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, motionTracks, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
+import { DEFAULT_IMAGE_CROP, DEFAULT_LINE_HEIGHT, PRESET_ENTRANCE_SECONDS, animPropertiesFor, cascadeEasingToTracks, defaultAnim, defaultTextStagger, hasCustomAnimation, motionTracks, newArtboardId, newElementId, newGroupId, tracksFromPreset } from './elements';
 import { currentAppearance, migrateAppearance, moveLayer, newFillLayer, newShadowLayer, newStrokeLayer, withBaseLayerColor, withBaseStroke, withBaseStrokeHidden, withBaseStrokeWidth } from '../lib/appearance';
 import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
@@ -101,7 +101,7 @@ function withPreset(anim: ElementAnim, preset: AnimPreset): ElementAnim {
   const reveal = anim.tracks.reveal;
   if (hasCustomAnimation(motionTracks(anim.tracks))) return anim;
   const keyframes = anim.keyframes.length >= 2 ? anim.keyframes : defaultAnim(preset, anim.start, anim.duration, anim.easing).keyframes;
-  const tracks = tracksFromPreset(preset, keyframes, anim.easing, anim.bezier, anim.duration);
+  const tracks = tracksFromPreset(preset, keyframes, anim.easing, anim.bezier, anim.duration, Math.min(anim.duration, PRESET_ENTRANCE_SECONDS));
   return { ...anim, preset, keyframes, tracks: reveal ? { ...tracks, reveal } : tracks };
 }
 
@@ -341,6 +341,26 @@ function docOf(s: StudioState): DocSnapshot {
  * اللقطةُ واسمُها وإبطالُ المستقبل — تُكتَب معًا أو لا تُكتَب. ومن مرّ من هنا
  * بلا اسمٍ تبقى خطوتُه مجهولةَ الاسم صريحًا (`''`)، فيعود تلميحُ الزرّ إلى
  * «تراجع» العامّة — ولا اسمٌ مُختلَق. */
+/** **العنصرُ الجديد في فيديو يبدأ عند المؤشّر ويبقى ٣ ثوانٍ** (٢٩ أكتوبر ٢٠٢٦، بالنقر الحقيقيّ).
+ * كان كلُّ عنصرٍ يُضاف بمقطعٍ من ٠ إلى ٠٫٦ث — نصٌّ يومض ويختفي، ومستندٌ طوله ٠٫٦ث — وفي محرّرات
+ * الفيديو يُضاف المقطعُ عند رأس التشغيل بثلاث ثوانٍ. يُطبَّق على المقطع الافتراضيّ وحده (بلا حركة،
+ * بلا مسارات، يبدأ عند ٠ بطول ٠٫٦)، فاللصقُ والاستنساخُ والقوالبُ وأدواتُ MCP تبقى كما كُتبت. */
+export const NEW_CLIP_SECONDS = 3;
+function placeNewClips(prev: StudioState, next: StudioState): StudioState {
+  if (next === prev || next.medium !== 'timed' || next.elements === prev.elements || next.elements.length <= prev.elements.length) return next;
+  const had = new Set(prev.elements.map((e) => e.id));
+  let changed = false;
+  const elements = next.elements.map((e) => {
+    if (had.has(e.id) || e.type === 'audio' || e.type === 'video') return e;
+    const a = e.anim;
+    const isDefault = a && a.preset === 'none' && a.start === 0 && Math.abs(a.duration - 0.6) < 1e-9 && !Object.keys(a.tracks ?? {}).length;
+    if (!isDefault) return e;
+    changed = true;
+    return { ...e, anim: { ...a, start: Math.max(0, prev.t ?? 0), duration: NEW_CLIP_SECONDS } };
+  });
+  return changed ? { ...next, elements } : next;
+}
+
 function pushHistory(s: StudioState, label = ''): Pick<StudioState, 'historyPast' | 'historyLabels' | 'historyFuture' | 'historyFutureLabels' | 'dirty'> {
   return {
     historyPast: [...s.historyPast, docOf(s)],
@@ -1212,7 +1232,12 @@ interface StudioContextValue {
 const StudioContext = createContext<StudioContextValue | null>(null);
 
 export function StudioProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<StudioState>(initialStudioState);
+  const [state, setStateRaw] = useState<StudioState>(initialStudioState);
+  /** كلُّ كتابةٍ للحالة تمرّ بـ`placeNewClips`: العنصرُ الجديد في مستندٍ مُوقَّت يُوضَع عند المؤشّر
+   * بطول ٣ ثوانٍ (انظرها). موضعٌ واحد بدل عشرات مواضع الإنشاء. */
+  const setState = useCallback((u: StudioState | ((s: StudioState) => StudioState)) => {
+    setStateRaw((prev) => placeNewClips(prev, typeof u === 'function' ? (u as (s: StudioState) => StudioState)(prev) : u));
+  }, []);
   /** حافظة العناصر (⌘C/⌘X/⌘V). خارج الحالة عمدًا: ليست مستندًا ولا واجهة، ولا يُعاد
    * الرسم لأجلها. `pastes` يعدّ اللصقات منذ آخر نسخ فتتدرّج الإزاحة ولا تتكدّس. */
   const clipboardRef = useRef<{ elements: DocElement[]; pastes: number } | null>(null);
