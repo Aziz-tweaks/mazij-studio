@@ -64,6 +64,7 @@ import { BACKGROUND_ID, backgroundLayer, decorLayer, type McpCtx } from '../lib/
 import { describeAiError, providerById } from '../lib/aiProviders';
 import { loadApiKey } from '../lib/aiKeyStore';
 import { LLM_PROVIDERS, loadModel, runLlm } from '../lib/llmAgent';
+import { linkAllowed } from '../lib/aiLink';
 
 /** Switches one clip to an entrance preset **and rebuilds its property tracks** from
  * it, which is the half that used to be missing: `tracks` is the only thing
@@ -2421,6 +2422,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         });
       }
     })();
+  }, []);
+
+  // «اسمح لتطبيقات الذكاء تتحكم بمزيج» (`AiLinkSection`): يُستعاد عند كلّ تشغيل، فيجد
+  // تطبيقُ Claude خادمَ الأدوات جاهزًا متى كتب له المستخدم.
+  useEffect(() => {
+    if (hasDesktopSidecars && linkAllowed()) setMcpServerEnabled(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openAiGenerate = useCallback(() => patch({ aiGenOpen: true }), []);

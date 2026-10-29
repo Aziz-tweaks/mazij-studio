@@ -84,6 +84,11 @@ fn search_dirs() -> Vec<PathBuf> {
     dirs
 }
 
+/// للربط (`link.rs`): أين ثُبِّت Claude Code أو Codex.
+pub fn find_bin_pub(name: &str) -> Option<PathBuf> {
+    find_bin(name)
+}
+
 fn find_bin(name: &str) -> Option<PathBuf> {
     search_dirs().into_iter().map(|d| d.join(name)).find(|p| is_executable(p))
 }

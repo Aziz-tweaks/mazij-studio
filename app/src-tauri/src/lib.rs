@@ -11,6 +11,9 @@ pub mod mcp;
 // مِزو عبر وكلاءٍ خارجيّين (Claude Code / Codex / مخصّص) — انظر `agents.rs`.
 pub mod agents;
 
+// ربطُ مزيج بتطبيق Claude للكمبيوتر وClaude Code وCodex — انظر `link.rs`.
+pub mod link;
+
 /// Roadmap #20, security fix: `run()` used to call `mcp::spawn(mcp::MCP_PORT)`
 /// unconditionally, so 127.0.0.1:7420 went to LISTEN the instant the app launched
 /// while the MCP dialog (whose `mcpServerEnabled` flag defaults to `false`)
@@ -24,11 +27,15 @@ pub mod agents;
 /// boundary exactly once and is never logged on either side.
 #[tauri::command]
 fn mcp_start() -> Result<mcp::StartInfo, String> {
-    mcp::start(mcp::MCP_PORT, None)
+    let info = mcp::start(mcp::MCP_PORT, None)?;
+    // جسرُ `--mcp-stdio` (تطبيق Claude، Codex) يجد المنفذَ والرمزَ هنا.
+    link::write_endpoint(info.port, &info.token);
+    Ok(info)
 }
 
 #[tauri::command]
 fn mcp_stop() {
+    link::clear_endpoint();
     mcp::stop();
 }
 
@@ -48,16 +55,24 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![greet, mcp_start, mcp_stop, mcp_is_listening, agents::agent_detect, agents::agent_run, agents::agent_cancel])
+        .invoke_handler(tauri::generate_handler![greet, mcp_start, mcp_stop, mcp_is_listening, agents::agent_detect, agents::agent_run, agents::agent_cancel, link::ai_link_status, link::ai_link, link::ai_unlink, link::ai_restart_claude_desktop])
         // The bridge must not outlive the window that owns the document, and a
         // listener surviving a quit would be a local control surface with no UI
         // at all attached to it.
         .on_window_event(|_window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 agents::agent_cancel();
+                link::clear_endpoint();
                 mcp::stop();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        // ‏⌘Q لا يمرّ بحدث إغلاق النافذة: ملفُّ المنفذ يُحذف عند خروج التطبيق كلِّه أيضًا.
+        .run(|_app, event| {
+            if let tauri::RunEvent::Exit = event {
+                link::clear_endpoint();
+                mcp::stop();
+            }
+        });
 }

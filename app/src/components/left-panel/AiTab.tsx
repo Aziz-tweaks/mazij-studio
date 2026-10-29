@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import type { AiEngine } from '../../lib/agentClient';
 import { Icon } from '../Icon';
 import { useStudio } from '../../state/StudioContext';
-import { onMobile } from '../../lib/tauriEnv';
+import { hasDesktopSidecars, onMobile } from '../../lib/tauriEnv';
+import { AiLinkSection } from './AiLinkSection';
 import type { Dictionary } from '../../i18n/strings';
 
 const SUGGESTIONS: Array<keyof Dictionary> = ['sug1', 'sug2', 'sug3', 'sug4'];
@@ -76,6 +77,7 @@ export function AiTab() {
           />
         )}
         <span style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>{note}</span>
+        {hasDesktopSidecars && <AiLinkSection />}
       </div>
 
       <MessageList />
