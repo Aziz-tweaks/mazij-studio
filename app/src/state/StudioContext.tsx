@@ -1095,6 +1095,8 @@ export interface StudioActions {
   /** «أضف خطًّا من جهازك»: ملفُّ ttf/otf/woff/woff2 يُسجَّل ويُحفَظ في مكتبة الخطوط فيبقى
    * بعد إعادة التشغيل، ويُطبَّق على النصّ المحدَّد إن وُجد. */
   addFontFromFile: () => Promise<void>;
+  /** الطريقُ نفسُه من بايتاتٍ جاهزة (أداةُ «أضف خطًّا من مسار» للوكيل): يُسجَّل ويُحفَظ في مكتبة الخطوط ويعيد اسمَ العائلة. */
+  addFontFromBytes: (bytes: Uint8Array, filename: string) => Promise<string>;
   /** «خطٌّ مثبّت بالاسم»: يُقاس أنه موجودٌ فعلًا في الجهاز (`isFontInstalled`) قبل أن يُضاف. */
   addSystemFont: (name: string) => void;
   removeUserFont: (family: string) => void;
@@ -1643,6 +1645,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       patch({ fontError: err instanceof Error ? err.message : String(err) });
     }
   }, [adoptUserFont, patch]);
+
+  const addFontFromBytes = useCallback(
+    async (bytes: Uint8Array, filename: string) => {
+      const taken = new Set(stateRef.current.fonts.map((ff) => ff.family));
+      const font = await fontFromBytes(bytes, filename, taken);
+      await adoptUserFont(font);
+      return font.family;
+    },
+    [adoptUserFont],
+  );
 
   const addSystemFont = useCallback(
     (name: string) => {
@@ -3998,6 +4010,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setFontUrl: (fontUrl) => patch({ fontUrl }),
       addFont,
       addFontFromFile,
+      addFontFromBytes,
       addSystemFont,
       removeUserFont,
       // Roadmap #16: also mirrors onto the active artboard's own metadata (see
@@ -4212,6 +4225,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       togglePlay,
       addFont,
       addFontFromFile,
+      addFontFromBytes,
       addSystemFont,
       removeUserFont,
       sendAi,

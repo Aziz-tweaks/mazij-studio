@@ -143,7 +143,13 @@ async function runLoop(port: number, token: string, myGen: number, ctx: McpCtx) 
     const tool = MCP_TOOLS.find((t) => t.name === call.tool);
     try {
       if (!tool) throw new Error(`unknown tool "${call.tool}"`);
-      const result = await tool.run(call.arguments ?? {}, ctx);
+      // أداةٌ لا تنتهي أبدًا كانت تُصمت الجسرَ كلَّه إلى الأبد (الحلقةُ واقفةٌ عندها). فلكلّ
+      // أداةٍ سقف — أطولُ من مهلة الخادم نفسِه لها (`tool_wait_secs` في mcp.rs) — ثم تُكمل الحلقة.
+      const limitMs = call.tool === 'export_run' ? 3_700_000 : call.tool === 'batch' ? 900_000 : 180_000;
+      const result = await Promise.race([
+        tool.run(call.arguments ?? {}, ctx),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`tool "${call.tool}" did not finish in time`)), limitMs)),
+      ]);
       replyBody = { id: call.id, result };
     } catch (err) {
       replyBody = { id: call.id, error: err instanceof Error ? err.message : String(err) };

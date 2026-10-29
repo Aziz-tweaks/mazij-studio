@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { Palette } from '../../data/constants';
 import type { DocElement, TextElement } from '../../state/elements';
 import { lineHeightOf, resolveShapeLabelColor, resolveTextColor } from '../../state/elements';
@@ -13,10 +13,72 @@ import { appearanceBoxShadowCss, fillsToCss, gradientCss, legacyBorderCss, resol
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from '../../lib/variableStroke';
 import { SHOWN_UNIT_VISUAL, TYPE_BREAK, buildStaggerTokens, resolveUnitVisual, typedSplit, typedUnitCount, unitVisualToCssFilter, unitVisualToCssTransform, type StaggerToken, type UnitVisual } from '../../lib/textStagger';
 import { shapeTextOnCurve } from '../../lib/textOnPath';
-import { wrapLines, justifyCanvasLines } from '../../lib/exportArtboard';
+import { wrapLines, justifyCanvasLines, drawTextSilhouette } from '../../lib/exportArtboard';
+import { paintGlass } from '../../lib/glass';
 import { LottiePreview } from './LottiePreview';
 import { VideoPreview } from './VideoPreview';
 import { withCounterAt } from '../../lib/textCounter';
+
+/** **خامةُ الزجاج في المعاينة** — قماشٌ فوق صندوق العنصر يرسمه `paintGlass` نفسُه الذي
+ * يرسم به التصدير، بظلّ الحروف نفسه (`drawTextSilhouette`). فلا تقريبَ بـCSS يختلف عن
+ * الملفّ. القماشُ أوسعُ من الصندوق بهامشٍ كي لا تُقصّ لمعةٌ أو حرفٌ يتجاوز حدَّه. */
+function GlassCanvas({ el, boxPx, artW, time, dir }: { el: DocElement; boxPx: { w: number; h: number }; artW: number; time: number; dir: 'rtl' | 'ltr' }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [fontsTick, setFontsTick] = useState(0);
+  useEffect(() => {
+    let live = true;
+    document.fonts?.ready.then(() => live && setFontsTick((t) => t + 1));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const pad = Math.max(boxPx.w, boxPx.h) * 0.15;
+  useEffect(() => {
+    const cv = ref.current;
+    const glass = el.glass;
+    if (!cv || !glass || boxPx.w <= 0 || boxPx.h <= 0) return;
+    // دقّةُ المعاينة محدودة: أطولُ ضلعٍ ١٢٠٠ بكسل. حقلٌ يملأ اللوحة بدقّةٍ كاملةٍ مضاعفة
+    // كان قماشًا بنحو ٥٠٠٠×٣٣٠٠ يُعاد رسمُه مع كلّ تغيير — فانهارت صفحةُ البرنامج.
+    // والتصديرُ لا يمرّ من هنا: يرسم بدقّته الكاملة في `exportArtboard.ts`.
+    const dpr = Math.min(window.devicePixelRatio || 1, 1200 / Math.max(boxPx.w + 2 * pad, boxPx.h + 2 * pad));
+    const W = Math.ceil((boxPx.w + 2 * pad) * dpr);
+    const H = Math.ceil((boxPx.h + 2 * pad) * dpr);
+    if (cv.width !== W) cv.width = W;
+    if (cv.height !== H) cv.height = H;
+    const c = cv.getContext('2d');
+    if (!c) return;
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, W, H);
+    c.setTransform(dpr, 0, 0, dpr, pad * dpr, pad * dpr);
+    if (el.type === 'text') {
+      const fontPx = (el.fontSize / 1080) * artW;
+      paintGlass(c, boxPx.w, boxPx.h, time, glass, fontPx * 0.09, (m) => drawTextSilhouette(m, el, boxPx.w, boxPx.h, fontPx, dir, time));
+    } else if (el.type === 'shape') {
+      const rr = el.shape === 'rect' ? Math.min(boxPx.w, boxPx.h) * el.radius : 0;
+      paintGlass(c, boxPx.w, boxPx.h, time, glass, Math.min(boxPx.w, boxPx.h) * 0.12, (m) => {
+        m.beginPath();
+        if (el.shape === 'ellipse') m.ellipse(boxPx.w / 2, boxPx.h / 2, boxPx.w / 2, boxPx.h / 2, 0, 0, Math.PI * 2);
+        else m.roundRect(0, 0, boxPx.w, boxPx.h, Math.min(rr, Math.min(boxPx.w, boxPx.h) / 2));
+        m.fill();
+      });
+    }
+    // يُعاد الرسمُ حين يتغيّر العنصرُ نفسُه أو الزمنُ أو الصندوق — لا مع كلّ تحديثٍ للوحة.
+  }, [el, time, boxPx.w, boxPx.h, artW, dir, pad, fontsTick]);
+  return (
+    <canvas
+      ref={ref}
+      aria-hidden
+      style={{
+        position: 'absolute',
+        left: `${(-pad / boxPx.w) * 100}%`,
+        top: `${(-pad / boxPx.h) * 100}%`,
+        width: `${((boxPx.w + 2 * pad) / boxPx.w) * 100}%`,
+        height: `${((boxPx.h + 2 * pad) / boxPx.h) * 100}%`,
+        pointerEvents: 'none',
+      }}
+    />
+  );
+}
 
 /** Roadmap #12 — live preview of a text element bent along `pathShape`'s curve (see
  * `src/lib/textOnPath.ts`). The shaping itself is async (real HarfBuzz/WASM, same
@@ -365,6 +427,13 @@ export function ElementView({ el: rawEl, pal, selected, editing, croppingActive,
         </div>
       );
     }
+    if (el.glass) {
+      return (
+        <div data-testid={testIdFor(el.id)} data-el-id={el.id} data-glass="1" onPointerDown={(e) => onPointerDown(e, el.id)} onDoubleClick={(e) => onDoubleClick(e, el.id)} dir={dir} style={{ ...baseStyle, userSelect: 'none', WebkitUserSelect: 'none' }}>
+          <GlassCanvas el={el} boxPx={frameBoxPx} artW={size.w} time={time ?? 0} dir={dir} />
+        </div>
+      );
+    }
     return (
       <div
         data-testid={testIdFor(el.id)}
@@ -566,7 +635,7 @@ export function ElementView({ el: rawEl, pal, selected, editing, croppingActive,
       : {
           width: '100%',
           height: '100%',
-          ...fillCss,
+          ...(el.glass ? {} : fillCss),
           borderRadius: el.shape === 'ellipse' ? '50%' : `${shapeRadiusCqw.toFixed(3)}cqw`,
           ...strokeShadowStyle,
           display: 'grid',
@@ -641,6 +710,7 @@ export function ElementView({ el: rawEl, pal, selected, editing, croppingActive,
         })()
       ) : (
         <div style={shapeInner}>
+          {el.glass && <GlassCanvas el={el} boxPx={frameBoxPx} artW={size.w} time={time ?? 0} dir={lang === 'ar' ? 'rtl' : 'ltr'} />}
           {el.label && el.labelPosition === 'center' && (
             <span style={{ color: labelColor, fontWeight: 800, fontSize: '5.4cqw', pointerEvents: 'none' }}>{el.label}</span>
           )}

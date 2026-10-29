@@ -83,7 +83,9 @@ function docSummary(state: StudioState) {
       geo: e.geo,
       ...(e.type === 'text' ? { text: e.text, fontFamily: e.fontFamily, fontSize: e.fontSize, weight: e.weight, color: e.color } : {}),
       ...(e.type === 'shape' ? { shape: e.shape, fill: e.fill, stroke: e.stroke } : {}),
-      ...(e.type === 'image' ? { src: e.src, fit: e.fit } : {}),
+      // صورةٌ مضمَّنة لا تُرسَل بايتاتُها: أربعون صورةً كانت ردًّا بعدّة ميغابايت يفوت مهلةَ
+      // الجسر، فيصمت `document_get` في أيّ تصميمٍ غنيٍّ بالصور. يكفي الوكيلَ أن يعرف نوعَها.
+      ...(e.type === 'image' ? { src: e.src?.startsWith('data:') ? `(embedded ${e.src.slice(5, e.src.indexOf(';'))}, ${Math.round((e.src.length * 3) / 4 / 1024)} KB)` : e.src, fit: e.fit } : {}),
     })),
   };
 }

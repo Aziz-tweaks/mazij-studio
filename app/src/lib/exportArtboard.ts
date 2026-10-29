@@ -17,6 +17,8 @@ import { normalizeShutter, runningMeanAlpha, shutterIsOpen, shutterSampleTimes, 
 import { shapeTextOnCurve } from './textOnPath';
 import { justifyWithKashida } from './kashidaJustify';
 import { withCounterAt } from './textCounter';
+import { paintGlass } from './glass';
+import { canvasFilterWorks, drawBlurred } from './canvasBlur';
 import {
   cssGradientLine,
   ellipseTracer,
@@ -451,7 +453,14 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     // متعدّدةٍ تُضبَّب طبقاتُه فُرادى ثم تُركَّب، والفرقُ مقيسٌ ومُعلَنٌ رقمًا في
     // `qa/shape-blur.spec.mjs` §٥ لا مُغطًّى.
     const blurPx = canvasBlurRadiusPx(el.blur ?? 0, visual, w);
-    if (blurPx > 0) ctx.filter = `blur(${blurPx.toFixed(3)}px)`;
+    // **WebKit لا يرسم `ctx.filter`** (انظر `lib/canvasBlur.ts`): كانت ضبابيّةُ العنصر — ومنها
+    // لطخةُ الحركة في الانتقالات — تختفي من الفيديو المُصدَّر على الماك. فيُرسَم العنصرُ هناك
+    // في طبقةٍ بالمصفوفة والشفافيّة نفسيهما، ثم يُوضَع مضبَّبًا. وحيث يعمل `filter` لا تغيير.
+    const mainCtx = ctx;
+    const softLayer = blurPx > 0 && !canvasFilterWorks() ? softLayerFor(mainCtx) : null;
+    if (softLayer) ctx = softLayer;
+    else if (blurPx > 0) ctx.filter = `blur(${blurPx.toFixed(3)}px)`;
+    try {
     ctx.translate(cx, cy);
     ctx.rotate((el.geo.rotation * Math.PI) / 180);
     // Matches ElementView's CSS `rotate(baseDeg) translate(Xcqw,Ycqw) scale(SX,SY) rotate(deg)`
@@ -596,7 +605,8 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         const radiusPx = Math.min(bw, bh) * el.radius;
         const tracer = rectTracer(bw, bh, radiusPx);
         paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
-        paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
+        if (el.glass) paintGlass(ctx, bw, bh, time, el.glass, Math.min(bw, bh) * 0.12, (c) => (c.beginPath(), tracer(c, 0), c.fill()));
+        else paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
         paintStrokesCanvas(
           ctx,
           resolved.strokes,
@@ -612,7 +622,8 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       } else if (el.shape === 'ellipse') {
         const tracer = ellipseTracer(bw, bh);
         paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
-        paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
+        if (el.glass) paintGlass(ctx, bw, bh, time, el.glass, Math.min(bw, bh) * 0.12, (c) => (c.beginPath(), tracer(c, 0), c.fill()));
+        else paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
         paintStrokesCanvas(
           ctx,
           resolved.strokes,
@@ -714,6 +725,10 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
           // Unsupported (non-built-in) font or a degenerate curve — leave this
           // element blank rather than throwing mid-export and losing every other one.
         }
+      } else if (el.glass) {
+        // خامةُ الزجاج تحلّ محلّ التعبئة (والظلّ والحدّ — قيدٌ مُعلَن في `lib/glass.ts`).
+        const glass = el.glass;
+        paintGlass(ctx, bw, bh, time, glass, fontPx * 0.09, (c) => drawTextSilhouette(c, el, bw, bh, fontPx, dir, time, Math.sqrt(Math.max(0, sx) * Math.max(0, sy))));
       } else if (el.textAnim?.enabled) {
         // Same char/word/line reveal-stagger the DOM preview renders (see
         // `renderStaggeredText` in ElementView.tsx) — a real per-unit rasterization
@@ -784,7 +799,74 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     }
 
     ctx.restore();
+    } finally {
+      if (softLayer) {
+        ctx = mainCtx;
+        ctx.restore();
+        // المنطقةُ على قدر العنصر لا القماش كلّه: مركزُه بعد إزاحته ونصفُ قطرِه بعد مقياسه.
+        const T = mainCtx.getTransform();
+        const es = effectiveScale(visual);
+        const px = cx + visual.x * w;
+        const py = cy + visual.y * w;
+        const tScale = Math.sqrt(Math.abs(T.a * T.d - T.b * T.c)) || 1;
+        const R = (Math.hypot(bw * Math.abs(es.sx), bh * Math.abs(es.sy)) / 2) * 1.35 * tScale + blurPx * 3 + 4;
+        const dcx = T.a * px + T.c * py + T.e;
+        const dcy = T.b * px + T.d * py + T.f;
+        const CW = softLayer.canvas.width;
+        const CH = softLayer.canvas.height;
+        const rx = Math.max(0, Math.floor(dcx - R));
+        const ry = Math.max(0, Math.floor(dcy - R));
+        const rw = Math.min(CW, Math.ceil(dcx + R)) - rx;
+        const rh = Math.min(CH, Math.ceil(dcy + R)) - ry;
+        if (rw > 0 && rh > 0) drawBlurred(mainCtx, softLayer.canvas, rx, ry, rw, rh, rx, ry, blurPx);
+      }
+    }
   }
+}
+
+let softCanvas: HTMLCanvasElement | null = null;
+/** طبقةٌ بحجم القماش تَرث مصفوفتَه وشفافيّتَه — يُرسَم فيها عنصرٌ مضبَّب حيث لا `filter`. */
+function softLayerFor(main: CanvasRenderingContext2D): CanvasRenderingContext2D | null {
+  if (typeof document === 'undefined') return null;
+  if (!softCanvas) softCanvas = document.createElement('canvas');
+  if (softCanvas.width !== main.canvas.width || softCanvas.height !== main.canvas.height) {
+    softCanvas.width = main.canvas.width;
+    softCanvas.height = main.canvas.height;
+  }
+  const l = softCanvas.getContext('2d');
+  if (!l) return null;
+  l.setTransform(1, 0, 0, 1, 0, 0);
+  l.globalCompositeOperation = 'source-over';
+  l.globalAlpha = 1;
+  l.clearRect(0, 0, softCanvas.width, softCanvas.height);
+  l.setTransform(main.getTransform());
+  l.globalAlpha = main.globalAlpha;
+  return l;
+}
+
+/** **ظلُّ النصّ** — حروفُه مصمتةً في إحداثيّاته المحلّيّة بالتخطيط نفسه الذي يرسمه
+ * المسارُ العاديّ (لفٌّ، محاذاة، تتابع). تستعمله خامةُ الزجاج في التصدير **وفي المعاينة**،
+ * فلا يختلف موضعُ حرفٍ بين ما يُرى وما يُصدَّر. */
+export function drawTextSilhouette(c: CanvasRenderingContext2D, el: TextElement, bw: number, bh: number, fontPx: number, dir: 'rtl' | 'ltr', time: number, scaleMean = 1): void {
+  c.font = `${WEIGHT_CSS[el.weight]} ${fontPx}px ${el.fontFamily}, sans-serif`;
+  (c as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = el.tracking ? `${el.tracking / 100}em` : '0px';
+  c.textBaseline = 'alphabetic';
+  c.direction = dir;
+  const solid = typeof c.fillStyle === 'string' ? c.fillStyle : '#000000';
+  if (el.textAnim?.enabled) {
+    drawStaggeredText(c, el, bw, bh, dir, fontPx, time, 1, { fill: solid, shadows: [], stroke: null, blurPx: 0, scaleMean });
+    return;
+  }
+  const lines = wrapLines(c, el.text, bw);
+  const lineHeight = fontPx * lineHeightOf(el);
+  const totalHeight = lines.length * lineHeight;
+  const shift = firstBaselineShift(el, fontPx);
+  const startY = el.valign === 'top' ? fontPx * 0.9 + shift : el.valign === 'middle' ? (bh - totalHeight) / 2 + fontPx * 0.9 + shift : bh - totalHeight + fontPx * 0.9 + shift;
+  const startIsRight = dir === 'rtl';
+  const alignX = el.halign === 'start' ? (startIsRight ? bw : 0) : el.halign === 'end' ? (startIsRight ? 0 : bw) : bw / 2;
+  c.textAlign = el.halign === 'start' ? (startIsRight ? 'right' : 'left') : el.halign === 'end' ? (startIsRight ? 'left' : 'right') : 'center';
+  c.fillStyle = solid;
+  lines.forEach((line, i) => c.fillText(line, alignX, startY + i * lineHeight));
 }
 
 /** **نصٌّ بتعبئةٍ متدرّجة يُرسَم في طبقةٍ ثم يُلوَّن — لا `fillText` بتدرّجٍ مباشرةً.**

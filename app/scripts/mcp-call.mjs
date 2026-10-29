@@ -18,12 +18,21 @@ try {
 const url = ep.url ?? `http://127.0.0.1:${ep.port}/mcp`;
 let rid = 1;
 export async function rpc(method, params) {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${ep.token}` },
-    body: JSON.stringify({ jsonrpc: '2.0', id: rid++, method, params }),
+  // `http` لا `fetch`: التصديرُ الطويل يُبقي الردَّ دقائق، ومهلةُ fetch في Node (خمسُ دقائق
+  // للرؤوس) كانت تقطعه والتصديرُ ماضٍ في مزيج. الخادمُ نفسُه يحدّ كلَّ أداةٍ بمهلتها.
+  const { request } = await import('node:http');
+  const payload = JSON.stringify({ jsonrpc: '2.0', id: rid++, method, params });
+  const text = await new Promise((resolve, reject) => {
+    const req = request(url, { method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload), authorization: `Bearer ${ep.token}` } }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => (data += c));
+      res.on('end', () => resolve(data));
+    });
+    req.on('error', reject);
+    req.end(payload);
   });
-  const body = await res.json();
+  const body = JSON.parse(text);
   if (body.error) throw new Error(JSON.stringify(body.error));
   return body.result;
 }

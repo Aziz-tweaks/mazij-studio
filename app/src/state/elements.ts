@@ -488,6 +488,9 @@ interface ElementBase {
    * `docs/UX-AUDIT-2026-10-18.md`: القائمة كانت تعرض «شكل · mvdiutl2» لأن الاسم
    * كان يُشتقّ من المعرّف الخام لا من المحتوى. */
   name?: string;
+  /** **خامةُ الزجاج** — تحلّ محلّ التعبئة في النصّ والمستطيل والدائرة (`lib/glass.ts`).
+   * اختياريّة: غيابُها = التعبئةُ المعتادة بلا أيّ فرق. */
+  glass?: import('../lib/glass').GlassStyle;
   opacity: number;
   geo: Geometry;
   anim: ElementAnim;

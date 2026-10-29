@@ -13,6 +13,7 @@ pub mod agents;
 
 // ربطُ مزيج بتطبيق Claude للكمبيوتر وClaude Code وCodex — انظر `link.rs`.
 pub mod link;
+mod awake;
 
 /// Roadmap #20, security fix: `run()` used to call `mcp::spawn(mcp::MCP_PORT)`
 /// unconditionally, so 127.0.0.1:7420 went to LISTEN the instant the app launched
@@ -30,11 +31,13 @@ fn mcp_start() -> Result<mcp::StartInfo, String> {
     let info = mcp::start(mcp::MCP_PORT, None)?;
     // جسرُ `--mcp-stdio` (تطبيق Claude، Codex) يجد المنفذَ والرمزَ هنا.
     link::write_endpoint(info.port, &info.token);
+    awake::begin();
     Ok(info)
 }
 
 #[tauri::command]
 fn mcp_stop() {
+    awake::end();
     link::clear_endpoint();
     mcp::stop();
 }
@@ -65,6 +68,13 @@ pub fn run() {
                 link::clear_endpoint();
                 mcp::stop();
             }
+        })
+        .setup(|app| {
+            use tauri::Manager;
+            for (_, win) in app.webview_windows() {
+                awake::configure_webview(&win);
+            }
+            Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

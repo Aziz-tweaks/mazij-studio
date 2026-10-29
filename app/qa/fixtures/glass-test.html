@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+@import url('/src/assets/fonts/fonts.css');
+body{margin:0;background:#fbfaff}</style></head>
+<body><canvas id="c" width="1920" height="1080" style="width:1920px;height:1080px"></canvas>
+<script type="module">
+import { paintGlass } from '/src/lib/glass.ts';
+const c = document.getElementById('c').getContext('2d');
+const t = Number(new URLSearchParams(location.search).get('t') || 0);
+await document.fonts.load("800 300px 'Readex Pro'");
+await document.fonts.load("800 300px Alexandria");
+const tube = { mode: 'tube', colors: ['#ff2d87', '#ff6a2b', '#ff2d87', '#a64dff'], rim: '#7f8cff', core: '#ff7a1f', flow: 0.15, angle: 90, highlight: 0.9 };
+function txt(str, x, y, w, h, px) {
+  c.save(); c.translate(x, y);
+  paintGlass(c, w, h, t, tube, px * 0.09, (m) => { m.font = `800 ${px}px 'Readex Pro'`; m.direction = 'rtl'; m.textAlign = 'center'; m.fillText(str, w / 2, h * 0.72); });
+  c.restore();
+}
+txt('الحين', 160, 20, 1600, 520, 400);
+c.save(); c.translate(200, 600);
+paintGlass(c, 900, 220, t, { mode: 'reeded', colors: ['#ff4fa3', '#ff8a3d', '#8b5cff', '#3b8bff'], flow: 0.3, stripes: 7, strength: 0.7, highlight: 0.5 }, 26, (m) => { m.beginPath(); m.roundRect(0, 0, 900, 220, 110); m.fill(); });
+c.restore();
+c.save(); c.translate(1250, 560);
+paintGlass(c, 420, 420, t, { mode: 'tube', colors: ['#ffffff', '#c9b8ff', '#ff4fa3'], rim: '#8fb0ff', core: '#ff6fb5', flow: 0.1, angle: 135, highlight: 0.9 }, 60, (m) => { m.beginPath(); m.ellipse(210, 210, 210, 210, 0, 0, Math.PI * 2); m.fill(); });
+c.restore();
+document.title = 'done';
+</script></body></html>

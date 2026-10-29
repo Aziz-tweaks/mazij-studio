@@ -35,7 +35,7 @@ const settle = () => new Promise((r) => setTimeout(r, 2500)); // الحفظُ ا
 
 const tools = (await import('../scripts/mcp-call.mjs')).rpc;
 const list = (await tools('tools/list', {})).tools.map((t) => t.name);
-for (const t of ['element_animate', 'element_set_fill', 'element_set_look', 'text_set_stagger', 'text_set_counter', 'text_set_spacing', 'effect_particle_burst', 'batch']) ok(list.includes(t), `الأداة ${t} معروضة`);
+for (const t of ['element_animate', 'element_set_fill', 'element_set_look', 'text_set_stagger', 'text_set_counter', 'text_set_spacing', 'effect_particle_burst', 'batch', 'element_set_glass', 'group_camera', 'templates_render_png', 'fonts_add_from_path']) ok(list.includes(t), `الأداة ${t} معروضة`);
 
 await call('document_new', { sizeId: 'yt-video' });
 const W = 1920;
@@ -75,6 +75,22 @@ ok(b.ok && b.results.length === 4, 'الدفعةُ نفّذت أربعةَ ند�
 const bad = await call('batch', { calls: [{ tool: 'element_set_look', args: { id: '$5' } }] });
 ok(bad.ok === false && bad.failedAt === 0, 'مرجعٌ غيرُ موجودٍ يُبلَّغ بلا تنفيذ');
 
+// ٦. الزجاج والكاميرا والقوالب والخطوط
+const gl = await call('element_set_glass', { id: tx.id, mode: 'tube', colors: ['#ff2d87', '#ff6a2b'], rim: '#7f8cff', core: '#ff7a1f' });
+ok(gl.glass?.mode === 'tube', 'خامةُ الزجاج على النصّ');
+const cam = await call('group_camera', { ids: [sh.id], keys: [{ t: 1.5, zoom: 1 }, { t: 2.5, zoom: 3 }] });
+ok(cam.moved === 1, 'حركةُ الكاميرا كُتبت في مفاتيح العنصر');
+const rnd = await call('templates_render_png', { ids: ['demo-poster'] });
+ok(rnd.renders?.length === 1 && rnd.renders[0].path.endsWith('demo-poster.png'), 'قالبٌ جاهز صُدِّر صورةً');
+const fontFile = join(homedir(), 'Mazij/Fonts/test-arabic-bold.ttf');
+let fontOk = true;
+try { statSync(fontFile); } catch { fontOk = false; }
+if (fontOk) {
+  const f1 = await call('fonts_add_from_path', { path: fontFile });
+  const f2 = await call('fonts_add_from_path', { path: fontFile });
+  ok(typeof f1.family === 'string' && f2.family === f1.family && f2.reused === true, 'الخطُّ يُضاف مرّةً ويُعاد استعمالُه بلا تكرار');
+}
+
 await settle();
 const doc = project();
 const se = findEl(doc, sh.id);
@@ -86,6 +102,8 @@ ok(te && te.counter?.prefix === '$' && te.text === '$45,708', 'نصُّ العد
 ok(te && te.tracking === -2 && te.lineHeight === 1.4, 'التتبّعُ وتباعدُ الأسطر');
 const ge = findEl(doc, b.results[0].id);
 ok(ge && ge.name === 'عنوانٌ متدرّج' && ge.pivot?.y === 1, 'الاسمُ والارتكاز');
+ok(te && te.glass?.mode === 'tube', 'الزجاجُ محفوظٌ في المستند');
+ok(se && se.anim.tracks.scale.length > 20 && Math.abs(se.anim.tracks.scale[se.anim.tracks.scale.length - 1].value - 3) < 0.05, 'الكاميرا: المقياسُ يبلغ ٣ في آخر المقطع');
 
 // ٦. التصدير — PNG، ونقطتا الياء في «في» المتدرّجة
 const exportsDir = join(homedir(), 'Mazij/Exports');

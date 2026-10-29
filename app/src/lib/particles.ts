@@ -19,6 +19,8 @@ export interface ParticleBurstOptions {
   start?: number;
   duration?: number;
   seed?: number;
+  /** `burst` تتطاير من المركز (الافتراضي)، `implode` تتجمّع إليه ثم تذوب — لِيولد منها ما بعدها. */
+  mode?: 'burst' | 'implode';
 }
 
 function rng(seed: number) {
@@ -58,12 +60,20 @@ export function particleBurst(opts: ParticleBurstOptions, page: { w: number; h: 
     // `x`/`y` في المسارات كسرٌ من **عرض** اللوحة كلاهما — انظر `ElementAnim.tracks`.
     const dx = (Math.cos(ang) * dist) / page.w;
     const dy = (Math.sin(ang) * dist) / page.w;
-    const tracks: PropertyTracks = {
-      x: [kf(0, 0), kf(life, dx)],
-      y: [kf(0, 0), kf(life, dy + (0.04 * page.h) / page.w)],
-      scale: [kf(0, 0.2), kf(life * 0.18, 1), kf(life, 0.4)],
-      opacity: [kf(0, 0, 'linear'), kf(life * 0.06, 1, 'linear'), kf(life * 0.55, 1, 'linear'), kf(life, 0, 'linear')],
-    };
+    const tracks: PropertyTracks =
+      opts.mode === 'implode'
+        ? {
+            x: [kf(0, dx, 'easeInOut'), kf(life, 0)],
+            y: [kf(0, dy, 'easeInOut'), kf(life, 0)],
+            scale: [kf(0, 0.6, 'easeIn'), kf(life * 0.8, 1, 'easeIn'), kf(life, 0.3)],
+            opacity: [kf(0, 0, 'linear'), kf(life * 0.2, 1, 'linear'), kf(life * 0.85, 1, 'linear'), kf(life, 0, 'linear')],
+          }
+        : {
+            x: [kf(0, 0), kf(life, dx)],
+            y: [kf(0, 0), kf(life, dy + (0.04 * page.h) / page.w)],
+            scale: [kf(0, 0.2), kf(life * 0.18, 1), kf(life, 0.4)],
+            opacity: [kf(0, 0, 'linear'), kf(life * 0.06, 1, 'linear'), kf(life * 0.55, 1, 'linear'), kf(life, 0, 'linear')],
+          };
     const anim = { ...defaultAnim('none', start, life), preset: 'none' as const, sourceIn: 0, bounded: true, tracks };
     out.push({
       id: newElementId('shape'),
