@@ -7,7 +7,7 @@ import { firstSelectedElement, selectedElements, useStudio } from '../../state/S
 import { geoToPx } from '../../lib/geometry';
 import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
 import { animPropertiesFor, hasCustomAnimation, lineHeightOf, pivotOf, resolveTextColor } from '../../state/elements';
-import { keyframeAt } from '../../lib/animTimeline';
+import { documentDuration, keyframeAt } from '../../lib/animTimeline';
 import { isInstantEffect, revealUnitCount, revealValueAt } from '../../lib/textStagger';
 import type { EasingId } from '../../lib/easing';
 import { EASE_LABEL_KEY } from '../timeline/EasingMenu';
@@ -111,7 +111,7 @@ export function PropsTab() {
       {isPen ? (
         <PenProps />
       ) : !el ? (
-        <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--muted)', fontSize: 12.5 }}>{L.no_selection}</div>
+        <ProjectDetails />
       ) : (
         <>
           {maskCandidate && (
@@ -2562,5 +2562,35 @@ function Toggle({ on }: { on: boolean }) {
     <span style={{ width: 32, height: 18, borderRadius: 999, background: on ? 'var(--accent)' : 'var(--line)', position: 'relative', display: 'inline-block' }}>
       <span style={{ position: 'absolute', top: 2, [on ? 'insetInlineEnd' : 'insetInlineStart']: 2, width: 14, height: 14, borderRadius: '50%', background: on ? 'var(--onAccent)' : 'var(--surface)', boxShadow: on ? 'none' : '0 1px 2px rgba(0,0,0,.2)' }} />
     </span>
+  );
+}
+
+
+/** **لا تحديد ← خصائصُ المشروع** (٢٩ أكتوبر ٢٠٢٦، مقابل محرّر فيديو شائع: «Details» حين لا شيء محدَّد). كان اللوحُ
+ * فارغًا إلا من تلميح، فيبدو كأنّ شيئًا تعطّل. الآن: المقاسُ والنوعُ والطولُ وعددُ الطبقات، والتلميحُ تحتها. */
+function ProjectDetails() {
+  const { state, dict: L } = useStudio();
+  const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+  const timed = state.medium === 'timed';
+  const layers = state.elements.filter((e) => e.id !== 'mz-background').length;
+  const duration = timed ? documentDuration(state.elements.map((e) => e.anim), state.fps) : 0;
+  const ar = state.lang === 'ar';
+  const rows: Array<[string, string]> = [
+    [ar ? 'المقاس' : 'Size', `${size.w} × ${size.h}`],
+    [ar ? 'النوع' : 'Type', timed ? (ar ? 'فيديو' : 'Video') : ar ? 'صورة' : 'Image'],
+    ...(timed ? ([[ar ? 'الطول' : 'Duration', `${duration.toFixed(2)}${ar ? 'ث' : 's'}`], [ar ? 'الإطارات' : 'Frame rate', `${state.fps}fps`]] as Array<[string, string]>) : []),
+    [ar ? 'الطبقات' : 'Layers', String(layers)],
+  ];
+  return (
+    <section data-testid="project-details" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="mz-label">{ar ? 'المشروع' : 'Project'}</div>
+      {rows.map(([k, v]) => (
+        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+          <span style={{ color: 'var(--muted)' }}>{k}</span>
+          <span style={{ fontWeight: 600, direction: 'ltr' }}>{v}</span>
+        </div>
+      ))}
+      <div style={{ paddingTop: 10, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>{L.no_selection}</div>
+    </section>
   );
 }

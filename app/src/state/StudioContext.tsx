@@ -2810,6 +2810,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             // الحركة التي طلبها لحظةَ طلبها — لا مؤشّرًا واقفًا بعد نهايتها.
             return { elements, medium: 'timed', tlOpen: true, t: 0, playing: true, ...pushHistory(s, label) };
           }
+          // **تطبيقُ حركةٍ يعرضها فورًا** (كما في محرّر فيديو شائع): يرجع المؤشّرُ إلى بداية المقطع ويشتغل، فيرى المصمّمُ
+          // ما اختاره لحظةَ اختياره — بدل أن يقفز المؤشّرُ إلى نهاية المقطع ويقف.
+          if (preset !== 'none') return { elements, ...pushHistory(s, label), t: after.anim.start, playing: true };
           const vanished = rendersNothingAt(after.anim, s.t);
           return { elements, ...pushHistory(s, label), t: vanished ? Math.max(s.t, after.anim.start + after.anim.duration) : s.t };
         }),
@@ -3240,6 +3243,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         patch((s) => {
           const elements = s.elements.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e));
           const after = elements.find((e) => e.id === id);
+          // تطبيقُ حركةِ دخولٍ يعرضها فورًا من بداية المقطع (كما في محرّر فيديو شائع)، بدل القفز إلى نهايته.
+          if (after && preset !== 'none' && s.medium === 'timed') {
+            return { elements, ...pushHistory(s, (s.lang === 'ar' ? AR : EN).entrance), t: after.anim.start, playing: true };
+          }
           const vanished = !!after && rendersNothingAt(after.anim, s.t);
           return {
             elements,
