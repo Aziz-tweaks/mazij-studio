@@ -225,6 +225,13 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
   /** الطبقة التي يُعاد تسميتها الآن داخل سطرها — حالة عرضٍ محليّة لا مستنديّة. */
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const trackWrapRef = useRef<HTMLDivElement>(null);
+  // **قائمةُ الطبقات ومساراتُها تُمرَّران معًا.** كانتا حاويتين مستقلّتين، فتمريرُ المسارات يُزيح
+  // المقاطعَ تحت أسماءٍ ليست لها — يُقرأ «ضبابية» أمام مقطع صورة. كلٌّ منهما يعكس تمريرَ الأخرى.
+  const layersScrollRef = useRef<HTMLDivElement>(null);
+  const tracksScrollRef = useRef<HTMLDivElement>(null);
+  const mirrorScroll = (from: HTMLDivElement | null, to: HTMLDivElement | null) => {
+    if (from && to && Math.abs(to.scrollTop - from.scrollTop) > 0.5) to.scrollTop = from.scrollTop;
+  };
   const rulerRef = useRef<HTMLDivElement>(null);
   // **تكبيرُ الخطّ الزمنيّ** (٢٥ أكتوبر ٢٠٢٦). كان المدى كلُّه يُحشَر في عرض اللوح: مقطعٌ من
   // ٤٤ ثانية = ٢٩ بكسلًا للثانية، فالإطارُ بكسلٌ واحد، والماستان المتجاورتان لا تُمسَكان.
@@ -322,6 +329,42 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
   useEffect(() => {
     if (selectedKf && !selectedKfData) setSelectedKf(null);
   }, [selectedKf, selectedKfData]);
+
+  // **تحديدُ عنصرٍ على اللوحة يُظهر صفَّه في الخطّ الزمنيّ.** كان المحدَّدُ يبقى خارج المنظر
+  // (المستندُ بعشرات الطبقات)، فلا يُرى أيُّ مقطعٍ هو ولا متى يظهر. يُمرَّر إليه أقلَّ تمريرٍ يكفي.
+  const lastSel = state.selectedIds[state.selectedIds.length - 1];
+  useEffect(() => {
+    if (!lastSel) return;
+    const box = tracksScrollRef.current;
+    const row = box?.querySelector<HTMLElement>(`[data-clip-row="${lastSel}-opacity"]`);
+    if (!box || !row) return;
+    const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    const bottom = top + row.getBoundingClientRect().height;
+    if (top < box.scrollTop) box.scrollTop = top;
+    else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = bottom - box.clientHeight;
+    mirrorScroll(box, layersScrollRef.current);
+  }, [lastSel]);
+
+  // **لوحُ المفتاح يُغلَق كما تُغلَق كلُّ نافذةٍ عائمة:** بـEsc من أيّ مكان، وبضغطةٍ خارجه وخارج
+  // الماسات. كان يبقى مفتوحًا فوق صفوف الطبقات (يغطّيها) حتى يُضغط مفتاحٌ آخر.
+  useEffect(() => {
+    if (!selectedKf) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      setSelectedKf(null);
+    };
+    const onDown = (ev: PointerEvent) => {
+      const t = ev.target as Element | null;
+      if (t?.closest?.('[data-testid="kf-popover"], [data-testid^="kf-"]')) return;
+      setSelectedKf(null);
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown, true);
+    };
+  }, [selectedKf]);
 
   // Cumulative top offset of each layer's row block, in track-column pixels below the
   // ruler — needed because expanded layers are taller than collapsed ones, so a flat
@@ -661,7 +704,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
       </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-        <div style={{ width: timed ? 200 : '100%', flex: timed ? 'none' : 1, borderInlineEnd: timed ? '1px solid var(--line)' : 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div ref={layersScrollRef} onScroll={() => mirrorScroll(layersScrollRef.current, tracksScrollRef.current)} style={{ width: timed ? 200 : '100%', flex: timed ? 'none' : 1, borderInlineEnd: timed ? '1px solid var(--line)' : 0, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
           {/* صفٌّ بارتفاع المسطرة يحاذي الطبقات بمساراتها — ولا مسطرة لمستندٍ ساكن،
               والعنوان «الطبقات» مكتوبٌ فوقه أصلًا. */}
           {timed && <div style={{ height: RULER_H, flex: 'none', display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: 11, color: 'var(--muted)', borderBottom: '1px solid var(--line)' }}>{L.layers}</div>}
@@ -858,7 +901,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
               }}
             />
           )}
-          <div data-testid="timeline-tracks" onPointerDown={startScrub} style={{ flex: 1, position: 'relative', cursor: 'ew-resize', overflowY: 'auto', touchAction: 'none' }}>
+          <div ref={tracksScrollRef} onScroll={() => mirrorScroll(tracksScrollRef.current, layersScrollRef.current)} data-testid="timeline-tracks" onPointerDown={startScrub} style={{ flex: 1, position: 'relative', cursor: 'ew-resize', overflowY: 'auto', touchAction: 'none' }}>
             {/* **البوّابةُ سقطت عن المقطع نفسه.** كان هذا الفرعُ يرسم في الوضع
                 البسيط شريطًا ساكنًا عند `opacity: .35` لا يُنقَل ولا يُقلَّم،
                 والوضعُ البسيط هو الافتراضيّ (`src/state/types.ts`) — فالمستندُ

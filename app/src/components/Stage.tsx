@@ -1074,7 +1074,11 @@ export function Stage() {
   const soleSelected = selected.length === 1 ? state.elements.find((e) => e.id === selected[0]) : undefined;
   /** العنصر الذي تُرسم مقابضُه — وخطُّ تحديده معها في طبقة المقابض (انظرها أدناه). */
   // والصوتُ لا صندوقَ له على اللوحة: لا مقابض ولا خطَّ تحديد — يُحدَّد ويُحرَّر من صفّه.
-  const handlesFor = soleSelected && soleSelected.type !== 'audio' && soleSelected.type !== 'fx' && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id ? soleSelected : undefined;
+  // ولا مقابضَ لعنصرٍ لا يُرى في هذه اللحظة (خارج مقطعه، أو شفّافٍ تمامًا الآن): كان تحديدُ صفِّه
+  // من الخطّ الزمنيّ يرسم صندوقًا ومقابضَ فارغةً فوق ما يُرى فعلًا. يبقى محدَّدًا ويُحرَّر من المفتّش،
+  // وتظهر مقابضُه متى نُقل المؤشّرُ إلى حيث يُرى — كما يفعل محرّرو الفيديو.
+  const shownNow = (el: DocElement) => el.visible && clipShowsAt(el.anim, t) && ((el.opacity ?? 100) / 100) * (entranceByTool[el.id]?.opacity ?? 1) >= 0.02;
+  const handlesFor = soleSelected && soleSelected.type !== 'audio' && soleSelected.type !== 'fx' && !state.editingTextId && state.cropEditingId !== soleSelected.id && state.nodeEditId !== soleSelected.id && shownNow(soleSelected) ? soleSelected : undefined;
   const handlesLayerStyle: CSSProperties = {
     position: 'absolute',
     left: abStyle.left,

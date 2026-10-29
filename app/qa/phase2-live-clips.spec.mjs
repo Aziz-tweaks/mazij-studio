@@ -243,8 +243,8 @@ async function main() {
   assert(b1.ruler.kind === 'ruler' && b1.ruler.cursor === 'ew-resize', `a point above the tracks is the ruler (${b1.ruler.kind}, cursor ${b1.ruler.cursor}) — the same table answers that question too`);
   assert(b1.empty.kind === 'emptyRow' && b1.empty.cursor === 'ew-resize', `and a point below every row is an empty row with a scrub cursor (${b1.empty.cursor}) — "nothing" is still an answer with a behaviour`);
   assert(
-    b1.kfBeatsEdge.kind === 'keyframe' && b1.kfBeatsEdge.keyframeId === 'k1',
-    `with a diamond at 2.97 s and A's out-edge at 3.00 s, x=297 resolves to the **keyframe** (${b1.kfBeatsEdge.kind}) — the one deliberate departure from محرّر خطٍّ زمنيٍّ مفتوح, which has no on-clip diamonds to collide with`,
+    b1.kfBeatsEdge.kind === 'clipEdge' && b1.kfBeatsEdge.edge === 'out',
+    `with a diamond at 2.97 s and A's out-edge at 3.00 s, x=297 resolves to the **out-edge** (${b1.kfBeatsEdge.kind}) — edges beat diamonds since 2026-10-29: every preset keys both clip ends, so diamonds-first left no trimmable edge under a real press`,
   );
   assert(
     b1.locked.kind === 'clipEdge' && b1.locked.cursor === 'not-allowed' && b1.locked.blocked === true,

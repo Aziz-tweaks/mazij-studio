@@ -22,7 +22,8 @@
 // قيمةٌ بنقاط egui. والمنقولُ هو **النسبةُ والقاعدة** — ولذلك يَقيس المعيار B1
 // فصلَ التعادل عند ١٠٠ بكسل/ثانية بوحدات الورقة نفسها، لا الرقمَ ٧ (§10.1).
 //
-// **والمخالفةُ الواحدة المقصودة عن محرّر خطٍّ زمنيٍّ مفتوح: المفاتيحُ تَسبق الحوافّ.** لا ماسات
+// **(تاريخيّ — عُكس في ٢٩ أكتوبر ٢٠٢٦: الحوافّ الآن تسبق المفاتيح، انظر (٤) أدناه.)**
+// **والمخالفةُ الواحدة المقصودة عن محرّر خطٍّ زمنيٍّ مفتوح كانت: المفاتيحُ تَسبق الحوافّ.** لا ماسات
 // مفاتيحَ على المقطع هناك فلا تصادم؛ ومزيجٌ فيها، والتصادمُ **مكتوبٌ أصلًا**
 // معالجةً جانبيّةً في `src/components/timeline/Clip.tsx` («it has no hit-area of
 // its own once the resize handle takes priority over it»). فصلُ التعادل هذا
@@ -147,26 +148,6 @@ export function hitTest(point: HitPoint, layout: HitLayout, clips: readonly HitC
   const rows = clips.filter((c) => y >= c.top && y < c.top + c.height);
   if (!rows.length) return { kind: 'emptyRow', cursor: 'ew-resize', blocked: false };
 
-  // (٠) المفاتيح أوّلًا.
-  let bestKf: { row: HitClipRow; kf: HitKeyframe; d: number } | null = null;
-  for (const row of rows) {
-    for (const kf of row.keyframes ?? []) {
-      const d = Math.abs(kf.timelineTime * pxPerSecond - point.x);
-      if (d <= kfGrabPx && (!bestKf || d < bestKf.d)) bestKf = { row, kf, d };
-    }
-  }
-  if (bestKf) {
-    const locked = !!bestKf.row.locked;
-    return {
-      kind: 'keyframe',
-      elementId: bestKf.row.elementId,
-      property: bestKf.kf.property,
-      keyframeId: bestKf.kf.id,
-      cursor: locked ? 'not-allowed' : 'grab',
-      blocked: locked,
-    };
-  }
-
   // (١–٣) الحوافّ.
   const candidates: EdgeCandidate[] = [];
   let bodyRow: HitClipRow | null = null;
@@ -199,6 +180,29 @@ export function hitTest(point: HitPoint, layout: HitLayout, clips: readonly HitC
       property: win.row.property,
       edge: win.edge,
       cursor: locked ? 'not-allowed' : 'ew-resize',
+      blocked: locked,
+    };
+  }
+
+  // (٤) المفاتيحُ بعد الحوافّ. **عُكس الترتيبُ (٢٩ أكتوبر ٢٠٢٦، بالنقر الحقيقيّ):** كلُّ نمطٍ
+  // جاهزٍ يكتب مفتاحًا عند طرفَي المقطع، فكانت ضغطةٌ على بُعد ٤ بكسلات من الحافّة تمسك الماسةَ
+  // وتفتح لوحَها بدل أن تقصّ — حافّةُ أشهرِ مقطعٍ لا تُقبَض. والآن شريطُ الحافّة (٧ بكسلات) للقصّ
+  // دائمًا، كما في محرّرات الفيديو؛ والماسةُ تُمسَك من داخل المقطع، أو تُحرَّر من لوحها.
+  let bestKf: { row: HitClipRow; kf: HitKeyframe; d: number } | null = null;
+  for (const row of rows) {
+    for (const kf of row.keyframes ?? []) {
+      const d = Math.abs(kf.timelineTime * pxPerSecond - point.x);
+      if (d <= kfGrabPx && (!bestKf || d < bestKf.d)) bestKf = { row, kf, d };
+    }
+  }
+  if (bestKf) {
+    const locked = !!bestKf.row.locked;
+    return {
+      kind: 'keyframe',
+      elementId: bestKf.row.elementId,
+      property: bestKf.kf.property,
+      keyframeId: bestKf.kf.id,
+      cursor: locked ? 'not-allowed' : 'grab',
       blocked: locked,
     };
   }

@@ -145,6 +145,10 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
     // عنصرٌ مقفول: المؤشّرةُ قالت `not-allowed` **قبل** المحاولة، والضغطةُ تُبتلَع
     // فلا تُحرّك شيئًا ولا تُحرّك المؤشّرَ الزمنيّ خلسةً.
     if (hit.blocked) return;
+    // **الضغطُ على مقطعٍ يحدّد عنصرَه** (وبه تُحدَّد على اللوحة وفي المفتّش)، كما في محرّرات
+    // الفيديو: كان السحبُ يحرّك مقطعًا ويبقى التحديدُ على غيره، فيُحرَّر في المفتّش ما لم يُلمَس.
+    // ⇧/⌘ تُضيف إلى التحديد كما في قائمة الطبقات.
+    if (!state.selectedIds.includes(el.id) || e.shiftKey || e.metaKey) actions.selectElement(el.id, e.shiftKey || e.metaKey || e.ctrlKey);
 
     const kind: GestureKind = hit.kind === 'keyframe' ? 'kf' : hit.kind === 'clipEdge' ? 'trim' : 'move';
     const edge = hit.edge;
