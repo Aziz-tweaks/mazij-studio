@@ -293,7 +293,14 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
             height: 16,
             borderRadius: 4,
             background: color,
-            boxShadow: anim.bounded && property === 'opacity' ? `inset 0 0 0 1.5px ${color}` : undefined,
+            // **المقطعُ المحدَّد محاطٌ بحدٍّ واضح** (كما في محرّر فيديو شائع: حدٌّ أبيض ٢px)، فيُعرف من الشريط
+            // نفسِه أيُّ مقطعٍ سيُقصّ أو يُسحب — لا من ترويسة الصفّ وحدها.
+            boxShadow:
+              property === 'opacity' && state.selectedIds.includes(el.id)
+                ? '0 0 0 2px var(--text)'
+                : anim.bounded && property === 'opacity'
+                  ? `inset 0 0 0 1.5px ${color}`
+                  : undefined,
             opacity: property === 'opacity' ? (anim.bounded ? 0.62 : 0.4) : 0.22,
             // المؤشّرةُ تُورَّث من الصفّ: هي قرارُ `hitTest` لا صفةُ عقدةٍ ثابتة،
             // وإلا قالت الحافّةُ `grab` لأنها ترقد على الجسم.

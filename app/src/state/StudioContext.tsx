@@ -345,6 +345,30 @@ function docOf(s: StudioState): DocSnapshot {
  * كان كلُّ عنصرٍ يُضاف بمقطعٍ من ٠ إلى ٠٫٦ث — نصٌّ يومض ويختفي، ومستندٌ طوله ٠٫٦ث — وفي محرّرات
  * الفيديو يُضاف المقطعُ عند رأس التشغيل بثلاث ثوانٍ. يُطبَّق على المقطع الافتراضيّ وحده (بلا حركة،
  * بلا مسارات، يبدأ عند ٠ بطول ٠٫٦)، فاللصقُ والاستنساخُ والقوالبُ وأدواتُ MCP تبقى كما كُتبت. */
+/** **سطرٌ واحدٌ يتّسع صندوقُه ولا يلتفّ** (٢٩ أكتوبر ٢٠٢٦، بالنقر الحقيقيّ مقابل محرّر فيديو شائع). كان إضافةُ
+ * كلمةٍ إلى عنوانٍ من سطرٍ واحد تكسره سطرين داخل عرضه القديم. فإن كان النصُّ بلا فاصل أسطر وصار أعرضَ
+ * من صندوقه، يُوسَّع الصندوقُ حول محاذاته (الوسطُ يبقى وسطًا، والبدايةُ في العربيّة يمينٌ تبقى مكانها)
+ * حتى ٩٦٪ من عرض المستند؛ وما زاد يلتفّ كالمعتاد. والصندوقُ الأعرضُ من النصّ لا يُضيَّق. */
+function widenForOneLine(el: TextElement, text: string, size: { w: number; h: number }): Geometry {
+  if (text.includes('\n') || typeof document === 'undefined') return el.geo;
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return el.geo;
+  const weight = { regular: 400, medium: 600, bold: 800 }[el.weight] ?? 400;
+  ctx.font = `${weight} ${el.fontSize}px "${el.fontFamily}"`;
+  const needPx = ctx.measureText(text).width + el.fontSize * 0.35;
+  const curPx = el.geo.w * size.w;
+  if (needPx <= curPx) return el.geo;
+  const w = Math.min(needPx, size.w * 0.96) / size.w;
+  const grow = w - el.geo.w;
+  // «البداية» يمينٌ في النصّ العربيّ ويسارٌ في غيره، و«النهاية» عكسها.
+  const rtl = /[\u0600-\u06FF]/.test(text);
+  const anchorRight = el.halign === 'start' ? rtl : el.halign === 'end' ? !rtl : false;
+  const anchorLeft = el.halign === 'start' ? !rtl : el.halign === 'end' ? rtl : false;
+  let x = anchorRight ? el.geo.x - grow : anchorLeft ? el.geo.x : el.geo.x - grow / 2;
+  x = Math.max(0.02, Math.min(x, 0.98 - w));
+  return { ...el.geo, x, w };
+}
+
 export const NEW_CLIP_SECONDS = 3;
 function placeNewClips(prev: StudioState, next: StudioState): StudioState {
   if (next === prev || next.medium !== 'timed' || next.elements === prev.elements || next.elements.length <= prev.elements.length) return next;
@@ -356,7 +380,8 @@ function placeNewClips(prev: StudioState, next: StudioState): StudioState {
     const isDefault = a && a.preset === 'none' && a.start === 0 && Math.abs(a.duration - 0.6) < 1e-9 && !Object.keys(a.tracks ?? {}).length;
     if (!isDefault) return e;
     changed = true;
-    return { ...e, anim: { ...a, start: Math.max(0, prev.t ?? 0), duration: NEW_CLIP_SECONDS } };
+    // ومحدودٌ بمقطعه: لا يظهر قبله ولا بعده — كما في محرّرات الفيديو (كان يظهر طوال الفيديو).
+    return { ...e, anim: { ...a, start: Math.max(0, prev.t ?? 0), duration: NEW_CLIP_SECONDS, bounded: true } };
   });
   return changed ? { ...next, elements } : next;
 }
@@ -1038,7 +1063,8 @@ export interface StudioActions {
       placeholderFill?: boolean;
     },
   ) => void;
-  placeShapeFromLibrary: (recipe: ShapeRecipe) => void;
+  /** `drop`: سُحبت البطاقةُ وأُفلتت — على اللوحة (`center` كسرٌ من المستند) أو على الخطّ الزمنيّ (`start` بالثواني). */
+  placeShapeFromLibrary: (recipe: ShapeRecipe, drop?: { center?: { x: number; y: number }; start?: number }) => void;
   setShapeDrawN: (n: number) => void;
   openToolLibrary: (tool: StudioState['tool']) => void;
   addPathElement: (points: Array<{ x: number; y: number }>, closed: boolean, bboxPx: { x: number; y: number; w: number; h: number }) => void;
@@ -3676,11 +3702,16 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       commitTextEdit: (id, text) =>
         setState((s) => {
           const current = s.elements.find((e) => e.id === id);
-          if (current?.type !== 'text' || current.text === text) return { ...s, editingTextId: null };
+          if (current?.type !== 'text') return { ...s, editingTextId: null };
+          if (current.text === text) {
+            // النصُّ كُتب حيًّا أثناء التحرير، فيصل الالتزامُ بلا فرق — ويبقى اتّساعُ السطر واجبًا.
+            const geo = widenForOneLine(current, text, sizeAt(s.sizeIdx, s.customW, s.customH));
+            return geo === current.geo ? { ...s, editingTextId: null } : { ...s, editingTextId: null, elements: s.elements.map((e) => (e.id === id && e.type === 'text' ? { ...e, geo } : e)) };
+          }
           return {
             ...s,
             editingTextId: null,
-            elements: s.elements.map((e) => (e.id === id && e.type === 'text' ? { ...e, text } : e)),
+            elements: s.elements.map((e) => (e.id === id && e.type === 'text' ? { ...e, text, geo: widenForOneLine(e, text, sizeAt(s.sizeIdx, s.customW, s.customH)) } : e)),
             ...pushHistory(s),
           };
         }),
@@ -3765,10 +3796,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
        * بالمقاس النسبي. سحبة على اللوحة بأداة الأشكال = ارسم صندوقًا بالضبط، بكل
        * مُعدِّلاتها. المصمم الذي يريد 30% في المنتصف ينقر، والذي يريد صندوقًا محدَّدًا
        * يسحب، ولا يقع أحدهما في الأخرى بالخطأ لأن سطح البداية مختلف. */
-      placeShapeFromLibrary: (recipe) =>
+      placeShapeFromLibrary: (recipe, drop) =>
         setState((s) => {
           const size = sizeAt(s.sizeIdx, s.customW, s.customH);
-          const box = clickPlacementBox(size);
+          const box0 = clickPlacementBox(size);
+          // **الإفلاتُ على اللوحة يضعه حيث أُفلت** (مركزُه عند المؤشّر)، كما في الأداة الشائعة ومحرّر فيديو شائع.
+          const box = drop?.center ? { ...box0, x: drop.center.x * size.w - box0.w / 2, y: drop.center.y * size.h - box0.h / 2 } : box0;
           const id = newElementId('shape');
           const g = shapeGeometryFor(recipe);
           const el: DocElement = {
@@ -3787,7 +3820,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             radius: g.radius,
             ...(g.points ? { points: g.points, closed: g.closed } : {}),
             appearance: libraryAppearance(recipe, size.w),
-            anim: defaultAnim('none', 0, 0.6),
+            anim: drop?.start !== undefined ? { ...defaultAnim('none', Math.max(0, drop.start), NEW_CLIP_SECONDS), bounded: true } : defaultAnim('none', 0, 0.6),
           };
           return {
             ...s,
