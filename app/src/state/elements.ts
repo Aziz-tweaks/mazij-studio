@@ -394,6 +394,8 @@ export interface AppearanceFillLayer {
   gradientAngle: number;
   gradientFrom: string;
   gradientTo: string;
+  /** شكل التدرّج: خطّي (الافتراضي) أو دائري من المركز إلى الحافة. غيابه = خطّي. */
+  gradientType?: 'linear' | 'radial';
 }
 
 /** One stroke (border) layer. `position` decides where the painted band sits relative
@@ -567,9 +569,28 @@ export function pivotOffsetFrac(el: { pivot?: { x: number; y: number } | null })
   return { dx: p.x - 0.5, dy: p.y - 0.5 };
 }
 
+/** عدّادُ أرقام على نصّ (انظر `lib/textCounter.ts`). الأزمنةُ بالثواني من بداية المقطع. */
+export interface TextCounter {
+  from: number;
+  to: number;
+  decimals?: number;
+  prefix?: string;
+  suffix?: string;
+  /** `arabic` = ٠١٢٣…، وغيابُه = 0123. */
+  digits?: 'latin' | 'arabic';
+  /** فاصلُ الآلاف — مُفعَّلٌ ما لم يُطفأ صراحةً. */
+  grouping?: boolean;
+  easing?: EasingId;
+  delay?: number;
+  /** غيابُه = بقيّةُ المقطع بعد `delay`. */
+  duration?: number;
+}
+
 export interface TextElement extends ElementBase {
   type: 'text';
   text: string;
+  /** اختياريٌّ كسائر الحقول الجديدة: غيابُه = نصٌّ ساكن كما كان. */
+  counter?: TextCounter;
   fontFamily: string;
   /** Reference px against a 1080-wide artboard, matching the on-canvas cqw sizing used before. */
   fontSize: number;

@@ -9,13 +9,14 @@ import { maskClipLocal } from '../../lib/maskGeometry';
 import { commandsToSvgPath, ellipsePathCmds, pathElementCommands, roundRectPathCmds, type PathCmd } from '../../lib/pathGeometry';
 import { isTrimmed, trimPathCmds } from '../../lib/pathTrim';
 import { animTimeAt, resolveAnimAt } from '../../lib/animTimeline';
-import { appearanceBoxShadowCss, fillsToCss, legacyBorderCss, resolveAppearance, withAlpha } from '../../lib/appearance';
+import { appearanceBoxShadowCss, fillsToCss, gradientCss, legacyBorderCss, resolveAppearance, withAlpha } from '../../lib/appearance';
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from '../../lib/variableStroke';
 import { SHOWN_UNIT_VISUAL, TYPE_BREAK, buildStaggerTokens, resolveUnitVisual, typedSplit, typedUnitCount, unitVisualToCssFilter, unitVisualToCssTransform, type StaggerToken, type UnitVisual } from '../../lib/textStagger';
 import { shapeTextOnCurve } from '../../lib/textOnPath';
 import { wrapLines, justifyCanvasLines } from '../../lib/exportArtboard';
 import { LottiePreview } from './LottiePreview';
 import { VideoPreview } from './VideoPreview';
+import { withCounterAt } from '../../lib/textCounter';
 
 /** Roadmap #12 — live preview of a text element bent along `pathShape`'s curve (see
  * `src/lib/textOnPath.ts`). The shaping itself is async (real HarfBuzz/WASM, same
@@ -235,7 +236,9 @@ export interface ElementViewProps {
   editRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function ElementView({ el, pal, selected, editing, croppingActive, size, scale, maskShape, pathShape, lang, entranceOpacity, entranceTransform, entranceFilter, time, onPointerDown, onDoubleClick, onTextBlur, onTextKeyDown, editRef }: ElementViewProps) {
+export function ElementView({ el: rawEl, pal, selected, editing, croppingActive, size, scale, maskShape, pathShape, lang, entranceOpacity, entranceTransform, entranceFilter, time, onPointerDown, onDoubleClick, onTextBlur, onTextKeyDown, editRef }: ElementViewProps) {
+  // العدّادُ يُبدّل النصَّ بزمنه — إلا أثناء التحرير، فهناك يُرى المخزونُ ويُكتب.
+  const el = editing ? rawEl : withCounterAt(rawEl, time);
   if (!el.visible) return null;
   const dir = lang === 'ar' ? 'rtl' : 'ltr';
 
@@ -303,7 +306,7 @@ export function ElementView({ el, pal, selected, editing, croppingActive, size, 
     const colorStyle: CSSProperties =
       topFill?.kind === 'gradient' && topFill.gradient
         ? {
-            backgroundImage: `linear-gradient(${topFill.gradient.angle}deg, ${topFill.gradient.from}, ${topFill.gradient.to})`,
+            backgroundImage: gradientCss(topFill.gradient),
             WebkitBackgroundClip: 'text',
             backgroundClip: 'text',
             color: 'transparent',

@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react';
 import { useStudio } from '../../state/StudioContext';
 import { FX_CATALOG, fxCss, overlayCss, resolveFx, type FxCategory, type FxSpec } from '../../lib/effects';
+import { particleBurst } from '../../lib/particles';
+import { sizeAt } from '../../data/constants';
 
 /** لوح «تأثيرات» (٢٨ أكتوبر ٢٠٢٦) — كان «قريبًا» منذ بُني شريطُ الإضافة.
  *
@@ -28,6 +30,38 @@ export function FxLibrary() {
           </div>
         </section>
       ))}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="mz-label">{L.fx_cat_particles}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          <button
+            data-testid="fx-card-particle-burst"
+            className="mz-tile"
+            title={L.fx_particle_burst}
+            onClick={() => {
+              // دوائرُ حقيقيّةٌ مجمّعة من وسط اللوحة عند المؤشّر — انظر `lib/particles.ts`.
+              const pg = sizeAt(state.sizeIdx, state.customW, state.customH);
+              const els = particleBurst({ cx: pg.w / 2, cy: pg.h / 2, start: state.t, seed: Math.round(state.t * 1000) + state.elements.length }, pg);
+              actions.commitElements((cur) => [...cur, ...els], L.undo_fx_add);
+            }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: 0, border: 0, background: 'transparent', color: 'var(--text)', cursor: 'pointer' }}
+          >
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '1', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--line)', background: '#fff' }}>
+              {Array.from({ length: 14 }, (_, i) => {
+                const a = (i / 14) * Math.PI * 2;
+                const r = 26 + (i % 3) * 9;
+                const d = 5 + (i % 4) * 2;
+                return (
+                  <span
+                    key={i}
+                    style={{ position: 'absolute', left: `calc(50% + ${Math.cos(a) * r}% - ${d / 2}px)`, top: `calc(50% + ${Math.sin(a) * r}% - ${d / 2}px)`, width: d, height: d, borderRadius: '50%', background: ['#ff5ea8', '#ff9a3c', '#8b5cf6', '#3b82f6'][i % 4] }}
+                  />
+                );
+              })}
+            </div>
+            <span style={{ fontSize: 11, lineHeight: 1.3, textAlign: 'center' }}>{L.fx_particle_burst}</span>
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

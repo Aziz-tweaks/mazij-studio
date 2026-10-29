@@ -16,6 +16,7 @@ import { getVideoExportFrame, resetVideoExportEngine } from './videoExportEngine
 import { normalizeShutter, runningMeanAlpha, shutterIsOpen, shutterSampleTimes, type ShutterSpec } from './motionBlur';
 import { shapeTextOnCurve } from './textOnPath';
 import { justifyWithKashida } from './kashidaJustify';
+import { withCounterAt } from './textCounter';
 import {
   cssGradientLine,
   ellipseTracer,
@@ -28,6 +29,7 @@ import {
   resolveAppearance,
   resolveFillStyleCanvas,
   type ResolvedShadowPaint,
+  type GradientSpec,
 } from './appearance';
 
 export interface ArtboardRenderSpec {
@@ -406,7 +408,8 @@ function settledTimeOf(spec: Omit<ArtboardRenderSpec, 'scale'>): number {
 
 async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRenderSpec, 'scale'>, w: number, h: number) {
   const time = spec.time ?? settledTimeOf(spec);
-  for (const el of spec.elements) {
+  for (const rawEl of spec.elements) {
+    const el = withCounterAt(rawEl, time);
     if (!el.visible) continue;
     // الصوتُ يُسمَع ولا يُرى — مكانُه خلطُ الصوت في `videoExport.ts` لا الإطار.
     if (el.type === 'audio') continue;
@@ -723,7 +726,12 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
           blurPx,
           scaleMean: Math.sqrt(Math.max(0, sx) * Math.max(0, sy)),
         };
-        drawStaggeredText(ctx, el, bw, bh, dir, fontPx, time, ctx.globalAlpha, paint);
+        if (topFill?.gradient && !paint.stroke && !paint.shadows.length) {
+          // التدرّجُ في طبقة (انظر `withGradientTextLayer`): شفافيّةُ العنصر تُطبَّق مرّةً عند الوضع.
+          withGradientTextLayer(ctx, color, bw, bh, topFill.gradient, (c, solid) => drawStaggeredText(c, el, bw, bh, dir, fontPx, time, 1, { ...paint, fill: solid }));
+        } else {
+          drawStaggeredText(ctx, el, bw, bh, dir, fontPx, time, ctx.globalAlpha, paint);
+        }
       } else {
         let lines = wrapLines(ctx, el.text, bw);
         if (el.justify && dir === 'rtl') lines = await justifyCanvasLines(ctx, lines, bw);
@@ -756,8 +764,10 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
           lines.forEach((line, i) => ctx.fillText(line, alignX, startY + i * lineHeight));
           ctx.restore();
         }
-        ctx.fillStyle = color;
-        lines.forEach((line, i) => ctx.fillText(line, alignX, startY + i * lineHeight));
+        withGradientTextLayer(ctx, color, bw, bh, topFill?.gradient, (c, solid) => {
+          c.fillStyle = typeof color === 'string' ? color : solid;
+          lines.forEach((line, i) => c.fillText(line, alignX, startY + i * lineHeight));
+        });
         // Only the topmost visible stroke layer paints glyph outlines (multi-layer
         // text stroke isn't independently composited — a documented limitation).
         const topStroke = resolved.strokes[resolved.strokes.length - 1];
@@ -775,6 +785,56 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
 
     ctx.restore();
   }
+}
+
+/** **نصٌّ بتعبئةٍ متدرّجة يُرسَم في طبقةٍ ثم يُلوَّن — لا `fillText` بتدرّجٍ مباشرةً.**
+ *
+ * WebKit (محرّكُ مزيج على الماك والآيفون) يرسم النصَّ ذا التعبئة غير المصمتة (تدرّجًا أو
+ * نقشًا) بقصِّ التعبئة على **صندوق السطر** لا على الحروف، فما يتدلّى تحته يختفي: نقطتا
+ * الياء الأخيرة تحديدًا، فتصير «في» «فى» في كلّ عنوانٍ متدرّج (مقيسٌ في WebKit، وChromium
+ * سليم). فنرسم الحروفَ مصمتةً في طبقةٍ بحجم القماش وبالمصفوفة نفسِها، ثم نلوّنها بالتدرّج
+ * عبر `source-in`، ثم نضعها على القماش — فيسري عليها شفافيّةُ العنصر وضبابيّتُه وقناعُه
+ * كما كانت تسري على `fillText`. */
+let gradLayer: HTMLCanvasElement | null = null;
+function withGradientTextLayer(ctx: CanvasRenderingContext2D, fill: string | CanvasGradient, bw: number, bh: number, gradient: GradientSpec | undefined, draw: (c: CanvasRenderingContext2D, solid: string) => void): void {
+  if (typeof fill === 'string' || !gradient || typeof document === 'undefined') {
+    draw(ctx, typeof fill === 'string' ? fill : '#000000');
+    return;
+  }
+  const cw = ctx.canvas.width;
+  const ch = ctx.canvas.height;
+  if (!gradLayer) gradLayer = document.createElement('canvas');
+  if (gradLayer.width !== cw || gradLayer.height !== ch) {
+    gradLayer.width = cw;
+    gradLayer.height = ch;
+  }
+  const l = gradLayer.getContext('2d');
+  if (!l) {
+    draw(ctx, '#000000');
+    return;
+  }
+  l.setTransform(1, 0, 0, 1, 0, 0);
+  l.globalCompositeOperation = 'source-over';
+  l.globalAlpha = 1;
+  l.filter = 'none';
+  l.clearRect(0, 0, cw, ch);
+  l.setTransform(ctx.getTransform());
+  l.font = ctx.font;
+  l.textAlign = ctx.textAlign;
+  l.textBaseline = ctx.textBaseline;
+  l.direction = ctx.direction;
+  (l as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing = (ctx as CanvasRenderingContext2D & { letterSpacing?: string }).letterSpacing ?? '0px';
+  draw(l, '#000000');
+  l.globalCompositeOperation = 'source-in';
+  l.globalAlpha = 1;
+  l.filter = 'none';
+  l.fillStyle = resolveFillStyleCanvas(l, { id: '', opacity: 1, blend: 'normal', kind: 'gradient', color: gradient.from, gradient }, bw, bh);
+  l.fillRect(-bw, -bh, bw * 3, bh * 3);
+  l.globalCompositeOperation = 'source-over';
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(gradLayer, 0, 0);
+  ctx.restore();
 }
 
 /** يتتبّع أوامرَ مسارٍ بالبكسل على المسار الجاري **بلا** `beginPath` — شكلُ «المتتبِّع»
@@ -979,7 +1039,10 @@ function esc(s: string) {
  * مجموعته) وبخطّ CSS نفسه (`cssGradientLine`): كان `objectBoundingBox` مع
  * `rotate(angle)` — زاويةُ رياضيّات (٠ نحو اليمين) لا زاوية CSS التي تعرضها اللوحة،
  * وتدويرٌ في فضاءٍ مُطبَّع ينحرف على أيّ صندوقٍ غير مربّع. */
-function svgGradientDef(grad: { angle: number; from: string; to: string }, id: string, bw: number, bh: number): string {
+function svgGradientDef(grad: { angle: number; from: string; to: string; type?: 'linear' | 'radial' }, id: string, bw: number, bh: number): string {
+  if (grad.type === 'radial') {
+    return `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${bw / 2}" cy="${bh / 2}" r="${Math.max(1, Math.min(bw, bh) / 2)}"><stop offset="0" stop-color="${grad.from}" /><stop offset="1" stop-color="${grad.to}" /></radialGradient>`;
+  }
   const l = cssGradientLine(grad.angle, bw, bh);
   return `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${l.x0}" y1="${l.y0}" x2="${l.x1}" y2="${l.y1}"><stop offset="0" stop-color="${grad.from}" /><stop offset="1" stop-color="${grad.to}" /></linearGradient>`;
 }
@@ -1051,7 +1114,8 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
 
   // لحظةُ هذا الملفّ الساكن — نفسُ ما يُحلّ عنده كلُّ ما يأخذ زمنًا أدناه.
   const svgTime = spec.time ?? settledTimeOf(spec);
-  for (const el of spec.elements) {
+  for (const rawEl of spec.elements) {
+    const el = withCounterAt(rawEl, svgTime);
     if (!el.visible) continue;
     if (el.type === 'audio') continue; // لا صورةَ للصوت.
     // المؤثّراتُ للقُماش والفيديو وحدهما؛ ملفُّ SVG ساكنٌ لا زمنَ فيه — قيدٌ مُعلَن.

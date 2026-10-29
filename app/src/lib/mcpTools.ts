@@ -4,6 +4,7 @@ import type { DocElement } from '../state/elements';
 import { defaultAnim, defaultTextStagger, newElementId } from '../state/elements';
 import { SIZES, CUSTOM_SIZE_IDX, sizeAt, PALETTES } from '../data/constants';
 import { AR } from '../i18n/strings';
+import { MOTION_TOOLS } from './mcpMotionTools';
 
 /** Roadmap #20 (+ #24-ب, which will drive the exact same registry locally): the
  * single typed command surface for "the chat becomes an interface to the app".
@@ -599,6 +600,8 @@ export const MCP_TOOLS: McpTool[] = [
         transparent: { type: 'boolean' },
         fps: { type: 'number' },
         quality: { type: 'string', enum: ['high', 'med'] },
+        shutterSamples: { type: 'number', description: 'motion blur: sub-frame samples per frame (1 = off, 4–8 = smooth)' },
+        timeoutSec: { type: 'number', description: 'how long to wait for a long video export (default 60)' },
       },
       required: ['targets', 'format'],
       additionalProperties: false,
@@ -623,16 +626,58 @@ export const MCP_TOOLS: McpTool[] = [
       if (typeof args.transparent === 'boolean') ctx.actions.setExportTransparent(args.transparent);
       if (typeof args.fps === 'number') ctx.actions.setExportFps(args.fps);
       if (typeof args.quality === 'string') ctx.actions.setExportQuality(args.quality as 'high' | 'med');
+      if (typeof args.shutterSamples === 'number') ctx.actions.setExportShutterSamples(Math.max(1, Math.round(args.shutterSamples)));
 
       // `startExport` reads `exportScale`/`exportFormat`/etc. from the *current*
       // render's closure (via the live-actions proxy) — it must not fire before
       // the setters above have actually flushed, or it exports with stale options.
       await flush();
       ctx.actions.startExport();
-      await waitFor(() => ctx.getState().exportState === 'done' || ctx.getState().exportState === 'error' || ctx.getState().exportState === 'unavailable', 60_000);
+      await waitFor(() => ctx.getState().exportState === 'done' || ctx.getState().exportState === 'error' || ctx.getState().exportState === 'unavailable', Math.max(60, num(args.timeoutSec, 60)) * 1000);
       const state = ctx.getState();
       if (state.exportState === 'unavailable') throw new Error('this export (video) needs the packaged Tauri app — unavailable in this environment');
       return { state: state.exportState, paths: state.exportedPaths, results: state.exportResults };
+    },
+  },
+  ...MOTION_TOOLS,
+  {
+    name: 'batch',
+    descriptionAr: 'تنفيذ عدة أدوات بالترتيب في نداء واحد. يمكن الإشارة لمعرّف عنصر أنشأه نداء سابق بـ"$N" (رقم النداء من 0).',
+    descriptionEn: 'Run several tools in order in one call. Reference an id created by an earlier call as "$N" (0-based call index) anywhere in args. Stops at the first error and reports it.',
+    inputSchema: {
+      type: 'object',
+      properties: { calls: { type: 'array', items: { type: 'object', properties: { tool: { type: 'string' }, args: { type: 'object' } }, required: ['tool'] } } },
+      required: ['calls'],
+      additionalProperties: false,
+    },
+    run: async (args, ctx) => {
+      const calls = Array.isArray(args.calls) ? (args.calls as Array<{ tool?: unknown; args?: unknown }>) : [];
+      const ids: Array<string | null> = [];
+      const results: unknown[] = [];
+      const sub = (v: unknown): unknown => {
+        if (typeof v === 'string' && /^\$\d+$/.test(v)) {
+          const id = ids[Number(v.slice(1))];
+          if (!id) throw new Error(`"${v}" does not refer to an element created earlier in this batch`);
+          return id;
+        }
+        if (Array.isArray(v)) return v.map(sub);
+        if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, sub(x)]));
+        return v;
+      };
+      for (let i = 0; i < calls.length; i++) {
+        const name = typeof calls[i].tool === 'string' ? (calls[i].tool as string) : '';
+        const tool = MCP_TOOLS.find((t) => t.name === name);
+        if (!tool || name === 'batch') return { ok: false, failedAt: i, error: `unknown tool "${name}"`, results };
+        try {
+          const r = (await tool.run(sub(calls[i].args ?? {}) as Record<string, unknown>, ctx)) as Record<string, unknown> | null;
+          const id = r && typeof r === 'object' ? (typeof r.id === 'string' ? r.id : typeof r.groupId === 'string' ? r.groupId : null) : null;
+          ids.push(id);
+          results.push(id ? { id } : r);
+        } catch (e) {
+          return { ok: false, failedAt: i, error: e instanceof Error ? e.message : String(e), results };
+        }
+      }
+      return { ok: true, results };
     },
   },
   {

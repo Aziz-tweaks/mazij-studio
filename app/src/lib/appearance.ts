@@ -25,7 +25,15 @@ export interface ResolvedFillPaint {
   blend: AppearanceFillLayer['blend'];
   kind: 'solid' | 'gradient';
   color: string;
-  gradient?: { angle: number; from: string; to: string };
+  gradient?: GradientSpec;
+}
+
+/** تدرّج من لونين — خطّي بزاوية CSS أو دائري (`radial`) من المركز إلى أقرب حافة. */
+export interface GradientSpec { angle: number; from: string; to: string; type?: 'linear' | 'radial' }
+
+/** قيمة CSS للتدرّج نفسها التي يرسمها الكانفس والـSVG. */
+export function gradientCss(g: GradientSpec, from = g.from, to = g.to): string {
+  return g.type === 'radial' ? `radial-gradient(circle closest-side, ${from}, ${to})` : `linear-gradient(${g.angle}deg, ${from}, ${to})`;
 }
 
 export interface ResolvedStrokePaint {
@@ -269,7 +277,7 @@ export function resolveAppearance(el: DocElement, pal: Palette): ResolvedAppeara
         blend: f.blend,
         kind: f.kind,
         color: resolveLayerColor(f.color, f.colorToken, pal),
-        gradient: f.kind === 'gradient' ? { angle: f.gradientAngle, from: f.gradientFrom, to: f.gradientTo } : undefined,
+        gradient: f.kind === 'gradient' ? { angle: f.gradientAngle, from: f.gradientFrom, to: f.gradientTo, type: f.gradientType ?? 'linear' } : undefined,
       })),
     strokes: stack.strokes
       .filter((s) => s.visible)
@@ -412,7 +420,14 @@ export function cssGradientLine(angle: number, bw: number, bh: number): { x0: nu
   return { x0: cx - dx * half, y0: cy - dy * half, x1: cx + dx * half, y1: cy + dy * half };
 }
 
-function buildLinearGradient(ctx: CanvasRenderingContext2D, grad: { angle: number; from: string; to: string }, bw: number, bh: number): CanvasGradient {
+function buildLinearGradient(ctx: CanvasRenderingContext2D, grad: GradientSpec, bw: number, bh: number): CanvasGradient {
+  if (grad.type === 'radial') {
+    // يطابق `circle closest-side` في CSS و`r = min/2` في الـSVG.
+    const g = ctx.createRadialGradient(bw / 2, bh / 2, 0, bw / 2, bh / 2, Math.max(1, Math.min(bw, bh) / 2));
+    g.addColorStop(0, grad.from);
+    g.addColorStop(1, grad.to);
+    return g;
+  }
   const l = cssGradientLine(grad.angle, bw, bh);
   const g = ctx.createLinearGradient(l.x0, l.y0, l.x1, l.y1);
   g.addColorStop(0, grad.from);
@@ -562,7 +577,7 @@ export function fillsToCss(fills: ResolvedFillPaint[]): FillCss {
   }
   const images = fills.map((f) =>
     f.kind === 'gradient' && f.gradient
-      ? `linear-gradient(${f.gradient.angle}deg, ${withAlpha(f.gradient.from, f.opacity)}, ${withAlpha(f.gradient.to, f.opacity)})`
+      ? gradientCss(f.gradient, withAlpha(f.gradient.from, f.opacity), withAlpha(f.gradient.to, f.opacity))
       : `linear-gradient(${withAlpha(f.color, f.opacity)}, ${withAlpha(f.color, f.opacity)})`,
   );
   return { backgroundImage: images.join(', '), backgroundBlendMode: fills.map((f) => f.blend).join(', ') };

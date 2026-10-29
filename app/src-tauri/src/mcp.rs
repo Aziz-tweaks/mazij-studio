@@ -705,13 +705,17 @@ fn route_tools_call(id: Value, params: &Value) -> Response<Cursor<Vec<u8>>> {
         }
         st.next_id += 1;
         let call_id = format!("call-{}", st.next_id);
+        // المهلةُ على قدر الأداة: تصديرُ فيديو طويل يأخذ دقائق وهو يعمل فعلًا، فمهلةٌ ثابتةٌ
+        // بعشرين ثانية كانت تُبلغ الوكيلَ بفشلٍ والتصديرُ ماضٍ في التطبيق.
+        let wait_secs = tool_wait_secs(&name, &arguments);
         st.queue.push_back(PendingCall { id: call_id.clone(), tool: name, arguments });
-        call_id
+        (call_id, wait_secs)
     };
+    let (call_id, wait_secs) = call_id;
     sh.call_added.notify_all();
 
     let mut st = sh.state.lock().unwrap();
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + Duration::from_secs(wait_secs);
     loop {
         if let Some(outcome) = st.results.remove(&call_id) {
             return match outcome {
@@ -734,6 +738,19 @@ fn route_tools_call(id: Value, params: &Value) -> Response<Cursor<Vec<u8>>> {
         }
         let (guard, _) = sh.result_added.wait_timeout(st, deadline - now).unwrap();
         st = guard;
+    }
+}
+
+/// كم ينتظر الخادمُ ردَّ النافذة على أداةٍ بعينها.
+fn tool_wait_secs(name: &str, arguments: &Value) -> u64 {
+    match name {
+        "export_run" => {
+            let t = arguments.get("timeoutSec").and_then(|v| v.as_f64()).unwrap_or(60.0);
+            (t.clamp(60.0, 3600.0) as u64) + 15
+        }
+        "image_trace" => 180,
+        "batch" => 900,
+        _ => 20,
     }
 }
 

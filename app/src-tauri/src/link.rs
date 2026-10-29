@@ -186,7 +186,9 @@ pub fn run_stdio_proxy() {
                 conn = connect(Duration::from_secs(if attempt == 0 { 20 } else { 8 }));
             }
             let Some((port, token)) = conn.clone() else { break };
-            match post(port, "/mcp", &token, &line, Duration::from_secs(40)) {
+            // الخادمُ نفسُه يَحدّ كلَّ أداةٍ بمهلتها (`tool_wait_secs` في mcp.rs، حتى ساعةٍ للتصدير)،
+            // فلا يقطع الجسرُ قبله.
+            match post(port, "/mcp", &token, &line, Duration::from_secs(3700)) {
                 Ok((200, body)) => {
                     // ردٌّ بصيغة SSE (‏`data: {...}`) أو JSON صريح.
                     let json_text = body.lines().find_map(|l| l.strip_prefix("data:")).map(|s| s.trim().to_string()).unwrap_or(body);

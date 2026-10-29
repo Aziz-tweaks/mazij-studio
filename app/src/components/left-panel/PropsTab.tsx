@@ -1105,12 +1105,20 @@ function ShapeProps({ el }: { el: DocElement & { type: 'shape' } }) {
         {baseFillLayer && (
           <select
             data-testid={`shape-fill-kind-${el.id}`}
-            value={baseFillLayer.kind}
-            onChange={(e) => actions.updateFillLayer(el.id, baseFillLayer.id, { kind: e.target.value as AppearanceFillLayer['kind'] })}
+            value={baseFillLayer.kind === 'gradient' && baseFillLayer.gradientType === 'radial' ? 'radial' : baseFillLayer.kind}
+            onChange={(e) => {
+              const v = e.target.value;
+              actions.updateFillLayer(
+                el.id,
+                baseFillLayer.id,
+                v === 'radial' ? { kind: 'gradient', gradientType: 'radial' } : { kind: v as AppearanceFillLayer['kind'], gradientType: 'linear' },
+              );
+            }}
             style={{ height: 24, border: '1px solid var(--line)', borderRadius: 4, background: 'var(--surface)', fontSize: 11 }}
           >
             <option value="solid">{L.appearance_solid}</option>
             <option value="gradient">{L.appearance_gradient}</option>
+            <option value="radial">{L.appearance_radial}</option>
           </select>
         )}
         {baseFillLayer && baseFillLayer.kind === 'gradient' && (
