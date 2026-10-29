@@ -576,6 +576,35 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
+    name: 'audio_insert_from_path',
+    descriptionAr: 'إدراج صوت (موسيقى أو تعليق صوتي) من ملف داخل ~/Mazij: طبقة صوت تبدأ عند start (ثوانٍ) وتُخلط في الفيديو المصدَّر. volume ٠..١.',
+    descriptionEn: 'Insert audio (music or voice-over) from a file under ~/Mazij: an audio layer starting at `start` seconds, mixed into the exported video. volume 0..1.',
+    inputSchema: { type: 'object', properties: { path: { type: 'string' }, start: { type: 'number' }, volume: { type: 'number' }, duration: { type: 'number' } }, required: ['path'], additionalProperties: false },
+    run: async (args, ctx) => {
+      const { inTauri } = await import('./tauriEnv');
+      if (!inTauri) throw new Error('audio_insert_from_path requires the real Tauri app');
+      const path = str(args.path);
+      const { readFile } = await import('@tauri-apps/plugin-fs');
+      const bytes = await readFile(path);
+      const name = path.split('/').pop() || 'audio';
+      const ext = name.split('.').pop()?.toLowerCase();
+      const mime = ext === 'wav' ? 'audio/wav' : ext === 'm4a' || ext === 'aac' ? 'audio/mp4' : ext === 'ogg' ? 'audio/ogg' : 'audio/mpeg';
+      const before = new Set(ctx.getState().elements.map((e) => e.id));
+      await ctx.actions.insertAudioFromFile(new File([bytes], name, { type: mime }));
+      await flush();
+      const st = ctx.getState();
+      if (st.audioError) throw new Error(st.audioError);
+      const el = st.elements.find((e) => !before.has(e.id) && e.type === 'audio');
+      if (!el) throw new Error('audio was not inserted');
+      const start = typeof args.start === 'number' ? Math.max(0, args.start) : el.anim.start;
+      const volume = typeof args.volume === 'number' ? Math.max(0, Math.min(1, args.volume)) : 1;
+      const duration = typeof args.duration === 'number' && args.duration > 0 ? args.duration : el.anim.duration;
+      ctx.actions.commitElements((els) => els.map((e) => (e.id === el.id ? ({ ...e, volume, anim: { ...e.anim, start, duration } } as DocElement) : e)));
+      await flush();
+      return { id: el.id, start, duration, volume };
+    },
+  },
+  {
     name: 'image_trace',
     descriptionAr: 'تتبُّع صورةٍ إلى أشكالٍ متجهة تُعدَّل (على الجهاز، بلا شبكة): تُضاف فوقها مباشرةً مجموعةُ مساراتٍ بألوانها، وتُخفى الصورة الأصليّة ولا تُحذف. بلا `id`: الصورة المحدَّدة، أو أعلى صورةٍ ظاهرة إن لم يُحدَّد شيء.',
     descriptionEn: 'Trace an image into editable vector shapes (on-device, offline): a group of filled paths in its exact colors is added right above it, and the original image is hidden, not deleted. Without `id`: the selected image, or the topmost visible one when nothing is selected.',
