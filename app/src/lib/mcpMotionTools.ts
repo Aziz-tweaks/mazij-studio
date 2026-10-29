@@ -1,6 +1,6 @@
 import type { McpTool, McpCtx } from './mcpTools';
 import type { AnimProperty, DocElement, PropertyKeyframe, PropertyTracks, TextCounter, TextStaggerAnim } from '../state/elements';
-import { newElementId } from '../state/elements';
+import { newElementId, defaultAnim } from '../state/elements';
 import { DEFAULT_BEZIER, EASING_IDS, applyEasing, type Bezier, type EasingId } from './easing';
 import { currentAppearance, newFillLayer } from './appearance';
 import { sizeAt } from '../data/constants';
@@ -138,6 +138,42 @@ export const MOTION_TOOLS: McpTool[] = [
       ctx.actions.commitElements((cur) => cur.map((e) => next.get(e.id) ?? e));
       await flush();
       return { gaps, closed: todo.length, stretched: next.size };
+    },
+  },
+  {
+    name: 'effect_add',
+    descriptionAr: 'يضيف طبقة مؤثّر فوق كل ما تحتها على الخط الزمني: فلتر لوني (warm, cool, vivid, cinema…)، مؤثّر (blur, grain, vignette, glow, shake…)، أو انتقال (tr_flash, tr_blur, tr_zoom…). amount = الشدّة ٠..١.',
+    descriptionEn: 'Add an effect layer over everything beneath it on the timeline: a color filter (warm, cool, vivid, cinema…), an effect (blur, grain, vignette, glow, shake…) or a transition (tr_flash, tr_blur, tr_zoom…). amount = strength 0..1.',
+    inputSchema: {
+      type: 'object',
+      properties: { kind: { type: 'string' }, start: { type: 'number' }, duration: { type: 'number' }, amount: { type: 'number' }, fadeIn: { type: 'number' }, fadeOut: { type: 'number' } },
+      required: ['kind'],
+      additionalProperties: false,
+    },
+    run: async (args, ctx) => {
+      const { FX_CATALOG } = await import('./effects');
+      const spec = FX_CATALOG.find((f) => f.id === args.kind);
+      if (!spec) throw new Error(`unknown effect "${String(args.kind)}" — one of ${FX_CATALOG.map((f) => f.id).join(', ')}`);
+      const start = Math.max(0, n(args.start, 0));
+      const duration = Math.max(1 / 60, n(args.duration, spec.defaultDuration));
+      const id = newElementId('fx');
+      const el = {
+        id,
+        type: 'fx',
+        visible: true,
+        locked: false,
+        opacity: 100,
+        maskId: null,
+        geo: { x: 0, y: 0, w: 0, h: 0, rotation: 0 },
+        fx: spec.id,
+        amount: Math.max(0, Math.min(1, n(args.amount, 1))),
+        fadeIn: Math.max(0, n(args.fadeIn, 0)),
+        fadeOut: Math.max(0, n(args.fadeOut, 0)),
+        anim: { ...defaultAnim('none', start, duration), tracks: {}, bounded: true },
+      } as unknown as DocElement;
+      ctx.actions.commitElements((els) => [...els, el]);
+      await flush();
+      return { id, kind: spec.id, start, duration };
     },
   },
   {
@@ -363,10 +399,19 @@ export const MOTION_TOOLS: McpTool[] = [
     name: 'templates_render_png',
     descriptionAr: 'يصدّر قوالب مزيج الجاهزة صورًا (PNG) إلى ~/Mazij/Renders دون لمس المستند — لاستعمالها صورًا داخل تصميم آخر.',
     descriptionEn: 'Render Mazij starter templates to PNG files in ~/Mazij/Renders without touching the document — to use them as images inside another design.',
-    inputSchema: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' } }, scale: { type: 'number' } }, additionalProperties: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'string' } },
+        scale: { type: 'number' },
+        fontFamily: { type: 'string', description: 'render every text in the templates with this font family (e.g. one added by fonts_add_from_path) — keeps a whole video in one typeface' },
+      },
+      additionalProperties: false,
+    },
     run: async (args) => {
       const { inTauri } = await import('./tauriEnv');
       if (!inTauri) throw new Error('templates_render_png needs the real app');
+      const family = typeof args.fontFamily === 'string' && args.fontFamily ? args.fontFamily : null;
       const { STARTER_TEMPLATES } = await import('./starterTemplates');
       const { SIZES, PALETTES } = await import('../data/constants');
       const { renderArtboardPng } = await import('./exportArtboard');
@@ -379,8 +424,8 @@ export const MOTION_TOOLS: McpTool[] = [
       for (const tp of STARTER_TEMPLATES) {
         if (want && !want.includes(tp.id)) continue;
         const size = SIZES[tp.sizeIdx];
-        const blob = await renderArtboardPng({ size, palette: PALETTES[tp.paletteIdx] ?? PALETTES[0], elements: tp.elements(), transparent: false, scale: n(args.scale, 1), lang: 'ar', decorAccent: tp.decorAccent, placeholders: 'block' } as never);
-        const path = await join(dir, `${tp.id}.png`);
+        const blob = await renderArtboardPng({ size, palette: PALETTES[tp.paletteIdx] ?? PALETTES[0], elements: family ? tp.elements().map((e) => (e.type === 'text' ? { ...e, fontFamily: family } : e)) : tp.elements(), transparent: false, scale: n(args.scale, 1), lang: 'ar', decorAccent: tp.decorAccent, placeholders: 'block' } as never);
+        const path = await join(dir, family ? `${tp.id}--${family.replace(/[^A-Za-z0-9-]/g, '')}.png` : `${tp.id}.png`);
         await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
         out.push({ id: tp.id, path, w: size.w, h: size.h });
       }

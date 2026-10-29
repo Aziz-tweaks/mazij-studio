@@ -1,3 +1,4 @@
+import { drawBlurred } from './canvasBlur';
 /** **مكتبةُ الفلاتر والمؤثّرات والانتقالات** (٢٨ أكتوبر ٢٠٢٦).
  *
  * **الفكرة: طبقةُ مؤثّر.** المؤثّرُ عنصرٌ في الطبقات (`FxElement`) لا يُرسَم بنفسه، بل
@@ -396,48 +397,6 @@ export function applyColorOps(data: Uint8ClampedArray, ops: ColorOp[]): void {
   }
 }
 
-/** ضبابيّةٌ احتياطيّة حين لا يعرف القُماشُ `ctx.filter` (WebKit): ثلاثُ تمريراتِ صندوقٍ
- * تقارب الغاوسيّة بانحرافٍ `sigma` — وهو معنى `blur(Npx)` في CSS. */
-function boxBlurImage(img: ImageData, sigma: number): void {
-  const w = img.width;
-  const h = img.height;
-  const boxes = 3;
-  const wIdeal = Math.sqrt((12 * sigma * sigma) / boxes + 1);
-  let wl = Math.floor(wIdeal);
-  if (wl % 2 === 0) wl--;
-  const wu = wl + 2;
-  const m = Math.round((12 * sigma * sigma - boxes * wl * wl - 4 * boxes * wl - 3 * boxes) / (-4 * wl - 4));
-  const radii = [0, 1, 2].map((i) => ((i < m ? wl : wu) - 1) / 2);
-  const src = new Float32Array(img.data.length);
-  for (let i = 0; i < src.length; i++) src[i] = img.data[i];
-  const tmp = new Float32Array(src.length);
-  const pass = (a: Float32Array, b: Float32Array, r: number, horiz: boolean) => {
-    const len = horiz ? w : h;
-    const lines = horiz ? h : w;
-    const inv = 1 / (2 * r + 1);
-    for (let line = 0; line < lines; line++) {
-      for (let c = 0; c < 4; c++) {
-        const idx = (k: number) => {
-          const kk = k < 0 ? 0 : k >= len ? len - 1 : k;
-          return ((horiz ? line * w + kk : kk * w + line) << 2) + c;
-        };
-        let acc = 0;
-        for (let k = -r; k <= r; k++) acc += a[idx(k)];
-        for (let k = 0; k < len; k++) {
-          b[idx(k)] = acc * inv;
-          acc += a[idx(k + r + 1)] - a[idx(k - r)];
-        }
-      }
-    }
-  };
-  for (const r of radii) {
-    if (r <= 0) continue;
-    pass(src, tmp, r, true);
-    pass(tmp, src, r, false);
-  }
-  for (let i = 0; i < src.length; i++) img.data[i] = src[i];
-}
-
 function paintOverlay(ctx: CanvasRenderingContext2D, o: FxOverlay, w: number, h: number): void {
   if (!(o.a > 0)) return;
   ctx.save();
@@ -472,6 +431,7 @@ function paintOverlay(ctx: CanvasRenderingContext2D, o: FxOverlay, w: number, h:
 /** يطبّق المؤثّر على **كلّ ما رُسم على القُماش حتى الآن** — نظيرُ غلاف المعاينة الذي
  * يضمّ ما تحت الطبقة. الترتيبُ ترتيبُ CSS: الفلتر في الفضاء المحلّيّ (ضبابيّةٌ ثم لون)،
  * ثم التحويلُ، ثم طبقاتُ التغطية فوق الكلّ. */
+let fxWork: HTMLCanvasElement | null = null;
 export function applyFxToCanvas(ctx: CanvasRenderingContext2D, r: FxResolved): void {
   const canvas = ctx.canvas;
   const w = canvas.width;
@@ -480,10 +440,19 @@ export function applyFxToCanvas(ctx: CanvasRenderingContext2D, r: FxResolved): v
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (hasPixelWork) {
-    const work = document.createElement('canvas');
-    work.width = w;
-    work.height = h;
-    const wctx = work.getContext('2d', { willReadFrequently: true })!;
+    // لوحةُ عملٍ واحدةٌ تُعاد كلَّ إطار — لوحةٌ جديدةٌ بحجم الإطار في كلّ إطارٍ تُراكم ذاكرةَ القماش
+    // في WebKit حتى يضيق بها التصديرُ الطويل.
+    if (!fxWork) fxWork = document.createElement('canvas');
+    const work = fxWork;
+    if (work.width !== w || work.height !== h) {
+      work.width = w;
+      work.height = h;
+    }
+    const wctx = work.getContext('2d', { willReadFrequently: r.ops.length > 0 })!;
+    wctx.setTransform(1, 0, 0, 1, 0, 0);
+    wctx.globalAlpha = 1;
+    wctx.globalCompositeOperation = 'source-over';
+    wctx.clearRect(0, 0, w, h);
     const blurPx = r.blur * w;
     if (blurPx > 0 && canvasSupportsBlurFilter()) {
       (wctx as CanvasRenderingContext2D & { filter: string }).filter = `blur(${blurPx.toFixed(3)}px)`;
@@ -495,10 +464,12 @@ export function applyFxToCanvas(ctx: CanvasRenderingContext2D, r: FxResolved): v
         wctx.putImageData(img, 0, 0);
       }
     } else {
-      wctx.drawImage(canvas, 0, 0);
-      if (blurPx > 0 || r.ops.length) {
+      // WebKit بلا `ctx.filter`: الضبابُ بهرم المعالج الرسوميّ (`drawBlurred`) لا بصندوقٍ على
+      // البكسلات — ذاك جعل طبقةَ «ضبابيّة» على فيلمٍ كامل تأخذ ساعات. واللونُ وحده يبقى على البكسلات.
+      if (blurPx > 0) drawBlurred(wctx, canvas, 0, 0, w, h, 0, 0, blurPx);
+      else wctx.drawImage(canvas, 0, 0);
+      if (r.ops.length) {
         const img = wctx.getImageData(0, 0, w, h);
-        if (blurPx > 0) boxBlurImage(img, blurPx);
         applyColorOps(img.data, r.ops);
         wctx.putImageData(img, 0, 0);
       }
