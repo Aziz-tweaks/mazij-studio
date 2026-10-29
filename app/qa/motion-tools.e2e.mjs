@@ -78,7 +78,9 @@ ok(bad.ok === false && bad.failedAt === 0, 'مرجعٌ غيرُ موجودٍ ي�
 // ٦. الزجاج والكاميرا والقوالب والخطوط
 const gl = await call('element_set_glass', { id: tx.id, mode: 'tube', colors: ['#ff2d87', '#ff6a2b'], rim: '#7f8cff', core: '#ff7a1f' });
 ok(gl.glass?.mode === 'tube', 'خامةُ الزجاج على النصّ');
-const cam = await call('group_camera', { ids: [sh.id], keys: [{ t: 1.5, zoom: 1 }, { t: 2.5, zoom: 3 }] });
+const camEl = await call('element_add_shape', { shape: 'ellipse', x: 1500, y: 100, w: 200, h: 200 });
+await call('element_animate', { id: camEl.id, start: 1.5, duration: 1, tracks: { opacity: [{ t: 0, v: 1 }] } });
+const cam = await call('group_camera', { ids: [camEl.id], keys: [{ t: 1.5, zoom: 1 }, { t: 2.5, zoom: 3 }] });
 ok(cam.moved === 1, 'حركةُ الكاميرا كُتبت في مفاتيح العنصر');
 const rnd = await call('templates_render_png', { ids: ['demo-poster'] });
 ok(rnd.renders?.length === 1 && rnd.renders[0].path.endsWith('demo-poster.png'), 'قالبٌ جاهز صُدِّر صورةً');
@@ -103,13 +105,14 @@ ok(te && te.tracking === -2 && te.lineHeight === 1.4, 'التتبّعُ وتبا
 const ge = findEl(doc, b.results[0].id);
 ok(ge && ge.name === 'عنوانٌ متدرّج' && ge.pivot?.y === 1, 'الاسمُ والارتكاز');
 ok(te && te.glass?.mode === 'tube', 'الزجاجُ محفوظٌ في المستند');
-ok(se && se.anim.tracks.scale.length > 20 && Math.abs(se.anim.tracks.scale[se.anim.tracks.scale.length - 1].value - 3) < 0.05, 'الكاميرا: المقياسُ يبلغ ٣ في آخر المقطع');
+const ce = findEl(doc, camEl.id);
+ok(ce && ce.anim.tracks.scale.length > 20 && Math.abs(ce.anim.tracks.scale[ce.anim.tracks.scale.length - 1].value - 3) < 0.05, 'الكاميرا: المقياسُ يبلغ ٣ في آخر المقطع');
 
 // ٦. التصدير — PNG، ونقطتا الياء في «في» المتدرّجة
 const exportsDir = join(homedir(), 'Mazij/Exports');
 const before = new Set(readdirSync(exportsDir));
 // النصُّ المتدرّج وحده: نُخفي ما سواه بحذفه، لأنّ القياس على عمود الياء.
-for (const id of [sh.id, tx.id, ...pb.ids]) await call('element_delete', { id });
+for (const id of [sh.id, tx.id, camEl.id, ...pb.ids]) await call('element_delete', { id });
 await call('document_set_background', { color: '#ffffff' });
 const ex = await call('export_run', { targets: ['yt-video'], format: 'png', timeoutSec: 120 });
 ok(ex.state === 'done', 'التصديرُ اكتمل');
