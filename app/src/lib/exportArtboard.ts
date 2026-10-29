@@ -256,6 +256,59 @@ function drawStaggerToken(ctx: CanvasRenderingContext2D, text: string, anchorX: 
   ctx.restore();
 }
 
+function drawSlicedLine(
+  ctx: CanvasRenderingContext2D,
+  lineTokens: PositionedToken[],
+  dir: 'rtl' | 'ltr',
+  effectiveAlign: 'left' | 'right' | 'center',
+  anchorX: number,
+  baselineY: number,
+  resolve: (tok: StaggerToken) => UnitVisual,
+  fontPx: number,
+  elementAlpha: number,
+  paint: StaggerPaint,
+) {
+  const texts = lineTokens.map((p) => p.tok.text);
+  const line = texts.join('');
+  const full = ctx.measureText(line).width;
+  const cum = [0];
+  for (let i = 1; i <= texts.length; i++) cum.push(i === texts.length ? full : Math.min(full, Math.max(cum[i - 1], ctx.measureText(texts.slice(0, i).join('')).width)));
+  const rightEdge = effectiveAlign === 'right' ? anchorX : effectiveAlign === 'left' ? anchorX + full : anchorX + full / 2;
+  const leftEdge = rightEdge - full;
+  const top = -fontPx * 1.6;
+  const tall = fontPx * 2.4;
+  lineTokens.forEach((p, i) => {
+    const visual = resolve(p.tok);
+    if (visual.opacity <= 0) return;
+    const w = cum[i + 1] - cum[i];
+    if (w <= 0) return;
+    // حافّةُ البداية لهذه الشريحة (يمينُها في العربيّة) — محورُ حركتها كما في المسار المعزول.
+    const edge = dir === 'rtl' ? rightEdge - cum[i] : leftEdge + cum[i];
+    ctx.save();
+    if (visual.blur > 0) {
+      const unitPx = visual.blur * fontPx * paint.scaleMean;
+      ctx.filter = `blur(${Math.hypot(paint.blurPx, unitPx).toFixed(3)}px)`;
+    }
+    ctx.translate(edge, baselineY);
+    if (visual.translateY !== 0) ctx.translate(0, visual.translateY * fontPx);
+    if (visual.rotateDeg !== 0) ctx.rotate((visual.rotateDeg * Math.PI) / 180);
+    if (visual.scale !== 1) ctx.scale(visual.scale, visual.scale);
+    // الطرفان يتجاوزان الحدَّ بنصف بكسل فلا يظهر شقٌّ بين شريحتين ساكنتين؛ وأوّلُ شريحةٍ
+    // وآخرُها مفتوحتان للخارج (ذيولُ الحروف ونقاطُها قد تتجاوز عرضَ القياس).
+    const first = i === 0;
+    const last = i === lineTokens.length - 1;
+    const outA = first ? fontPx : 0.5;
+    const outB = last ? fontPx : 0.5;
+    ctx.beginPath();
+    if (dir === 'rtl') ctx.rect(-w - outB, top, w + outA + outB, tall);
+    else ctx.rect(-outA, top, w + outA + outB, tall);
+    ctx.clip();
+    ctx.textAlign = dir === 'rtl' ? 'right' : 'left';
+    paintTextRun(ctx, line, dir === 'rtl' ? cum[i] : -cum[i], 0, paint, elementAlpha * visual.opacity);
+    ctx.restore();
+  });
+}
+
 /** Lays out and draws one visual line's tokens left-to-right-on-screen regardless of
  * script direction: for `dir==='rtl'` the first *logical* token (array order — the
  * order it was typed/stored in, same convention `buildStaggerTokens` uses) anchors
@@ -277,6 +330,14 @@ function drawStaggerLine(
   elementAlpha: number,
   paint: StaggerPaint,
 ) {
+  // **الحروفُ الموصولة تُقطَع من سطرها لا تُشكَّل وحدها.** محرفُ الوصل (ZWJ) لا يكفي: خطٌّ
+  // مُحمَّل لا يحوي رمزًا له (وهو شائعٌ في خطوطٍ عربيّةٍ كثيرة) يجعل WebKit يُكمل المحرفَ بخطٍّ آخر فينقطع المقطع
+  // ويُرسَم كلُّ حرفٍ معزولًا وأعرض. فنرسم السطرَ كاملًا مشكَّلًا، ولكلّ وحدةٍ شريحتُها منه
+  // (قصٌّ بين حدَّي بادئتها) بحركتها هي — فتبقى الكلمةُ موصولةً وكلُّ حرفٍ يتحرّك وحده.
+  if (lineTokens.some((p) => p.tok.shaped !== p.tok.text)) {
+    drawSlicedLine(ctx, lineTokens, dir, effectiveAlign, anchorX, baselineY, resolve, fontPx, elementAlpha, paint);
+    return;
+  }
   const widths = lineTokens.map((p) => ctx.measureText(p.tok.shaped).width);
   const totalWidth = widths.reduce((a, b) => a + b, 0);
   const rightEdge = effectiveAlign === 'right' ? anchorX : effectiveAlign === 'left' ? anchorX + totalWidth : anchorX + totalWidth / 2;

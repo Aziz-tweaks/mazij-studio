@@ -52,6 +52,164 @@ const KEY_SCHEMA = {
 
 export const MOTION_TOOLS: McpTool[] = [
   {
+    name: 'element_get_anim',
+    descriptionAr: 'قراءة حركة عنصر كاملةً: توقيت المقطع وكل مفاتيح كل خاصية (x/y/blur بالبكسل) — للتحقق مما بُني.',
+    descriptionEn: 'Read an element\'s full motion: clip timing and every key of every property (x/y/blur in pixels) — to verify what was built.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, maxKeys: { type: 'number' } }, required: ['id'], additionalProperties: false },
+    run: async (args, ctx) => {
+      const el = need(ctx, args.id);
+      const W = page(ctx).w;
+      const max = Math.max(2, n(args.maxKeys, 12));
+      const tracks: Record<string, { count: number; keys: [number, number, string][] }> = {};
+      for (const [p, list] of Object.entries(el.anim.tracks as Record<string, PropertyKeyframe[]>)) {
+        if (!list?.length) continue;
+        const step = Math.max(1, Math.ceil(list.length / max));
+        const pick = list.filter((_, i) => i % step === 0 || i === list.length - 1);
+        tracks[p] = { count: list.length, keys: pick.map((k) => [k.time, Math.round((PX_PROPS.has(p as AnimProperty) ? k.value * W : k.value) * 1000) / 1000, k.easing]) };
+      }
+      return { id: el.id, start: el.anim.start, duration: el.anim.duration, sourceIn: el.anim.sourceIn ?? 0, bounded: !!el.anim.bounded, preset: el.anim.preset, opacity: el.opacity, geo: el.geo, tracks };
+    },
+  },
+  {
+    name: 'timeline_close_gaps',
+    descriptionAr: 'يجد اللحظات الفارغة بين المشاهد (لا عنصر ظاهر) ويمدّ المشهد الخارج حتى يلتقي بالداخل، فيصير الفيلم متصلًا. dryRun = يُبلغ عن الفجوات فقط.',
+    descriptionEn: 'Find blank spans between scenes (no element visible) and hold the outgoing scene until the next one arrives, so the film reads as one continuous take. dryRun = only report the gaps.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        maxGap: { type: 'number', description: 'only close gaps up to this many seconds (default 1.2)' },
+        overlap: { type: 'number', description: 'extra seconds the outgoing scene overlaps the incoming one (default 0.15)' },
+        keep: { type: 'array', items: { type: 'array', items: { type: 'number' } }, description: '[from,to] spans that are blank on purpose' },
+        minOpacity: { type: 'number', description: 'an element counts as visible above this opacity (default 0.35)' },
+        maxBlurPx: { type: 'number', description: '…and below this blur in px (default 18)' },
+        dryRun: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+    run: async (args, ctx) => {
+      const els = ctx.getState().elements.filter((e) => e.id !== 'mz-background' && e.visible !== false && e.type !== 'audio');
+      const end = Math.max(0, ...els.map((e) => e.anim.start + e.anim.duration));
+      const step = 1 / 30;
+      const minOpacity = n(args.minOpacity, 0.35);
+      const maxBlur = n(args.maxBlurPx, 18) / page(ctx).w;
+      const shown = (e: DocElement, t: number) => {
+        if (e.anim.bounded && (t < e.anim.start || t >= e.anim.start + e.anim.duration)) return false;
+        const v = resolveAnimAt(e.anim, t);
+        // «ظاهرٌ» = يُقرأ فعلًا: لا شبحٌ شفّاف ولا ضبابٌ ثقيل ولا نقطةٌ متناهية الصِّغَر.
+        return v.opacity * (e.opacity / 100) > minOpacity && v.scale * Math.min(e.geo.w, e.geo.h) > 0.02 && (v.blur ?? 0) < maxBlur;
+      };
+      const keep = (Array.isArray(args.keep) ? (args.keep as unknown[]) : []).filter((k): k is number[] => Array.isArray(k) && k.length === 2);
+      const kept = (t: number) => keep.some(([a, b]) => t >= a && t <= b);
+      const gaps: { from: number; to: number }[] = [];
+      let g0: number | null = null;
+      for (let t = 0.2; t < end; t += step) {
+        const blank = !kept(t) && !els.some((e) => shown(e, t));
+        if (blank && g0 === null) g0 = t;
+        if (!blank && g0 !== null) {
+          gaps.push({ from: Math.round(g0 * 100) / 100, to: Math.round(t * 100) / 100 });
+          g0 = null;
+        }
+      }
+      const maxGap = n(args.maxGap, 1.2);
+      const overlap = n(args.overlap, 0.15);
+      const todo = gaps.filter((g) => g.to - g.from <= maxGap);
+      if (args.dryRun || !todo.length) return { gaps, closed: 0 };
+      const next = new Map<string, DocElement>();
+      for (const g of todo) {
+        const d = g.to - g.from + overlap;
+        // المشهدُ الخارج: ما كان ظاهرًا قُبيل الفجوة.
+        for (const e0 of els) {
+          const e = next.get(e0.id) ?? e0;
+          if (!shown(e0, g.from - 0.35) && !shown(e0, g.from - 0.1)) continue;
+          const clipEnd = e.anim.start + e.anim.duration;
+          if (clipEnd > g.to + 0.5) continue;
+          // مفاتيحُ الخروج (آخرُ ٠٫٤ ث قبل أن يغيب) تتأخّر بطول الفجوة؛ وما قبلها ثابت.
+          const outFrom = animTimeAt(e.anim, g.from) - 0.4;
+          const tracks = Object.fromEntries(
+            Object.entries(e.anim.tracks as Record<string, PropertyKeyframe[]>).map(([p, list]) => [p, (list ?? []).map((k) => (k.time >= outFrom ? { ...k, time: Math.round((k.time + d) * 1000) / 1000 } : k))]),
+          ) as PropertyTracks;
+          next.set(e.id, { ...e, anim: { ...e.anim, duration: e.anim.bounded ? e.anim.duration + d : e.anim.duration, tracks } } as DocElement);
+        }
+      }
+      ctx.actions.commitElements((cur) => cur.map((e) => next.get(e.id) ?? e));
+      await flush();
+      return { gaps, closed: todo.length, stretched: next.size };
+    },
+  },
+  {
+    name: 'render_frames',
+    descriptionAr: 'يرسم لحظاتٍ بعينها من الخط الزمني صورًا (PNG) في ~/Mazij/Renders/frames بمحرّك التصدير نفسه — مراجعةٌ سريعة دون تصدير الفيديو كله.',
+    descriptionEn: 'Render specific timeline instants to PNGs in ~/Mazij/Renders/frames through the exact export renderer — a quick check without exporting the whole video.',
+    inputSchema: { type: 'object', properties: { times: { type: 'array', items: { type: 'number' } }, scale: { type: 'number' } }, required: ['times'], additionalProperties: false },
+    run: async (args, ctx) => {
+      const { inTauri } = await import('./tauriEnv');
+      if (!inTauri) throw new Error('render_frames needs the real app');
+      const times = (Array.isArray(args.times) ? (args.times as unknown[]) : []).filter((t): t is number => typeof t === 'number' && t >= 0).slice(0, 120);
+      if (!times.length) throw new Error('"times" must list seconds');
+      const { PALETTES } = await import('../data/constants');
+      const { renderArtboardFrames } = await import('./exportArtboard');
+      const { writeFile, mkdir } = await import('@tauri-apps/plugin-fs');
+      const { homeDir, join } = await import('@tauri-apps/api/path');
+      const dir = await join(await homeDir(), 'Mazij', 'Renders', 'frames');
+      await mkdir(dir, { recursive: true }).catch(() => undefined);
+      const s = ctx.getState() as unknown as Record<string, unknown> & { elements: DocElement[]; lang?: string };
+      const spec = { size: page(ctx), palette: PALETTES[(s.paletteIdx as number) ?? 0] ?? PALETTES[0], elements: s.elements, transparent: false, scale: Math.min(1, Math.max(0.1, n(args.scale, 0.5))), lang: s.lang ?? 'ar', decorAccent: !!s.decorAccent };
+      const paths: string[] = [];
+      await renderArtboardFrames(spec as never, times, async (blob, i) => {
+        const p = await join(dir, `f_${times[i].toFixed(2)}.png`);
+        await writeFile(p, new Uint8Array(await blob.arrayBuffer()));
+        paths.push(p);
+      });
+      return { paths };
+    },
+  },
+  {
+    name: 'mockup_phone',
+    descriptionAr: 'إطار جوال حقيقي الشكل (جسم وشاشة وجزيرة) تُعرض داخله صورة من ~/Mazij — مجموعة عناصر عادية قابلة للتحريك والتعديل.',
+    descriptionEn: 'A realistic phone frame (body, screen, island) showing an image from ~/Mazij inside its screen — a group of ordinary, animatable elements. Animate every returned id with the same tracks to move it as one.',
+    inputSchema: {
+      type: 'object',
+      properties: { path: { type: 'string' }, cx: { type: 'number' }, cy: { type: 'number' }, w: { type: 'number', description: 'phone width in px (height = 2.05×)' }, body: { type: 'string' } },
+      required: ['path', 'cx', 'cy', 'w'],
+      additionalProperties: false,
+    },
+    run: async (args, ctx) => {
+      const { inTauri } = await import('./tauriEnv');
+      if (!inTauri) throw new Error('mockup_phone needs the real app');
+      const pg = page(ctx);
+      const w = n(args.w, 360);
+      const h = w * 2.05;
+      const x = n(args.cx, pg.w / 2) - w / 2;
+      const y = n(args.cy, pg.h / 2) - h / 2;
+      const bezel = w * 0.045;
+      const groupId = newElementId('group');
+      const base = { visible: true, locked: false, opacity: 100, maskId: null, groupId, stroke: null, strokeWidth: 0, fillToken: 'ac' as const };
+      const geo = (gx: number, gy: number, gw: number, gh: number) => ({ x: gx / pg.w, y: gy / pg.h, w: gw / pg.w, h: gh / pg.h, rotation: 0 });
+      const { defaultAnim } = await import('../state/elements');
+      const body = { ...base, id: newElementId('shape'), type: 'shape', name: 'جسم الجوال', shape: 'rect', fill: typeof args.body === 'string' ? args.body : '#111114', radius: 0.16, geo: geo(x, y, w, h), anim: defaultAnim('none', 0, 0.6) } as DocElement;
+      const screen = { ...base, id: newElementId('shape'), type: 'shape', name: 'شاشة الجوال', shape: 'rect', fill: '#ffffff', radius: 0.13, geo: geo(x + bezel, y + bezel, w - bezel * 2, h - bezel * 2), anim: defaultAnim('none', 0, 0.6) } as DocElement;
+      ctx.actions.commitElements((els) => [...els, body, screen]);
+      await flush();
+      const { readFile } = await import('@tauri-apps/plugin-fs');
+      const path = typeof args.path === 'string' ? args.path : '';
+      const bytes = await readFile(path);
+      const name = path.split('/').pop() || 'image.png';
+      const ext = name.split('.').pop()?.toLowerCase();
+      await ctx.actions.insertImageFromFile(new File([bytes], name, { type: ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg' }));
+      await flush();
+      const imgId = ctx.getState().selectedIds[0];
+      ctx.actions.setElementGeoPx(imgId, { x: x + bezel, y: y + bezel, w: w - bezel * 2, h: h - bezel * 2 });
+      ctx.actions.setImageFit(imgId, 'cover');
+      await flush();
+      ctx.actions.applyClippingMask(imgId, screen.id);
+      await flush();
+      const island = { ...base, id: newElementId('shape'), type: 'shape', name: 'الجزيرة', shape: 'rect', fill: '#000000', radius: 0.5, geo: geo(x + w * 0.36, y + bezel + h * 0.012, w * 0.28, h * 0.03), anim: defaultAnim('none', 0, 0.6) } as DocElement;
+      ctx.actions.commitElements((els) => [...els.map((e) => (e.id === imgId ? { ...e, groupId } : e)), island]);
+      await flush();
+      return { groupId, ids: [body.id, screen.id, imgId, island.id] };
+    },
+  },
+  {
     name: 'fonts_add_from_path',
     descriptionAr: 'إضافة خط من ملف (ttf/otf/woff/woff2) داخل ~/Mazij إلى مكتبة خطوط مزيج — نفس «أضف خطًّا من جهازك». يعيد اسم العائلة لاستعماله في fontFamily.',
     descriptionEn: 'Add a font file (ttf/otf/woff/woff2) under ~/Mazij to Mazij\'s font library — same as "add a font from your device". Returns the family name to use as fontFamily.',
@@ -91,6 +249,7 @@ export const MOTION_TOOLS: McpTool[] = [
         stripes: { type: 'number' },
         strength: { type: 'number' },
         highlight: { type: 'number' },
+        feather: { type: 'number', description: 'soft edge 0..0.5 of the smaller side — a colored aura that melts into the background' },
         remove: { type: 'boolean' },
       },
       required: ['id'],
@@ -111,6 +270,7 @@ export const MOTION_TOOLS: McpTool[] = [
             stripes: n(args.stripes, 7),
             strength: n(args.strength, 0.6),
             highlight: n(args.highlight, 0.85),
+            ...(typeof args.feather === 'number' && args.feather > 0 ? { feather: Math.min(0.5, args.feather) } : {}),
           };
       ctx.actions.commitElements((els) => els.map((e) => (e.id === el.id ? ({ ...e, glass } as DocElement) : e)));
       await flush();

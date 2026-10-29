@@ -143,6 +143,12 @@ async function runLoop(port: number, token: string, myGen: number, ctx: McpCtx) 
     const tool = MCP_TOOLS.find((t) => t.name === call.tool);
     try {
       if (!tool) throw new Error(`unknown tool "${call.tool}"`);
+      // وكيلٌ مربوطٌ يعمل على المشروع المفتوح: إن كان مزيج على شاشة البداية فُتح المحرّرُ
+      // كما يضغط المستخدم «كمّل» — كان كلُّ تشغيلٍ جديدٍ يحتاج نقرةً بشريّة قبل أن تعمل أيُّ أداة.
+      if (ctx.getState().screen !== 'editor') {
+        ctx.actions.goEditor();
+        await sleep(400);
+      }
       // أداةٌ لا تنتهي أبدًا كانت تُصمت الجسرَ كلَّه إلى الأبد (الحلقةُ واقفةٌ عندها). فلكلّ
       // أداةٍ سقف — أطولُ من مهلة الخادم نفسِه لها (`tool_wait_secs` في mcp.rs) — ثم تُكمل الحلقة.
       const limitMs = call.tool === 'export_run' ? 3_700_000 : call.tool === 'batch' ? 900_000 : 180_000;

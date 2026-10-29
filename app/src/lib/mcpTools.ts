@@ -39,6 +39,19 @@ function str(v: unknown, fallback = ''): string {
 function num(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
+/** «اجعله سطرًا واحدًا»: أكبرُ مقاسٍ (حتى المطلوب) يتّسع فيه النصّ لعرض صندوقه — يُقاس بالقماش
+ * بالخطّ نفسِه، فلا ينكسر عنوانٌ كبيرٌ سطرين ويركب على ما تحته. */
+function fitFontSize(text: string, family: string, weight: 'regular' | 'medium' | 'bold', refSize: number, boxW: number, artW: number): number {
+  if (typeof document === 'undefined' || !text) return refSize;
+  const c = document.createElement('canvas').getContext('2d');
+  if (!c) return refSize;
+  const px = (refSize / 1080) * artW;
+  c.font = `${{ regular: 400, medium: 600, bold: 800 }[weight]} ${px}px ${family}, sans-serif`;
+  const widest = Math.max(...text.split('\n').map((l) => c.measureText(l).width));
+  if (widest <= boxW * 0.97) return refSize;
+  return Math.max(4, refSize * ((boxW * 0.97) / widest));
+}
+
 function requireId(args: Record<string, unknown>): string {
   const id = args.id;
   if (typeof id !== 'string' || !id) throw new Error('missing required "id"');
@@ -278,6 +291,7 @@ export const MCP_TOOLS: McpTool[] = [
         fontSize: { type: 'number', description: 'Reference px against a 1080-wide artboard (rendered size = fontSize × artboardWidth / 1080).' },
         weight: { type: 'string', enum: ['regular', 'medium', 'bold'] },
         color: { type: 'string' },
+        fitOneLine: { type: 'boolean', description: 'shrink fontSize (never grow) so the text fits the box width on a single line' },
       },
       required: ['text'],
       additionalProperties: false,
@@ -298,7 +312,7 @@ export const MCP_TOOLS: McpTool[] = [
         geo: { x: num(args.x, size.w * 0.1) / size.w, y: num(args.y, size.h * 0.1) / size.h, w: wPx / size.w, h: hPx / size.h, rotation: 0 },
         text: str(args.text, 'نص جديد'),
         fontFamily: str(args.fontFamily, 'Alexandria'),
-        fontSize: num(args.fontSize, 48),
+        fontSize: args.fitOneLine ? fitFontSize(str(args.text, ''), str(args.fontFamily, 'Alexandria'), (typeof args.weight === 'string' ? args.weight : 'bold') as 'regular' | 'medium' | 'bold', num(args.fontSize, 48), wPx, size.w) : num(args.fontSize, 48),
         weight: (typeof args.weight === 'string' ? args.weight : 'bold') as 'regular' | 'medium' | 'bold',
         color: typeof args.color === 'string' ? args.color : null,
         halign: 'start',

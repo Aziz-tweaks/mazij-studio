@@ -28,6 +28,9 @@ export interface GlassStyle {
   strength?: number;
   /** شدّةُ اللمعة ٠..١. */
   highlight?: number;
+  /** حافّةٌ ذائبة: نصفُ قطرِ تلاشي الحدود كنسبةٍ من أصغر بُعدَي العنصر (٠ = حادّة). يصنع
+   *  «الهالة» — حقلًا ملوّنًا يذوب في الأبيض كما في المرجع لا مستطيلًا يقطع الإطار. */
+  feather?: number;
 }
 
 import { drawBlurred } from './canvasBlur';
@@ -80,7 +83,8 @@ function bodyGradient(c: Ctx, g: GlassStyle, bw: number, bh: number, time: numbe
  */
 export function paintGlass(ctx: Ctx, bw: number, bh: number, time: number, g: GlassStyle, depth: number, silhouette: (c: Ctx) => void): void {
   const T = ctx.getTransform();
-  const pad = Math.max(bw, bh) * 0.08 + depth * 2;
+  const fr = Math.max(0, Math.min(0.5, g.feather ?? 0)) * Math.min(bw, bh);
+  const pad = Math.max(bw, bh) * 0.08 + depth * 2 + fr * 1.2;
   const pts = [
     [-pad, -pad],
     [bw + pad, -pad],
@@ -136,7 +140,7 @@ export function paintGlass(ctx: Ctx, bw: number, bh: number, time: number, g: Gl
     B.globalCompositeOperation = 'source-over';
     A.globalCompositeOperation = 'source-atop';
     // ثلاثُ طبقاتٍ مضبَّبة تُشبع العمق فيبقى لونُ الحافّة شريطًا رفيعًا لا ضبابًا شاحبًا.
-    for (let i = 0; i < 3; i++) drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, r * 0.42);
+    for (let i = 0; i < 2; i++) drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, r * 0.45);
     // ٤. القلب الحارّ في أعمق نقطة.
     if (g.core) {
       B.globalCompositeOperation = 'source-over';
@@ -145,9 +149,9 @@ export function paintGlass(ctx: Ctx, bw: number, bh: number, time: number, g: Gl
       B.globalCompositeOperation = 'source-in';
       B.fillStyle = g.core;
       B.fillRect(0, 0, W, H);
-      A.globalAlpha = 0.7;
-      drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, r * 0.75);
-      drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, r * 0.75);
+      // قلبٌ حارٌّ متدرّج لا مصمت: انتشارٌ واسع بشفافيّةٍ جزئيّة يرسم خطَّ وسطِ كلّ ضربة.
+      A.globalAlpha = 0.85;
+      drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, r * 1.3);
       A.globalAlpha = 1;
     }
     // ٥. الانكسارُ البارد أسفلَ كلّ حرف: هلالٌ بلون الحافّة — الظلُّ ناقصَ نفسِه مُزاحًا للأعلى.
@@ -158,11 +162,11 @@ export function paintGlass(ctx: Ctx, bw: number, bh: number, time: number, g: Gl
     B.fillStyle = g.rim ?? '#9db2ff';
     B.fillRect(0, 0, W, H);
     B.globalCompositeOperation = 'destination-out';
-    B.drawImage(M.canvas, 0, 0, W, H, 0, -Math.max(1, r * 0.35), W, H);
+    B.drawImage(M.canvas, 0, 0, W, H, 0, -Math.max(1, r * 0.22), W, H);
     B.globalCompositeOperation = 'source-over';
     A.globalCompositeOperation = 'source-atop';
     A.globalAlpha = 0.85;
-    drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, Math.max(0.6, r * 0.25));
+    drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, Math.max(0.5, r * 0.14));
     A.globalAlpha = 1;
   } else {
     // ٢. حقلُ الألوان كلُّه — لا داخل الظلّ — فلا تَعُضّ العدسةُ حافّةَ الشكل بفراغ.
@@ -201,13 +205,23 @@ export function paintGlass(ctx: Ctx, bw: number, bh: number, time: number, g: Gl
     B.fillStyle = '#ffffff';
     B.fillRect(0, 0, W, H);
     B.globalCompositeOperation = 'destination-out';
-    const o = Math.max(1, r * 0.3);
+    const o = Math.max(1, r * 0.18);
     B.drawImage(M.canvas, 0, 0, W, H, o * 0.4, o, W, H);
     B.globalCompositeOperation = 'source-over';
     A.globalCompositeOperation = 'source-atop';
     A.globalAlpha = hi;
-    drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, Math.max(0.6, r * 0.22));
+    drawBlurred(A, B.canvas, 0, 0, W, H, 0, 0, Math.max(0.5, r * 0.1));
     A.globalAlpha = 1;
+  }
+
+  // ٧. الحافّة الذائبة: الناتجُ داخل ظلٍّ مُضبَّب — الشكلُ يذوب في الخلفيّة.
+  if (fr > 0) {
+    B.globalCompositeOperation = 'source-over';
+    B.globalAlpha = 1;
+    B.clearRect(0, 0, W, H);
+    drawBlurred(B, M.canvas, 0, 0, W, H, 0, 0, fr * s * 0.5);
+    A.globalCompositeOperation = 'destination-in';
+    A.drawImage(B.canvas, 0, 0, W, H, 0, 0, W, H);
   }
 
   A.globalCompositeOperation = 'source-over';
