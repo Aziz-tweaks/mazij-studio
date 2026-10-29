@@ -172,11 +172,53 @@ function renderStaggeredText(el: TextElement, time: number): ReactNode {
   // anonymous item), so one token per top-level <span> would stack each character on
   // its own flex row instead of flowing inline. One wrapper element keeps this whole
   // run as a single flex item, with normal inline wrapping for the spans inside it.
+  // **الكلمةُ الموصولة تُقطَع شرائح لا تُشكَّل حروفًا معزولة** — كالقُماش (`drawSlicedLine`):
+  // محرفُ الوصل لا يصل حين يخلو الخطُّ المُحمَّل من رمزٍ له (وهو شائعٌ في الخطوط العربيّة) فيُكمله المتصفّحُ
+  // بخطٍّ آخر وتنقطع الكلمة. فكلُّ وحدةٍ تحمل الكلمةَ كاملةً مُزاحةً، ولا يظهر منها إلّا شريحتُها.
   const out: ReactNode[] = [];
-  let run: ReactNode[] = [];
+  let run: { tok: StaggerToken; i: number }[] = [];
+  const unit = (tok: StaggerToken, i: number, inner: ReactNode, extra?: CSSProperties) => {
+    const visual = visualOf(tok);
+    return (
+      <span key={i} data-stagger-unit="" style={{ display: 'inline-block', opacity: visual.opacity, transform: unitVisualToCssTransform(visual), filter: unitVisualToCssFilter(visual), transformOrigin: 'center bottom', ...extra }}>
+        {inner}
+      </span>
+    );
+  };
   const flush = () => {
     if (!run.length) return;
-    out.push(run.length === 1 ? run[0] : <span key={`w${out.length}`} style={{ whiteSpace: 'nowrap' }}>{run}</span>);
+    const joined = run.some(({ tok }) => tok.shaped !== tok.text);
+    const mc = joined ? getMeasureCtx() : null;
+    let nodes: ReactNode[];
+    if (mc) {
+      const word = run.map(({ tok }) => tok.text).join('');
+      const rtl = /[\u0590-\u08FF\uFB1D-\uFEFC]/.test(word);
+      mc.font = `${WEIGHT_CSS_NUM[el.weight] ?? 400} 100px ${el.fontFamily}, sans-serif`;
+      mc.direction = rtl ? 'rtl' : 'ltr';
+      const full = mc.measureText(word).width;
+      const cum = [0];
+      for (let j = 1; j <= run.length; j++) cum.push(j === run.length ? full : Math.min(full, Math.max(cum[j - 1], mc.measureText(run.slice(0, j).map(({ tok }) => tok.text).join('')).width)));
+      const em = (v: number) => `${(v / 100).toFixed(4)}em`;
+      nodes = run.map(({ tok, i }, j) => {
+        const w = cum[j + 1] - cum[j];
+        const first = j === 0;
+        const last = j === run.length - 1;
+        // البدايةُ والنهاية مفتوحتان (ذيولُ الحروف والنقاط)، وما بينهما حدٌّ بنصف بكسل.
+        const a = first ? '-1em' : '-0.005em';
+        const b = last ? '-1em' : '-0.005em';
+        const clip = rtl ? `inset(-1em ${a} -1em ${b})` : `inset(-1em ${b} -1em ${a})`;
+        return unit(
+          tok,
+          i,
+          <>
+            <span style={{ visibility: 'hidden', display: 'inline-block', width: 0 }}>{tok.text}</span>
+            <span style={{ position: 'absolute', top: 0, whiteSpace: 'nowrap', direction: rtl ? 'rtl' : 'ltr', ...(rtl ? { right: em(-cum[j]) } : { left: em(-cum[j]) }) }}>{word}</span>
+          </>,
+          { position: 'relative', width: em(w), clipPath: clip },
+        );
+      });
+    } else nodes = run.map(({ tok, i }) => unit(tok, i, tok.shaped));
+    out.push(nodes.length === 1 ? nodes[0] : <span key={`w${out.length}`} style={{ whiteSpace: 'nowrap' }}>{nodes}</span>);
     run = [];
   };
   tokens.forEach((tok, i) => {
@@ -185,12 +227,7 @@ function renderStaggeredText(el: TextElement, time: number): ReactNode {
       out.push(tok.text);
       return;
     }
-    const visual = visualOf(tok);
-    run.push(
-      <span key={i} data-stagger-unit="" style={{ display: 'inline-block', opacity: visual.opacity, transform: unitVisualToCssTransform(visual), filter: unitVisualToCssFilter(visual), transformOrigin: 'center bottom' }}>
-        {tok.shaped}
-      </span>,
-    );
+    run.push({ tok, i });
   });
   flush();
   return <span>{out}</span>;

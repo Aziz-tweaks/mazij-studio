@@ -34,13 +34,22 @@ export function canvasFilterWorks(): boolean {
  * وأسرعُ بمراتب من صندوقٍ على `getImageData` (الذي جعل تصديرَ فيلمٍ يأخذ ساعةً ونصفًا). */
 const levels: HTMLCanvasElement[] = [];
 function level(i: number, w: number, h: number): CanvasRenderingContext2D | null {
+  if (w * h > 24e6) return null; // أكبرُ من أيّ إطارٍ معقول — لا تُخاطَر لوحةُ الهرم كلُّها لأجله
   if (!levels[i]) levels[i] = document.createElement('canvas');
-  const c = levels[i];
-  if (c.width < w || c.height < h) {
-    c.width = Math.max(c.width, w);
-    c.height = Math.max(c.height, h);
+  let c = levels[i];
+  if (c.width < w || c.height < h || c.width * c.height > 4 * w * h + 4e6) {
+    // تُحجَّم على المطلوب (تكبر وتصغر)، فلا تبقى لوحةٌ ضخمة محجوزة من إطارٍ مضى.
+    c.width = Math.max(w, Math.min(c.width, w * 2));
+    c.height = Math.max(h, Math.min(c.height, h * 2));
   }
-  const x = c.getContext('2d');
+  let x = c.getContext('2d');
+  if (!x || c.width === 0) {
+    // لوحةٌ أبطلها المحرّك — تُستبدَل بجديدة بدل أن تُفسد ما بعدها.
+    c = levels[i] = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    x = c.getContext('2d');
+  }
   if (!x) return null;
   x.setTransform(1, 0, 0, 1, 0, 0);
   x.globalCompositeOperation = 'source-over';
@@ -79,10 +88,35 @@ export function drawBlurred(dst: Ctx, src: CanvasImageSource, sx: number, sy: nu
     return;
   }
   const m = Math.ceil(sigma * 2.5); // هامشٌ ينتشر فيه الضباب
+  // **لا يُضبَّب إلّا ما يقع على القماش.** عنصرٌ تكبّره الكاميرا سبعَ مرّات صندوقُه أعرضُ من
+  // الإطار بمراتب، وكانت لوحاتُ الهرم تنمو إليه ولا تصغر بعدها — فيتجاوز WebKit حدَّ ذاكرة
+  // القماش وتصير اللوحةُ باطلةً بصمت، فيختفي **كلُّ** عنصرٍ مضبَّب بعدها حتى يُعاد تشغيل
+  // التطبيق (رُصد: تصاميمُ مشاهدَ كاملةٍ غائبة في النصف الثاني من الفيلم).
+  {
+    const cw = dst.canvas.width;
+    const ch = dst.canvas.height;
+    const x0 = Math.max(dx, -m);
+    const y0 = Math.max(dy, -m);
+    const x1 = Math.min(dx + W, cw + m);
+    const y1 = Math.min(dy + H, ch + m);
+    if (x1 <= x0 || y1 <= y0) return;
+    sx += x0 - dx;
+    sy += y0 - dy;
+    W = x1 - x0;
+    H = y1 - y0;
+    dx = x0;
+    dy = y0;
+  }
   const w0 = W + 2 * m;
   const h0 = H + 2 * m;
+  const sharp = () => {
+    dst.save();
+    dst.setTransform(1, 0, 0, 1, 0, 0);
+    dst.drawImage(src, sx, sy, W, H, dx, dy, W, H);
+    dst.restore();
+  };
   const base = level(0, w0, h0);
-  if (!base) return;
+  if (!base) return sharp();
   base.drawImage(src, sx, sy, W, H, m, m, W, H);
   const sizes: [number, number][] = [[w0, h0]];
   for (let i = 1; i <= n; i++) {
@@ -90,7 +124,7 @@ export function drawBlurred(dst: Ctx, src: CanvasImageSource, sx: number, sy: nu
     const w = Math.max(1, Math.ceil(pw / 2));
     const h = Math.max(1, Math.ceil(ph / 2));
     const x = level(i, w, h);
-    if (!x) return;
+    if (!x) return sharp();
     x.drawImage(levels[i - 1], 0, 0, pw, ph, 0, 0, w, h);
     sizes.push([w, h]);
   }
@@ -99,7 +133,7 @@ export function drawBlurred(dst: Ctx, src: CanvasImageSource, sx: number, sy: nu
     const [w, h] = sizes[i];
     const [cw, ch] = sizes[i + 1];
     const x = level(i, w, h);
-    if (!x) return;
+    if (!x) return sharp();
     x.drawImage(levels[i + 1], 0, 0, cw, ch, 0, 0, w, h);
   }
   const [lw, lh] = sizes[1];

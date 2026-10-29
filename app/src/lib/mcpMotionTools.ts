@@ -123,10 +123,14 @@ export const MOTION_TOOLS: McpTool[] = [
           if (!shown(e0, g.from - 0.35) && !shown(e0, g.from - 0.1)) continue;
           const clipEnd = e.anim.start + e.anim.duration;
           if (clipEnd > g.to + 0.5) continue;
-          // مفاتيحُ الخروج (آخرُ ٠٫٤ ث قبل أن يغيب) تتأخّر بطول الفجوة؛ وما قبلها ثابت.
+          // مفاتيحُ **الظهور** وحدها (الشفافيّة والضباب) في آخر ٠٫٤ ث تتأخّر بطول الفجوة. والحركةُ
+          // لا تُمسّ: ما كان يطير يُكمل طيرانه ويخرج، ولا يتجمّد في منتصف الطريق.
           const outFrom = animTimeAt(e.anim, g.from) - 0.4;
           const tracks = Object.fromEntries(
-            Object.entries(e.anim.tracks as Record<string, PropertyKeyframe[]>).map(([p, list]) => [p, (list ?? []).map((k) => (k.time >= outFrom ? { ...k, time: Math.round((k.time + d) * 1000) / 1000 } : k))]),
+            Object.entries(e.anim.tracks as Record<string, PropertyKeyframe[]>).map(([p, list]) => [
+              p,
+              p === 'opacity' || p === 'blur' ? (list ?? []).map((k) => (k.time >= outFrom ? { ...k, time: Math.round((k.time + d) * 1000) / 1000 } : k)) : list,
+            ]),
           ) as PropertyTracks;
           next.set(e.id, { ...e, anim: { ...e.anim, duration: e.anim.bounded ? e.anim.duration + d : e.anim.duration, tracks } } as DocElement);
         }

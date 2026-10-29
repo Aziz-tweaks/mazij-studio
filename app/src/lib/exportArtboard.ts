@@ -452,13 +452,36 @@ function drawStaggeredText(ctx: CanvasRenderingContext2D, el: TextElement, bw: n
   });
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+/** **صورةٌ واحدةٌ مفكوكة لكلّ مصدر طوالَ التصدير** (٢٩ أكتوبر ٢٠٢٦). كانت كلُّ صورةٍ تُفكّ من
+ * جديد في **كلّ إطار** — ومصادرُها بياناتٌ مضمَّنة بالميغابايتات — فبعد مئات الإطارات يضيق
+ * WebKit بالذاكرة ويفشل الفكُّ بصمت، فتختفي الصورُ من الفيديو وتبقى في معاينة اللقطة الواحدة
+ * (رُصد: تصاميمُ مشهدٍ كاملٍ غائبة بعد الثانية ٢٤ من تصديرٍ طوله ٤٤ ثانية). فالفكُّ مرّةً،
+ * والمخزنُ يُفرَّغ حين ينتهي التصدير؛ والفشلُ العابر يُعاد مرّةً قبل أن يُستسلَم له. */
+const imageCache = new Map<string, Promise<HTMLImageElement>>();
+function decodeImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    img.onload = () => {
+      // `decode` يُبقي النسخةَ المفكوكة جاهزةً للرسم بدل فكٍّ كسولٍ عند كلّ `drawImage`.
+      const d = (img as HTMLImageElement & { decode?: () => Promise<void> }).decode;
+      if (d) d.call(img).then(() => resolve(img), () => resolve(img));
+      else resolve(img);
+    };
     img.onerror = () => reject(new Error('فشل تحميل صورة للتصدير'));
     img.src = src;
   });
+}
+function loadImage(src: string): Promise<HTMLImageElement> {
+  const hit = imageCache.get(src);
+  if (hit) return hit;
+  const p = decodeImage(src).catch(() => decodeImage(src));
+  imageCache.set(src, p);
+  p.catch(() => imageCache.delete(src));
+  return p;
+}
+/** يُفرغ مخزنَ الصور المفكوكة — آخرَ كلّ تصدير. */
+export function resetExportImageCache(): void {
+  imageCache.clear();
 }
 
 /** «كلُّ المقاطع قد انتهت» لهذا المستند بعينه. كان الجوابُ خمسَ ثوانٍ لكلّ مستند،
@@ -896,6 +919,12 @@ function softLayerFor(main: CanvasRenderingContext2D): CanvasRenderingContext2D 
   }
   const l = softCanvas.getContext('2d');
   if (!l) return null;
+  // **حالةٌ نظيفةٌ تمامًا كلَّ مرّة — والقصُّ منها.** قناعُ العنصر يقصّ هذه الطبقة (`clip`) ولا
+  // `save` عليها يقابله، فكان قصُّ شاشة الجوال يبقى فيها لكلّ عنصرٍ مضبَّبٍ بعده: تختفي
+  // التصاميمُ المضبَّبة من بقيّة الفيلم كلّه (رُصد بالتنصيف: يبدأ عند أوّل جوالٍ مضبَّب).
+  const lr = l as CanvasRenderingContext2D & { reset?: () => void };
+  if (typeof lr.reset === 'function') lr.reset();
+  else softCanvas.width = softCanvas.width; // إعادةُ ضبط العرض تُصفّر الحالةَ كلَّها في كلّ محرّك
   l.setTransform(1, 0, 0, 1, 0, 0);
   l.globalCompositeOperation = 'source-over';
   l.globalAlpha = 1;
@@ -1078,6 +1107,7 @@ export async function renderArtboardPng(spec: ArtboardRenderSpec): Promise<Blob>
     // past this call.
     resetLottieExportEngine();
     resetVideoExportEngine();
+    resetExportImageCache();
   }
 }
 
@@ -1166,6 +1196,7 @@ export async function renderArtboardFrames(
   } finally {
     resetLottieExportEngine();
     resetVideoExportEngine();
+    resetExportImageCache();
   }
 }
 

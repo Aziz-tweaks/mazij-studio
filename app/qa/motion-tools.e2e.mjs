@@ -138,5 +138,28 @@ if (out) {
   ok(right >= mid - (25 * H2) / 1080, 'نقطتا الياء الأخيرة ظاهرتان في الملفّ المُصدَّر');
 }
 
+// ── تسرّبُ القصّ بين العناصر المضبَّبة (٢٩ أكتوبر): صورةٌ مقنَّعةٌ مضبَّبة (كشاشة الجوال) كانت تترك
+// قصَّها في طبقة الضباب، فيختفي كلُّ عنصرٍ مضبَّبٍ بعدها. نرسم الأولى ثم نتأكّد أنّ بطاقةً مضبَّبةً
+// بعيدةً عنها ما زالت تُرسم.
+{
+  await call('document_new', { sizeId: 'yt-video' });
+  await call('document_set_background', { color: '#ffffff' });
+  const shot = rnd.renders?.[0]?.path ?? (await call('templates_render_png', { ids: ['demo-poster'] })).renders[0].path;
+  const ph = await call('mockup_phone', { path: shot, cx: 300, cy: 540, w: 260 });
+  for (const pid of ph.ids) await call('element_animate', { id: pid, start: 0, duration: 2, bounded: true, replaceAll: true, tracks: { blur: [{ t: 0, v: 8 }, { t: 2, v: 8 }] } });
+  const far = await call('element_add_shape', { shape: 'rect', x: 1300, y: 300, w: 400, h: 400 });
+  await call('element_set_fill', { id: far.id, kind: 'solid', color: '#ff2d87' });
+  await call('element_animate', { id: far.id, start: 0, duration: 2, bounded: true, replaceAll: true, tracks: { blur: [{ t: 0, v: 6 }, { t: 2, v: 6 }] } });
+  const fr = await call('render_frames', { times: [0.5, 1.0], scale: 0.5 });
+  ok(fr.paths?.length === 2, 'render_frames: صورتان');
+  const raw2 = execFileSync('ffmpeg', ['-v', 'error', '-i', fr.paths[1], '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-'], { maxBuffer: 64 << 20 });
+  const pxAt = (x, y) => raw2[(y * 960 + x) * 3 + 1]; // القناةُ الخضراء: الورديّ ينخفض فيها
+  ok(pxAt(750, 250) < 120, 'العنصرُ المضبَّب بعد جوالٍ مقنَّعٍ مضبَّب ما زال يُرسَم (لا تسرّبَ للقصّ)');
+  const an = await call('element_get_anim', { id: far.id });
+  ok(an.tracks.blur?.count === 2 && an.tracks.blur.keys[0][1] === 6, 'element_get_anim: مفاتيحُ الضباب بالبكسل');
+  const gp = await call('timeline_close_gaps', { dryRun: true });
+  ok(Array.isArray(gp.gaps), 'timeline_close_gaps: تقريرُ الفجوات');
+}
+
 console.log(`\nmotion-tools.e2e: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
