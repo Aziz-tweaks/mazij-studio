@@ -791,6 +791,27 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
             );
           })}
         </div>
+        {/* **مدّةُ الدخول بجانب النمط** (كما في محرّر فيديو شائع: منزلق «المدة» تحت شبكة الأنماط). */}
+        {el.anim.preset !== 'none' && !presetBlocked && (() => {
+          const keys = Object.values(el.anim.tracks).flatMap((t) => t ?? []);
+          const cur = keys.length ? Math.max(...keys.map((k) => k.time)) - (el.anim.sourceIn ?? 0) : 0.6;
+          const max = Math.max(0.2, Math.min(3, el.anim.duration));
+          return (
+            <label data-testid="props-anim-duration" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+              <span style={{ color: 'var(--muted)', minWidth: 40 }}>{state.lang === 'ar' ? 'المدة' : 'Duration'}</span>
+              <input
+                type="range"
+                min={0.1}
+                max={max}
+                step={0.05}
+                value={Math.min(max, Math.max(0.1, cur))}
+                onChange={(e) => actions.setEntranceDuration(el.id, Number(e.currentTarget.value))}
+                style={{ flex: 1 }}
+              />
+              <span style={{ minWidth: 38, textAlign: 'end', direction: 'ltr' }}>{cur.toFixed(2)}{state.lang === 'ar' ? 'ث' : 's'}</span>
+            </label>
+          );
+        })()}
       </section>
       )}
 

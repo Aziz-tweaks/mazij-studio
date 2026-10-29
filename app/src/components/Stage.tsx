@@ -1254,6 +1254,7 @@ export function Stage() {
             onPointerDown={onElementPointerDown}
             onDoubleClick={onDoubleClickElement}
             onTextBlur={(id, text) => actions.commitTextEdit(id, text)}
+            onTextInput={(id, text) => actions.liveWidenText(id, text)}
             onTextKeyDown={onTextKeyDown}
             editRef={(node) => {
               editRef.current = node;

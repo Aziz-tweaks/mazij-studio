@@ -354,8 +354,10 @@ function widenForOneLine(el: TextElement, text: string, size: { w: number; h: nu
   const ctx = document.createElement('canvas').getContext('2d');
   if (!ctx) return el.geo;
   const weight = { regular: 400, medium: 600, bold: 800 }[el.weight] ?? 400;
-  ctx.font = `${weight} ${el.fontSize}px "${el.fontFamily}"`;
-  const needPx = ctx.measureText(text).width + el.fontSize * 0.35;
+  // حجمُ الخطّ في مزيج بوحدةِ مستندٍ عرضُه ١٠٨٠ (`ElementView`: fontSize/1080 من عرض اللوحة)، فيُحوَّل إلى بكسلات هذا المستند.
+  const fontPx = (el.fontSize * size.w) / 1080;
+  ctx.font = `${weight} ${fontPx}px "${el.fontFamily}"`;
+  const needPx = ctx.measureText(text.trim()).width + fontPx * 0.35;
   const curPx = el.geo.w * size.w;
   if (needPx <= curPx) return el.geo;
   const w = Math.min(needPx, size.w * 0.96) / size.w;
@@ -1048,6 +1050,8 @@ export interface StudioActions {
   nudgeSelected: (dx: number, dy: number) => void;
   startTextEdit: (id: ElementId) => void;
   commitTextEdit: (id: ElementId, text: string) => void;
+  /** أثناء التحرير: يوسّع صندوقَ نصِّ السطر الواحد حيًّا بلا تاريخ (لا يغيّر النصّ المخزون). */
+  liveWidenText: (id: ElementId, text: string) => void;
   /** `kind` صار `ShapeDrawKind` (ثمانية أنواع) بدل `ShapeKind` المستنديّ الثلاثي؛
    * `'rect'`/`'ellipse'` تعنيان ما كانتا تعنيه، فكل نداء قائم (بما فيه أداة MCP
    * `add_shape`) يبقى صحيحًا بلا تغيير. */
@@ -1128,7 +1132,10 @@ export interface StudioActions {
   setAudioMuted: (id: ElementId, muted: boolean) => void;
   /** «تأثيرات» ← بطاقة: طبقةُ مؤثّرٍ **عند المؤشّر** فوق كلّ الطبقات، محدودةٌ بمقطعها،
    * محدَّدةٌ فورًا. والانتقالُ يُوسَّط على المؤشّر (قمّتُه عند القطع). خطوةُ تراجعٍ واحدة. */
-  insertFx: (kind: FxKind) => void;
+  /** `at`: زمنُ الإفلات إن سُحبت البطاقةُ إلى المسارات؛ وإلا فعند المؤشّر. */
+  insertFx: (kind: FxKind, at?: number) => void;
+  /** يعيد بناء مفاتيح نمط الدخول الجاهز على مدّةٍ بالثواني (حدٌّ أعلى: طولُ المقطع). خطوةُ تراجعٍ واحدة لكلّ قيمة. */
+  setEntranceDuration: (id: ElementId, seconds: number) => void;
   /** خصائصُ طبقة المؤثّر (النوع، القوّة، التلاشي) — خطوةُ تراجعٍ لكلّ التزام. */
   setFxProps: (id: ElementId, patch: Partial<{ fx: FxKind; amount: number; fadeIn: number; fadeOut: number }>) => void;
   /** القوّةُ أثناء سحب الشريط — حيٌّ بلا تاريخ، بين `beginElementEdit`/`commitElementEdit`. */
@@ -2380,7 +2387,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const insertFx = useCallback((kind: FxKind) => {
+  const insertFx = useCallback((kind: FxKind, at?: number) => {
     setState((s) => {
       const spec = fxSpec(kind);
       const id = newElementId('fx');
@@ -2390,7 +2397,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // **وإلى الإطار السابق لا الأقرب.** المؤشّرُ المنقور على المسطرة لا يقع على إطار؛
       // والتقريبُ للأقرب كان يضع البدايةَ بعد المؤشّر بجزءٍ من إطار، فيضغط المصمّمُ البطاقةَ
       // ولا يرى شيئًا على اللوحة (رُصد بالتجربة اليدويّة في البرنامج: المؤشّر ٠٫٢٥ والبداية ٠٫٢٧).
-      const rawStart = spec.cat === 'transition' ? s.t - duration / 2 : s.t;
+      const t0 = at ?? s.t;
+      const rawStart = spec.cat === 'transition' ? t0 - duration / 2 : t0;
       const start = Math.max(0, Math.floor(rawStart * s.fps + 1e-6) / s.fps);
       const el: DocElement = {
         id,
@@ -3706,6 +3714,30 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return els.map((e) => (ids.has(e.id) ? { ...e, geo: { ...e.geo, x: e.geo.x + dx / size.w, y: e.geo.y + dy / size.h } } : e));
         }),
       startTextEdit: (id) => patch({ editingTextId: id }),
+      setEntranceDuration: (id, seconds) =>
+        setState((s) => {
+          const el = s.elements.find((e) => e.id === id);
+          if (!el || el.anim.preset === 'none' || hasCustomAnimation(motionTracks(el.anim.tracks))) return s;
+          const span = Math.max(0.05, Math.min(seconds, el.anim.duration));
+          const keyframes = el.anim.keyframes.length >= 2 ? el.anim.keyframes : defaultAnim(el.anim.preset, el.anim.start, el.anim.duration, el.anim.easing).keyframes;
+          const base = tracksFromPreset(el.anim.preset, keyframes, el.anim.easing, el.anim.bezier, el.anim.duration, span);
+          const src0 = el.anim.sourceIn ?? 0;
+          const shifted = Object.fromEntries(Object.entries(base).map(([p, tr]) => [p, (tr ?? []).map((k) => ({ ...k, time: k.time + src0 }))]));
+          const reveal = el.anim.tracks.reveal;
+          const tracks = reveal ? { ...shifted, reveal } : shifted;
+          return { ...s, elements: s.elements.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, tracks } } : e)), ...pushHistory(s, (s.lang === 'ar' ? AR : EN).entrance) };
+        }),
+      liveWidenText: (id, text) => {
+        const s0 = stateRef.current;
+        const size = sizeAt(s0.sizeIdx, s0.customW, s0.customH);
+        liveUpdateElements((els) =>
+          els.map((e) => {
+            if (e.id !== id || e.type !== 'text') return e;
+            const geo = widenForOneLine(e, text, size);
+            return geo === e.geo ? e : { ...e, geo };
+          }),
+        );
+      },
       commitTextEdit: (id, text) =>
         setState((s) => {
           const current = s.elements.find((e) => e.id === id);

@@ -1,3 +1,4 @@
+import { consumeSuppressedClick, startTileDrag } from '../../lib/libraryDrag';
 import type { CSSProperties } from 'react';
 import { useStudio } from '../../state/StudioContext';
 import { FX_CATALOG, fxCss, overlayCss, resolveFx, type FxCategory, type FxSpec } from '../../lib/effects';
@@ -25,7 +26,7 @@ export function FxLibrary() {
           <div className="mz-label">{c.label}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {FX_CATALOG.filter((f) => f.cat === c.id).map((f) => (
-              <FxCard key={f.id} spec={f} label={state.lang === 'ar' ? f.ar : f.en} onPick={() => actions.insertFx(f.id)} />
+              <FxCard key={f.id} spec={f} label={state.lang === 'ar' ? f.ar : f.en} onPick={(drop) => actions.insertFx(f.id, drop?.start)} />
             ))}
           </div>
         </section>
@@ -66,7 +67,7 @@ export function FxLibrary() {
   );
 }
 
-function FxCard({ spec, label, onPick }: { spec: FxSpec; label: string; onPick: () => void }) {
+function FxCard({ spec, label, onPick }: { spec: FxSpec; label: string; onPick: (drop?: { start?: number }) => void }) {
   // لقطةٌ ثابتةٌ بقوّةٍ كاملة؛ والمؤثّراتُ الحيّة (اهتزاز، نبض) عند لحظةٍ تُظهر أثرها.
   const r = resolveFx(spec.id, 1, spec.id === 'pulse' ? 0.3 : 0.11);
   const css = fxCss(r);
@@ -74,7 +75,12 @@ function FxCard({ spec, label, onPick }: { spec: FxSpec; label: string; onPick: 
     <button
       data-testid={`fx-card-${spec.id}`}
       className="mz-tile"
-      onClick={onPick}
+      onClick={() => {
+        if (consumeSuppressedClick()) return;
+        onPick();
+      }}
+      // سحبُ البطاقة إلى المسارات يضع المؤثّرَ عند زمن الإفلات (كما في محرّر فيديو شائع)؛ والإفلاتُ على اللوحة = عند المؤشّر.
+      onPointerDown={(e) => startTileDrag(e, '<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(180deg,#2f7fd6,#f7c88b)"></div>', (drop) => onPick(drop.start !== undefined ? { start: drop.start } : undefined))}
       title={label}
       style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: 0, border: 0, background: 'transparent', color: 'var(--text)', cursor: 'pointer' }}
     >

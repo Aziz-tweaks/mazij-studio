@@ -331,11 +331,13 @@ export interface ElementViewProps {
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>, id: string) => void;
   onDoubleClick: (e: ReactPointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>, id: string) => void;
   onTextBlur: (id: string, text: string) => void;
+  /** يُنادى مع كلّ حرفٍ أثناء التحرير — ليتّسع صندوقُ السطر الواحد حيًّا (كما في محرّر فيديو شائع). */
+  onTextInput?: (id: string, text: string) => void;
   onTextKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, id: string) => void;
   editRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function ElementView({ el: rawEl, pal, selected, editing, croppingActive, size, scale, maskShape, pathShape, lang, entranceOpacity, entranceTransform, entranceFilter, time, onPointerDown, onDoubleClick, onTextBlur, onTextKeyDown, editRef }: ElementViewProps) {
+export function ElementView({ el: rawEl, pal, selected, editing, croppingActive, size, scale, maskShape, pathShape, lang, entranceOpacity, entranceTransform, entranceFilter, time, onPointerDown, onDoubleClick, onTextBlur, onTextInput, onTextKeyDown, editRef }: ElementViewProps) {
   // العدّادُ يُبدّل النصَّ بزمنه — إلا أثناء التحرير، فهناك يُرى المخزونُ ويُكتب.
   const el = editing ? rawEl : withCounterAt(rawEl, time);
   if (!el.visible) return null;
@@ -433,6 +435,7 @@ export function ElementView({ el: rawEl, pal, selected, editing, croppingActive,
           contentEditable
           suppressContentEditableWarning
           onBlur={(e) => onTextBlur(el.id, e.currentTarget.innerText ?? '')}
+          onInput={(e) => onTextInput?.(el.id, e.currentTarget.innerText ?? '')}
           onKeyDown={(e) => onTextKeyDown(e, el.id)}
           style={{
             ...baseStyle,
