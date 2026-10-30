@@ -479,11 +479,37 @@ function ColorGrid({ current, swatches, onPick }: { current: string; swatches: s
           />
         ))}
       </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)' }}>
         <input data-testid="ctx-color-input" type="color" value={normalizeHex(current) ?? '#000000'} onChange={(e) => onPick(e.target.value)} style={{ width: 30, height: 26, padding: 0, border: 0, background: 'transparent' }} />
-        <span dir="ltr" style={{ fontVariantNumeric: 'tabular-nums' }}>{(normalizeHex(current) ?? current).toUpperCase()}</span>
-      </label>
+        {/* الرمزُ يُكتَب (٣٠ أكتوبر): كان نصًّا للقراءة فقط، فاللونُ الدقيقُ يمرّ بمنتقي النظام. */}
+        <HexField value={(normalizeHex(current) ?? current).toUpperCase()} onCommit={onPick} />
+      </div>
     </div>
+  );
+}
+
+function HexField({ value, onCommit }: { value: string; onCommit: (hex: string) => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const n = normalizeHex(draft.trim().startsWith('#') ? draft.trim() : `#${draft.trim()}`);
+    if (n) onCommit(n);
+    setDraft(null);
+  };
+  return (
+    <input
+      data-testid="ctx-color-hex"
+      dir="ltr"
+      value={draft ?? value}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') setDraft(null);
+      }}
+      spellCheck={false}
+      style={{ width: 84, height: 26, padding: '0 8px', border: '1px solid var(--line)', borderRadius: 7, background: 'var(--surface2)', color: 'var(--text)', fontSize: 12, fontVariantNumeric: 'tabular-nums', outline: 0 }}
+    />
   );
 }
 
