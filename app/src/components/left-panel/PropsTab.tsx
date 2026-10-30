@@ -6,7 +6,7 @@ import type { HAlign, VAlign } from '../../state/types';
 import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
 import { geoToPx } from '../../lib/geometry';
 import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
-import { animPropertiesFor, hasCustomAnimation, lineHeightOf, pivotOf, resolveTextColor } from '../../state/elements';
+import { ANIM_PRESETS, animPropertiesFor, hasCustomAnimation, lineHeightOf, pivotOf, resolveTextColor } from '../../state/elements';
 import { documentDuration, keyframeAt } from '../../lib/animTimeline';
 import { isInstantEffect, revealUnitCount, revealValueAt } from '../../lib/textStagger';
 import type { EasingId } from '../../lib/easing';
@@ -34,7 +34,7 @@ const WEIGHTS: Array<'regular' | 'medium' | 'bold'> = ['regular', 'medium', 'bol
  * الخطأ لا لفرض ذوق. */
 const TRACKING_MIN = -20;
 const TRACKING_MAX = 50;
-const ANIMS: Array<'none' | 'fade' | 'slide' | 'pop'> = ['none', 'fade', 'slide', 'pop'];
+const ANIMS = ANIM_PRESETS;
 const TFIELDS: Array<{ k: string; prop: 'x' | 'y' | 'w' | 'h' | 'rotation' | 'opacity'; suffix?: string }> = [
   { k: 'X', prop: 'x' },
   { k: 'Y', prop: 'y' },
@@ -541,7 +541,7 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
   const swatches = Array.from(new Set([pal.fg, pal.ac, pal.bg, '#FFFFFF', ...(pal.ac2 ? [pal.ac2] : [])]));
   const activeColor = el.color ?? pal.fg;
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
-  const presetBlocked = hasCustomAnimation(el.anim.tracks);
+  const presetBlocked = hasCustomAnimation(el.anim.tracks, el.anim.preset);
 
   // مسوّدة نصّيّة لحقل المقاس أثناء الكتابة — وإلا استحال **كتابة** مقاس أصلًا.
   //
@@ -603,7 +603,8 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
             onClick={() => setFontPickerOpen((v) => !v)}
             style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, textAlign: 'start' }}
           >
-            <span style={{ flex: 1, fontFamily: el.fontFamily }}>{el.fontFamily}</span>
+            {/* اسمُ الخطّ كما في القائمة لا عائلتُه الداخليّة (`Mz-…` للخطوط المرفوعة). */}
+            <span style={{ flex: 1, fontFamily: el.fontFamily, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} dir="auto">{state.fonts.find((f) => f.family === el.fontFamily)?.name ?? el.fontFamily}</span>
             <Icon size={14} path="M5 8l5 5 5-5" />
           </button>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, height: 32, padding: '0 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>

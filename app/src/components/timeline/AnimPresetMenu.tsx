@@ -1,8 +1,8 @@
 import type { AnimPreset } from '../../state/elements';
-import { hasCustomAnimation, motionTracks } from '../../state/elements';
+import { ANIM_PRESETS, hasCustomAnimation, motionTracks } from '../../state/elements';
 import { useStudio } from '../../state/StudioContext';
 
-const PRESETS: AnimPreset[] = ['none', 'fade', 'slide', 'pop'];
+const PRESETS: AnimPreset[] = ANIM_PRESETS;
 
 /** حركة الدخول للطبقة المحدَّدة، في رأس الخط الزمني.
  *
@@ -31,7 +31,7 @@ export function AnimPresetMenu() {
    * تَجعل المؤشّرةَ `not-allowed` على حافّةِ مقطعٍ مقفول: الممنوعُ يقول ذلك
    * **قبل** أن تحاوله. */
   // و«الظهور» خارجَ السؤال: توقيتُ الكلمات لا يمسّه النمط (`withPreset`)، فلا يحجبه.
-  const blocked = hasCustomAnimation(motionTracks(el.anim.tracks));
+  const blocked = hasCustomAnimation(motionTracks(el.anim.tracks), el.anim.preset);
 
   return (
     <div data-testid="anim-preset-menu" data-preset-blocked={blocked ? 'true' : 'false'} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -20,8 +20,8 @@ export type Screen = 'editor' | 'home';
  * (`re-capcut-flows.md` §5.1). لـمحرّر فيديو شائع أحد عشر تبويبًا وكلٌّ منها يعيد رسم لوح
  * المكتبة بالكامل، فجملة «ضغطت ولم يحدث شيء» **مستحيلة بنيويًّا** هناك. */
 export type PanelId = 'props' | 'assets' | 'ai' | 'library' | null;
-export type AssetsTab = 'files' | 'fonts' | 'colors' | 'templates';
-export type AnimId = 'none' | 'fade' | 'slide' | 'pop';
+export type AssetsTab = 'files' | 'images' | 'videos' | 'fonts' | 'colors' | 'templates';
+export type AnimId = 'none' | 'fade' | 'slide' | 'pop' | 'drop' | 'side' | 'shrink' | 'spin' | 'focus';
 export type Weight = 'regular' | 'medium' | 'bold';
 export type ExportFormat = 'png' | 'jpg' | 'svg' | 'mp4' | 'gif' | 'mov' | 'webm' | 'livephoto';
 /** صيغُ الفيديو كلُّها — موضعٌ واحدٌ يُسأل: «أهذه فيديو؟». */

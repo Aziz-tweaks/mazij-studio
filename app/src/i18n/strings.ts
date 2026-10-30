@@ -11,7 +11,7 @@ export interface Dictionary {
   img_ph: string; fit: string; timeline: string; layers: string; easing: string; ease_out: string;
   tl_simple_hint: string; tl_play: string; tl_pause: string;
   l_bg: string; l_img: string; l_head: string; l_badge: string; l_logo: string;
-  anim_none: string; anim_fade: string; anim_slide: string; anim_pop: string;
+  anim_none: string; anim_fade: string; anim_slide: string; anim_pop: string; anim_drop: string; anim_side: string; anim_shrink: string; anim_spin: string; anim_focus: string;
   align_h: string; align_v: string; al_start: string; al_center: string; al_end: string; al_top: string; al_middle: string; al_bottom: string;
   sec_text: string; color: string; align: string; animation: string; transform: string; blend: string;
   tracking: string;
@@ -177,7 +177,7 @@ export interface Dictionary {
   ctx_animate: string; ctx_more: string; ctx_fill: string; ctx_crop: string; ctx_replace: string; ctx_edit_points: string;
   ctx_group: string; ctx_duplicate: string; ctx_delete: string; ctx_align_sel: string;
   pages: string; pages_add: string; pages_same_design: string; pages_to_reel: string;
-  up_drop: string; up_pick: string; up_note: string; brand_pick_hint: string;
+  up_drop: string; stk_builtin: string; stk_upload: string; up_note_images: string; up_note_videos: string; up_in_project: string; up_reuse: string; up_pick: string; up_note: string; brand_pick_hint: string;
   sec_timing: string; timing_start: string; timing_end: string; timing_mixed: string; timing_from_playhead: string; timing_start_here: string; timing_end_here: string; clip_bounded: string; clip_bounded_hint: string; undo_clip_timing: string; undo_clip_bounded: string; clip_bounded_tip: string; clip_unbounded_tip: string;
   prop_trimStart: string; prop_trimEnd: string;
   prop_reveal: string; stagger_fx_blur: string; stagger_fx_none: string; stagger_fx_type: string; stagger_type_hint: string; reveal_timing: string; reveal_auto_hint: string; reveal_next_char: string; reveal_next_word: string; reveal_next_line: string; reveal_next_tip: string; reveal_clear: string; reveal_all_timed: string; undo_reveal_next: string; undo_reveal_clear: string;
@@ -208,7 +208,7 @@ export const AR: Dictionary = {
   pro_mode: 'الوضع الاحترافي',
   pro_mode_hint: 'مسك أداة المتّجهات: كل المقابض، والزاوية ما تكبّر الخط',
   l_bg: 'الخلفية', l_img: 'الصورة', l_head: 'العنوان', l_badge: 'الشارة', l_logo: 'الشعار',
-  anim_none: 'بدون', anim_fade: 'ظهور تدريجي', anim_slide: 'انزلاق لأعلى', anim_pop: 'تكبير',
+  anim_none: 'بدون', anim_fade: 'ظهور تدريجي', anim_slide: 'انزلاق لأعلى', anim_pop: 'تكبير', anim_drop: 'هبوط', anim_side: 'دخول جانبي', anim_shrink: 'تصغير', anim_spin: 'دوران', anim_focus: 'تركيز',
   align_h: 'أفقيًا', align_v: 'عموديًا', al_start: 'بداية السطر (يمين)', al_center: 'وسط', al_end: 'نهاية السطر (يسار)', al_top: 'أعلى', al_middle: 'منتصف', al_bottom: 'أسفل',
   sec_text: 'النص', color: 'اللون', align: 'المحاذاة', animation: 'الحركة', transform: 'التحويل',
   tracking: 'تتبُّع الأحرف',
@@ -465,7 +465,7 @@ export const AR: Dictionary = {
   ctx_animate: 'حرّك', ctx_more: 'المزيد', ctx_fill: 'التعبئة', ctx_crop: 'قص', ctx_replace: 'بدّل', ctx_edit_points: 'حرّر النقاط',
   ctx_group: 'جمّع', ctx_duplicate: 'كرّر', ctx_delete: 'احذف', ctx_align_sel: 'رتّب',
   pages: 'اللوحات', pages_add: 'لوحة جديدة', pages_same_design: 'نفس التصميم بمقاس ثاني', pages_to_reel: 'حوّله لريل',
-  up_drop: 'اسحب ملفاتك هنا', up_pick: 'ارفع ملف', up_note: 'صور، فيديو، أو ملصقات لوتي — تنزل في وسط اللوحة.', brand_pick_hint: 'حدّد نص أو شكل وانقر اللون.',
+  up_drop: 'اسحب ملفاتك هنا', stk_builtin: 'ملصقات متحركة', stk_upload: 'ارفع ملف لوتي', up_note_videos: 'مقطع فيديو من جهازك يبدأ عند المؤشّر في وسط اللوحة.', up_note_images: 'صورة من جهازك تنزل في وسط اللوحة. وللنقر في مكانٍ بعينه اضغط حرف الأداة.', up_in_project: 'في هذا المشروع', up_reuse: 'أضِفها مرّةً ثانية', up_pick: 'ارفع ملف', up_note: 'صور، فيديو، أو ملصقات لوتي — تنزل في وسط اللوحة.', brand_pick_hint: 'حدّد نص أو شكل وانقر اللون.',
   sec_timing: 'التوقيت', timing_start: 'البداية', timing_end: 'النهاية', timing_mixed: 'مختلف', timing_from_playhead: 'من المؤشّر', timing_start_here: 'ابدأ المقطع عند المؤشّر (ينقل حركته معه)', timing_end_here: 'أنهِ المقطع عند المؤشّر', clip_bounded: 'يظهر في مقطعه فقط', clip_bounded_hint: 'يختفي قبل بداية مقطعه وبعد نهايته، مثل طبقات الفيديو. بدونه يبقى العنصر ظاهرًا على كامل المقطع.', undo_clip_timing: 'توقيت المقطع', undo_clip_bounded: 'الظهور داخل المقطع', clip_bounded_tip: 'يظهر في مقطعه فقط', clip_unbounded_tip: 'يبقى ظاهرًا قبل مقطعه وبعده',
   prop_trimStart: 'بداية الخط', prop_trimEnd: 'نهاية الخط',
   prop_reveal: 'الظهور', stagger_fx_blur: 'انقشاع', stagger_fx_none: 'فوري', stagger_fx_type: 'كتابة', stagger_type_hint: 'الكتابة تمشي بترتيب القراءة، وكل حرف يظهر بشكله وهو آخر المكتوب', reveal_timing: 'توقيت كل وحدة', reveal_auto_hint: 'تلقائي الحين: كل وحدة بعد اللي قبلها بالتأخير. تبيها مع الصوت؟ وقّف المؤشّر عند أول كلمة واضغط', reveal_next_char: 'الحرف التالي هنا', reveal_next_word: 'الكلمة التالية هنا', reveal_next_line: 'السطر التالي هنا', reveal_next_tip: 'تظهر الوحدة التالية في إطار المؤشّر بالضبط', reveal_clear: 'رجّعها تلقائي', reveal_all_timed: 'كل الوحدات موقّتة', undo_reveal_next: 'توقيت الظهور', undo_reveal_clear: 'إلغاء توقيت الظهور',
@@ -496,7 +496,7 @@ export const EN: Dictionary = {
   pro_mode: 'Pro mode',
   pro_mode_hint: 'أداة متّجهات grip: all handles; corners keep the font size',
   l_bg: 'Background', l_img: 'Image', l_head: 'Headline', l_badge: 'Badge', l_logo: 'Logo',
-  anim_none: 'None', anim_fade: 'Fade in', anim_slide: 'Slide up', anim_pop: 'Pop',
+  anim_none: 'None', anim_fade: 'Fade in', anim_slide: 'Slide up', anim_pop: 'Pop', anim_drop: 'Drop', anim_side: 'Slide in', anim_shrink: 'Shrink', anim_spin: 'Spin', anim_focus: 'Focus',
   align_h: 'Across', align_v: 'Down', al_start: 'Line start', al_center: 'Center', al_end: 'Line end', al_top: 'Top', al_middle: 'Middle', al_bottom: 'Bottom',
   sec_text: 'Text', color: 'Color', align: 'Align', animation: 'Motion', transform: 'Transform',
   tracking: 'Letter spacing',
@@ -745,7 +745,7 @@ export const EN: Dictionary = {
   ctx_animate: 'Animate', ctx_more: 'More', ctx_fill: 'Fill', ctx_crop: 'Crop', ctx_replace: 'Replace', ctx_edit_points: 'Edit points',
   ctx_group: 'Group', ctx_duplicate: 'Duplicate', ctx_delete: 'Delete', ctx_align_sel: 'Arrange',
   pages: 'Artboards', pages_add: 'New artboard', pages_same_design: 'Same design, another size', pages_to_reel: 'Make it a reel',
-  up_drop: 'Drop files here', up_pick: 'Upload a file', up_note: 'Images, video or Lottie stickers — they land at the centre.', brand_pick_hint: 'Select a text or shape, then click a colour.',
+  up_drop: 'Drop files here', stk_builtin: 'Animated stickers', stk_upload: 'Upload a Lottie file', up_note_videos: 'A video clip from your computer starts at the playhead, centred.', up_note_images: 'An image from your computer lands at the centre. To click a spot, press the tool key.', up_in_project: 'In this project', up_reuse: 'Add it again', up_pick: 'Upload a file', up_note: 'Images, video or Lottie stickers — they land at the centre.', brand_pick_hint: 'Select a text or shape, then click a colour.',
   sec_timing: 'Timing', timing_start: 'Start', timing_end: 'End', timing_mixed: 'Mixed', timing_from_playhead: 'From playhead', timing_start_here: 'Start the clip at the playhead (its motion moves with it)', timing_end_here: 'End the clip at the playhead', clip_bounded: 'Visible only during its clip', clip_bounded_hint: 'Hidden before its clip starts and after it ends, like video layers. Without it the element stays on screen for the whole piece.', undo_clip_timing: 'Clip timing', undo_clip_bounded: 'Visible during clip', clip_bounded_tip: 'Visible only during this clip', clip_unbounded_tip: 'Stays visible before and after this clip',
   prop_trimStart: 'Line start', prop_trimEnd: 'Line end',
   prop_reveal: 'Reveal', stagger_fx_blur: 'Unblur', stagger_fx_none: 'Instant', stagger_fx_type: 'Typing', stagger_type_hint: 'Typing follows reading order; each new letter shows the shape it has as the last one typed', reveal_timing: 'Per-unit timing', reveal_auto_hint: 'Automatic now: each unit follows the last by the delay. Want it on the voice? Park the playhead on the first word and press', reveal_next_char: 'Next letter here', reveal_next_word: 'Next word here', reveal_next_line: 'Next line here', reveal_next_tip: 'The next unit appears on the playhead\'s exact frame', reveal_clear: 'Back to automatic', reveal_all_timed: 'Every unit is timed', undo_reveal_next: 'Reveal timing', undo_reveal_clear: 'Clear reveal timing',

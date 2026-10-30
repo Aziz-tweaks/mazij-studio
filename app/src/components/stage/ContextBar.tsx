@@ -3,7 +3,7 @@ import { Icon } from '../Icon';
 import { ICONS, MEDIUM_SURFACES, PALETTES } from '../../data/constants';
 import type { HAlign } from '../../state/types';
 import type { AnimPreset, DocElement } from '../../state/elements';
-import { hasCustomAnimation, resolveTextColor } from '../../state/elements';
+import { ANIM_PRESETS, hasCustomAnimation, resolveTextColor } from '../../state/elements';
 import { baseLayerColorOf, normalizeHex, resolveLayerColor } from '../../lib/appearance';
 import { useStudio } from '../../state/StudioContext';
 
@@ -13,7 +13,7 @@ export const ALT = isMac ? '⌥' : 'Alt ';
 
 type PopId = 'font' | 'color' | 'anim' | 'more' | 'align' | null;
 
-const PRESETS: AnimPreset[] = ['none', 'fade', 'slide', 'pop'];
+const PRESETS: AnimPreset[] = ANIM_PRESETS;
 const ALIGN_NEXT: Record<HAlign, HAlign> = { start: 'center', center: 'end', end: 'start' };
 const ALIGN_ICON: Record<HAlign, string> = {
   start: 'M4 5h12M4 9h8M4 13h12M4 17h8',
@@ -89,7 +89,7 @@ export function ContextBar() {
     );
   }
 
-  const presetBlocked = !!el && hasCustomAnimation(el.anim.tracks);
+  const presetBlocked = !!el && hasCustomAnimation(el.anim.tracks, el.anim.preset);
   const shapeFill = el?.type === 'shape' ? (() => {
     const base = baseLayerColorOf(el);
     return base ? resolveLayerColor(base.color, base.colorToken, pal) : (el.fill ?? pal[el.fillToken]);
@@ -122,7 +122,7 @@ export function ContextBar() {
     body = (
       <>
         <button data-testid="ctx-font" aria-expanded={pop === 'font'} onClick={(e) => toggle('font', e)} title={L.ctx_font} style={{ ...pillBtn, background: 'var(--surface2)', maxWidth: 150, gap: 6 }}>
-          <span style={{ fontFamily: `'${el.fontFamily}', sans-serif`, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{el.fontFamily}</span>
+          <span style={{ fontFamily: `'${el.fontFamily}', sans-serif`, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} dir="auto">{state.fonts.find((f) => f.family === el.fontFamily)?.name ?? el.fontFamily}</span>
           <Icon size={12} path="M5 8l5 5 5-5" />
         </button>
         <div dir="ltr" style={{ display: 'flex', alignItems: 'center', height: 34, borderRadius: 9, background: 'var(--surface2)', marginInlineStart: 4 }}>

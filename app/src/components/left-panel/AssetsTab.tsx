@@ -12,7 +12,7 @@ import { isAudioFile } from '../../lib/audioFile';
  * (`product-01.png`، `hero.mp4`) بوسم «قريبًا»: واجهةٌ تَعِد بما لا تفعل، وهي من «الأشياء
  * الغريبة» التي شكا منها المالك. وتبويب «المقاسات» كان نسخةً ثانيةً من قائمة المقاس
  * فوق اللوحة، فرُفع. */
-const BRAND_TABS: AssetsTabId[] = ['colors', 'fonts'];
+const BRAND_TABS: Array<Extract<AssetsTabId, 'colors' | 'fonts'>> = ['colors', 'fonts'];
 
 export function AssetsTab() {
   const { state, actions, dict: L } = useStudio();
@@ -38,7 +38,7 @@ export function AssetsTab() {
         </div>
       )}
       <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {!brand && <FilesPane />}
+        {!brand && <FilesPane only={state.assetsTab === 'images' ? 'image' : state.assetsTab === 'videos' ? 'video' : undefined} />}
         {state.assetsTab === 'fonts' && <FontsPane />}
         {state.assetsTab === 'colors' && <ColorsPane />}
       </div>
@@ -46,8 +46,35 @@ export function AssetsTab() {
   );
 }
 
-function FilesPane() {
+/** وسائطُ المشروع كلِّه (كلّ اللوحات)، بلا تكرارٍ للمصدر نفسه — ما رُفع مرّةً يُعاد
+ * استعمالُه بنقرة بدل أن يُرفَع ثانيةً (لوحُ «الرفع» في الأداة الشائعة يحفظ ما رُفع). */
+function projectMedia(state: ReturnType<typeof useStudio>['state'], only?: 'image' | 'video'): Array<{ key: string; type: 'image' | 'video'; src: string; name: string }> {
+  const docs = [state.elements, ...state.artboards.filter((a) => a.id !== state.activeArtboardId).map((a) => (a as { doc?: { elements?: unknown[] } }).doc?.elements ?? [])];
+  const seen = new Set<string>();
+  const out: Array<{ key: string; type: 'image' | 'video'; src: string; name: string }> = [];
+  for (const els of docs) {
+    for (const raw of els as Array<{ type?: string; src?: string; name?: string; id?: string }>) {
+      if (!raw || (raw.type !== 'image' && raw.type !== 'video') || !raw.src) continue;
+      if (only && raw.type !== only) continue;
+      if (seen.has(raw.src)) continue;
+      seen.add(raw.src);
+      out.push({ key: raw.id ?? String(out.length), type: raw.type, src: raw.src, name: raw.name ?? '' });
+    }
+  }
+  return out;
+}
+
+function FilesPane({ only }: { only?: 'image' | 'video' }) {
   const { state, actions, dict: L } = useStudio();
+  const media = projectMedia(state, only);
+  const reuse = async (m: { type: 'image' | 'video'; src: string; name: string }) => {
+    const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+    const blob = await (await fetch(m.src)).blob();
+    const file = new File([blob], m.name || (m.type === 'image' ? 'image' : 'video'), { type: blob.type });
+    const p = { x: size.w / 2, y: size.h / 2 };
+    if (m.type === 'image') void actions.insertImageFromFile(file, p);
+    else void actions.insertVideoFromFile(file, p);
+  };
   const inputRef = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
   const place = (files: FileList | File[] | null) => {
@@ -87,7 +114,7 @@ function FilesPane() {
           data-testid="upload-input"
           type="file"
           multiple
-          accept="image/*,video/*,audio/*,.json,.lottie"
+          accept={only === 'image' ? 'image/*' : only === 'video' ? 'video/*,.mov,.m4v,.webm' : 'image/*,video/*,audio/*,.json,.lottie'}
           style={{ display: 'none' }}
           onChange={(e) => {
             place(e.target.files);
@@ -95,7 +122,27 @@ function FilesPane() {
           }}
         />
       </div>
-      <p style={{ margin: 0, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.6 }}>{L.up_note}</p>
+      <p style={{ margin: 0, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.6 }}>{only === 'image' ? L.up_note_images : only === 'video' ? L.up_note_videos : L.up_note}</p>
+      {media.length > 0 && (
+        <>
+          <span className="mz-label">{L.up_in_project}</span>
+          <div data-testid="project-media" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            {media.map((m) => (
+              <button
+                key={m.key}
+                data-testid="project-media-tile"
+                title={L.up_reuse}
+                onClick={() => void reuse(m)}
+                style={{ aspectRatio: '1', padding: 0, border: '1px solid var(--line)', borderRadius: 8, overflow: 'hidden', background: 'var(--surface2)', cursor: 'pointer' }}
+              >
+                {m.type === 'image'
+                  ? <img src={m.src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  : <video src={m.src} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

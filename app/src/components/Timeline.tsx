@@ -850,7 +850,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                         {el.trimIn.toFixed(1)}–{el.trimOut.toFixed(1)}s
                       </span>
                     )}
-                    {timed && el.type !== 'audio' && <Icon size={13} path="M10 17a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM10 8v3l2 1M8 3h4" style={{ color: hasCustomAnimation(el.anim.tracks) ? 'var(--accentText)' : 'var(--muted)' }} />}
+                    {timed && el.type !== 'audio' && <Icon size={13} path="M10 17a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM10 8v3l2 1M8 3h4" style={{ color: hasCustomAnimation(el.anim.tracks, el.anim.preset) ? 'var(--accentText)' : 'var(--muted)' }} />}
                   </button>
                   )}
                   {timed && (

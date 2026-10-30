@@ -4,6 +4,7 @@ import { ShapesLibrary } from './ShapesLibrary';
 import { TextLibrary } from './TextLibrary';
 import { AudioLibrary } from './AudioLibrary';
 import { FxLibrary } from './FxLibrary';
+import { StickersLibrary } from './StickersLibrary';
 
 /** لوح محتوى الأداة المختارة.
  *
@@ -28,6 +29,8 @@ export function LibraryTab() {
   if (status === 'ready' && tool === 'text') return <TextLibrary />;
   if (status === 'ready' && tool === 'audio') return <AudioLibrary />;
   if (status === 'ready' && tool === 'fx') return <FxLibrary />;
+  // الملصقاتُ لوحٌ يُفتَح من الشريط وحده؛ والأداةُ (حرفُها) ما زالت «انقر لمكانٍ ثم اختر ملفًّا».
+  if (tool === 'lottie') return <StickersLibrary />;
 
   return (
     <div data-testid={`library-soon-${tool}`} style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>

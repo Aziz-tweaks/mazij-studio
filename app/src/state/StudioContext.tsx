@@ -4287,7 +4287,13 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             selectedIds: [],
             sel: null,
             templatesOpen: false,
-            ...(s.medium !== 'timed' ? { t: settledTime(elements, s.fps ?? DEFAULT_DOC_FPS) } : {}),
+            // والمستندُ الزمنيّ كذلك (٣٠ أكتوبر): رأسُ التشغيل عند الصفر كان يُري لوحةً
+            // شبهَ فارغة — نصوصُ القالب كلُّها تدخل بعد البداية — فيظنّ المستخدمُ أن
+            // القالب لم يُطبَّق. يقف على آخر إطارٍ مكتمل، وزرُّ التشغيل يُريه يتحرّك.
+            playing: false,
+            t: s.medium !== 'timed'
+              ? settledTime(elements, s.fps ?? DEFAULT_DOC_FPS)
+              : Math.max(0, settledTime(elements, s.fps ?? DEFAULT_DOC_FPS) - 1 / (s.fps ?? DEFAULT_DOC_FPS)),
             ...pushHistory(s, 'قالب'),
           };
         }),

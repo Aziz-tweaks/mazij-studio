@@ -22,7 +22,9 @@ export interface Geometry {
   rotation: number;
 }
 
-export type AnimPreset = 'none' | 'fade' | 'slide' | 'pop';
+export type AnimPreset = 'none' | 'fade' | 'slide' | 'pop' | 'drop' | 'side' | 'shrink' | 'spin' | 'focus';
+/** ترتيبُ العرض في كلّ قائمة أنماط (المفتش وشريط السياق والخط الزمني). */
+export const ANIM_PRESETS: AnimPreset[] = ['none', 'fade', 'slide', 'drop', 'side', 'pop', 'shrink', 'spin', 'focus'];
 
 /** A keyframe on an element's entrance clip: `t` is a fraction (0..1) of the clip's
  * own duration (not an absolute timeline time, so moving/resizing the clip carries
@@ -257,6 +259,35 @@ export function tracksFromPreset(preset: AnimPreset, keyframes: AnimKeyframe[], 
         opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
         scale: keyframes.map((k) => ({ id: k.id, time: at(k), value: Math.max(0, k.v), easing, bezier: [...bezier] })),
       };
+    // (٣٠ أكتوبر) خمسةُ أنماطٍ أخرى — مكتبةُ الدخول كانت أربعةً، والمراجعُ عشرات.
+    // كلُّها مفتاحان على كلّ مسار، فتبقى «نمطًا» لا «حركةً مبنيّةً باليد».
+    case 'drop':
+      return {
+        opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
+        y: keyframes.map((k) => ({ id: k.id, time: at(k), value: -(1 - k.v) * 0.1, easing, bezier: [...bezier] })),
+      };
+    case 'side':
+      // من جهة بداية السطر العربيّ (اليمين) إلى موضعه.
+      return {
+        opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
+        x: keyframes.map((k) => ({ id: k.id, time: at(k), value: (1 - k.v) * 0.15, easing, bezier: [...bezier] })),
+      };
+    case 'shrink':
+      return {
+        opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
+        scale: keyframes.map((k) => ({ id: k.id, time: at(k), value: 1 + (1 - k.v) * 0.6, easing, bezier: [...bezier] })),
+      };
+    case 'spin':
+      return {
+        opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
+        rotation: keyframes.map((k) => ({ id: k.id, time: at(k), value: -(1 - k.v) * 90, easing, bezier: [...bezier] })),
+        scale: keyframes.map((k) => ({ id: k.id, time: at(k), value: 0.6 + k.v * 0.4, easing, bezier: [...bezier] })),
+      };
+    case 'focus':
+      return {
+        opacity: keyframes.map((k) => ({ id: k.id, time: at(k), value: clamp01(k.v), easing, bezier: [...bezier] })),
+        blur: keyframes.map((k) => ({ id: k.id, time: at(k), value: (1 - k.v) * 0.02, easing, bezier: [...bezier] })),
+      };
     case 'none':
     default:
       return {};
@@ -315,10 +346,13 @@ export function motionTracks(tracks: PropertyTracks): PropertyTracks {
   return motion;
 }
 
-export function hasCustomAnimation(tracks: PropertyTracks): boolean {
+export function hasCustomAnimation(tracks: PropertyTracks, preset?: AnimPreset): boolean {
+  // خصائصُ يزرعها **هذا** النمطُ بعينه (`x` لـ«جانبيّ»، `rotation` لـ«دوران»، `blur` لـ«تركيز»)
+  // ليست دليلَ يدٍ عليه — وتبقى دليلًا على غيره.
+  const own = preset ? new Set(Object.keys(tracksFromPreset(preset, [{ id: 'a', t: 0, v: 0 }, { id: 'b', t: 1, v: 1 }], 'easeOut', [...DEFAULT_BEZIER] as Bezier, 1))) : null;
   return Object.entries(tracks).some(([prop, track]) => {
     if (!track || !track.length) return false;
-    if (PRESET_FREE_PROPERTIES.has(prop as AnimProperty)) return true;
+    if (PRESET_FREE_PROPERTIES.has(prop as AnimProperty) && !own?.has(prop)) return true;
     return track.length > 2;
   });
 }

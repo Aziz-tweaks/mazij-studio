@@ -22,11 +22,17 @@ export function ContentPanel() {
       : panel === 'assets'
         ? state.assetsTab === 'colors'
           ? L.rail_brand
-          : L.rail_uploads
+          : state.assetsTab === 'images'
+            ? L.rail_images
+            : state.assetsTab === 'videos'
+              ? L.rail_video
+              : L.rail_uploads
         : state.libraryTool === 'text'
           ? L.rail_text
           : state.libraryTool === 'shape'
             ? L.rail_elements
+            : state.libraryTool === 'lottie'
+              ? L.rail_stickers
             : (L[`tool_${state.libraryTool}` as keyof typeof L] as string);
 
   return (

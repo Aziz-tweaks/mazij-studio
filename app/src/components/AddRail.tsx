@@ -17,7 +17,9 @@ export function AddRail() {
   const timed = state.medium === 'timed';
   const lib = state.panel === 'library';
   const brandView = state.assetsTab === 'colors' || state.assetsTab === 'fonts';
-  const uploadsOn = state.panel === 'assets' && !brandView;
+  const imagesOn = state.panel === 'assets' && state.assetsTab === 'images';
+  const videosOn = state.panel === 'assets' && state.assetsTab === 'videos';
+  const uploadsOn = state.panel === 'assets' && !brandView && !imagesOn && !videosOn;
   const brandOn = state.panel === 'assets' && brandView;
   const keyOf = (id: string) => TOOLS.find((t) => t.id === id)?.key ?? '';
 
@@ -41,9 +43,12 @@ export function AddRail() {
       <RailBtn testid="open-templates-btn" icon={ICONS.templates} label={L.rail_templates} active={state.templatesOpen} onClick={actions.openTemplates} />
       <RailBtn rail="text" icon={ICONS.text} label={L.rail_text} active={lib && state.libraryTool === 'text'} onClick={() => actions.toggleRailPanel('library', { libraryTool: 'text' })} />
       <RailBtn panelTab="library" icon={ICONS.shape} label={L.rail_elements} active={lib && state.libraryTool === 'shape'} onClick={() => actions.toggleRailPanel('library', { libraryTool: 'shape' })} />
-      <RailBtn tool="image" icon={ICONS.image} label={L.rail_images} shortcut={keyOf('image')} active={state.tool === 'image'} onClick={() => actions.openToolLibrary('image')} />
-      {timed && <RailBtn tool="video" icon={ICONS.video} label={L.rail_video} active={state.tool === 'video'} onClick={() => actions.openToolLibrary('video')} />}
-      <RailBtn tool="lottie" icon={ICONS.sticker} label={L.rail_stickers} active={state.tool === 'lottie'} onClick={() => actions.openToolLibrary('lottie')} />
+      {/* «صور» لوحٌ لا فخّ (٣٠ أكتوبر): كانت النقرةُ تُسلِّح أداةً ثم تفتح منتقيَ ملفّاتٍ
+          عند أوّل نقرةٍ على اللوحة، بلا مكانٍ يُرى فيه ما رُفع قبلُ. الآن تفتح لوحًا فيه
+          الرفعُ وصورُ المشروع، والحرفُ المختصر ما زال يُسلِّح الأداةَ لمن يريد النقرَ لمكانٍ بعينه. */}
+      <RailBtn tool="image" icon={ICONS.image} label={L.rail_images} shortcut={keyOf('image')} active={imagesOn || state.tool === 'image'} onClick={() => (imagesOn ? actions.setPanel('props') : actions.toggleRailPanel('assets', { assetsTab: 'images' }))} />
+      {timed && <RailBtn tool="video" icon={ICONS.video} label={L.rail_video} active={videosOn || state.tool === 'video'} onClick={() => (videosOn ? actions.setPanel('props') : actions.toggleRailPanel('assets', { assetsTab: 'videos' }))} />}
+      <RailBtn tool="lottie" icon={ICONS.sticker} label={L.rail_stickers} active={(lib && state.libraryTool === 'lottie') || state.tool === 'lottie'} onClick={() => actions.toggleRailPanel('library', { libraryTool: 'lottie' })} />
       {timed && <RailBtn tool="audio" icon={ICONS.audio} label={L.rail_audio} active={lib && state.libraryTool === 'audio'} onClick={() => actions.openToolLibrary('audio')} />}
       {timed && <RailBtn tool="fx" icon={ICONS.fx} label={L.rail_fx} active={lib && state.libraryTool === 'fx'} onClick={() => actions.openToolLibrary('fx')} />}
       <div style={{ width: 32, height: 1, margin: '6px 0', background: 'var(--line)', flex: 'none' }} />
