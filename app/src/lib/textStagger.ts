@@ -368,6 +368,8 @@ export function buildStaggerTokens(text: string, cfg: Pick<TextStaggerAnim, 'uni
 
 export interface UnitVisual {
   opacity: number;
+  /** إزاحةٌ أفقيّة كسرًا من حجم خطّ الوحدة — موجبُها يمين. لا يستعملها إلا «تجمّع». */
+  translateX: number;
   /** Fraction of the unit's own font size — positive moves it down. */
   translateY: number;
   scale: number;
@@ -376,8 +378,8 @@ export interface UnitVisual {
   blur: number;
 }
 
-export const SHOWN_UNIT_VISUAL: UnitVisual = { opacity: 1, translateY: 0, scale: 1, rotateDeg: 0, blur: 0 };
-export const HIDDEN_UNIT_VISUAL: UnitVisual = { opacity: 0, translateY: 0, scale: 1, rotateDeg: 0, blur: 0 };
+export const SHOWN_UNIT_VISUAL: UnitVisual = { opacity: 1, translateX: 0, translateY: 0, scale: 1, rotateDeg: 0, blur: 0 };
+export const HIDDEN_UNIT_VISUAL: UnitVisual = { opacity: 0, translateX: 0, translateY: 0, scale: 1, rotateDeg: 0, blur: 0 };
 
 /** أثرٌ **فوريّ**: الوحدةُ غائبةٌ ثم حاضرةٌ في إطارٍ واحد، بلا مدّة. «فوري» يُظهر الوحدةَ
  * بصورتها في النصّ الكامل، و«الكتابة» تُظهر **البادئةَ مُشكَّلةً وحدها** (آخرُ حروفها
@@ -390,24 +392,41 @@ export function isInstantEffect(effect: StaggerEffect): boolean {
  * renderer, given a unit's already-eased 0..1 reveal progress. Composes with (never
  * replaces) the element-level `resolveAnimAt` opacity/transform — see
  * `docs/CONTROLS.md` for how the two animation layers combine. */
-export function unitVisualAt(effect: StaggerEffect, progress: number): UnitVisual {
+export function unitVisualAt(effect: StaggerEffect, progress: number, rank = 0): UnitVisual {
   const p = Math.max(0, Math.min(1, progress));
   switch (effect) {
+    // (٣٠ أكتوبر) «تجمّع»: كلُّ وحدةٍ تبدأ قطعةً صغيرةً مضبّبةً في موضعٍ متناثرٍ ثابتٍ (مشتقٍّ من
+    // رتبتها، فالإطارُ نفسه يُرسَم مرّتين بالشكل نفسه في المعاينة والتصدير) ثم تلتئم في مكانها.
+    case 'gather': {
+      const h1 = seeded(rank * 2 + 1);
+      const h2 = seeded(rank * 2 + 2);
+      const ang = h1 * Math.PI * 2;
+      const dist = 2.5 + h2 * 3.5;
+      const k = (1 - p) * (1 - p);
+      return {
+        opacity: Math.min(1, p * 4),
+        translateX: Math.cos(ang) * dist * k,
+        translateY: Math.sin(ang) * dist * k,
+        scale: 0.25 + 0.75 * p,
+        rotateDeg: (h2 - 0.5) * 240 * (1 - p),
+        blur: (1 - p) * 0.12,
+      };
+    }
     case 'slide':
-      return { opacity: p, translateY: (1 - p) * 0.45, scale: 1, rotateDeg: 0, blur: 0 };
+      return { opacity: p, translateX: 0, translateY: (1 - p) * 0.45, scale: 1, rotateDeg: 0, blur: 0 };
     case 'scale':
-      return { opacity: p, translateY: 0, scale: 0.3 + 0.7 * p, rotateDeg: 0, blur: 0 };
+      return { opacity: p, translateX: 0, translateY: 0, scale: 0.3 + 0.7 * p, rotateDeg: 0, blur: 0 };
     case 'rotate':
-      return { opacity: p, translateY: 0, scale: 1, rotateDeg: (1 - p) * -40, blur: 0 };
+      return { opacity: p, translateX: 0, translateY: 0, scale: 1, rotateDeg: (1 - p) * -40, blur: 0 };
     // تنقشع من ضبابيّةٍ نصفُ قطرها ثلثُ حجم الخطّ — تكفي لمحو الحرف ولا تفيض على جاره كثيرًا.
     case 'blur':
-      return { opacity: p, translateY: 0, scale: 1, rotateDeg: 0, blur: (1 - p) * 0.3 };
+      return { opacity: p, translateX: 0, translateY: 0, scale: 1, rotateDeg: 0, blur: (1 - p) * 0.3 };
     case 'none':
     case 'type':
       return p > 0 ? SHOWN_UNIT_VISUAL : HIDDEN_UNIT_VISUAL;
     case 'fade':
     default:
-      return { opacity: p, translateY: 0, scale: 1, rotateDeg: 0, blur: 0 };
+      return { opacity: p, translateX: 0, translateY: 0, scale: 1, rotateDeg: 0, blur: 0 };
   }
 }
 
@@ -542,7 +561,7 @@ export function resolveUnitProgress(cfg: TextStaggerAnim, anim: Pick<ElementAnim
 /** `resolveUnitProgress` + `unitVisualAt` in one call — what both renderers actually
  * invoke per animated unit. */
 export function resolveUnitVisual(cfg: TextStaggerAnim, anim: Pick<ElementAnim, 'start' | 'sourceIn' | 'tracks'>, rank: number, time: number): UnitVisual {
-  return unitVisualAt(cfg.effect, resolveUnitProgress(cfg, anim, rank, time));
+  return unitVisualAt(cfg.effect, resolveUnitProgress(cfg, anim, rank, time), rank);
 }
 
 /** عددُ الوحدات الظاهرة **بترتيب القراءة** — ما يحتاجه أثرُ «الكتابة» ليقطع البادئة.
@@ -604,6 +623,8 @@ export const TYPE_BREAK = ZWNJ;
  * every DOM span the stagger layer renders. */
 export function unitVisualToCssTransform(v: UnitVisual): string | undefined {
   const parts: string[] = [];
+  // الإزاحةُ الأفقيّة بالـ`em` (كسرٌ من حجم الخطّ) لا بالنسبة: نسبةُ `translateX` تُقاس بعرض الوحدة.
+  if (v.translateX !== 0) parts.push(`translateX(${v.translateX.toFixed(3)}em)`);
   if (v.translateY !== 0) parts.push(`translateY(${(v.translateY * 100).toFixed(2)}%)`);
   if (v.scale !== 1) parts.push(`scale(${v.scale.toFixed(3)})`);
   if (v.rotateDeg !== 0) parts.push(`rotate(${v.rotateDeg.toFixed(2)}deg)`);
@@ -616,3 +637,9 @@ export function unitVisualToCssFilter(v: UnitVisual): string | undefined {
 }
 
 export type { StaggerDirection, StaggerEffect, StaggerUnit, TextStaggerAnim };
+
+/** عددٌ شبهُ عشوائيٍّ ثابتٌ في [0،1) من عددٍ صحيح — لا يتغيّر بين إطارٍ وآخر ولا بين المعاينة والتصدير. */
+function seeded(n: number): number {
+  const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}

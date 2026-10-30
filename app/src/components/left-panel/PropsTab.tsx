@@ -23,7 +23,7 @@ import { WIDTH_PROFILE_PRESETS, type StrokeWidthProfile } from '../../lib/variab
 
 const STAGGER_UNITS: StaggerUnit[] = ['char', 'word', 'line'];
 const STAGGER_DIRECTIONS: StaggerDirection[] = ['start', 'end', 'center', 'random'];
-const STAGGER_EFFECTS: StaggerEffect[] = ['fade', 'slide', 'scale', 'rotate', 'blur', 'none', 'type'];
+const STAGGER_EFFECTS: StaggerEffect[] = ['fade', 'slide', 'scale', 'rotate', 'blur', 'gather', 'none', 'type'];
 const STAGGER_EASINGS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'back', 'bounce', 'hold'];
 
 const WEIGHTS: Array<'regular' | 'medium' | 'bold'> = ['regular', 'medium', 'bold'];

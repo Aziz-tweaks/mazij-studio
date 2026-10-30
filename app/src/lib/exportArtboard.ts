@@ -249,7 +249,7 @@ function drawStaggerToken(ctx: CanvasRenderingContext2D, text: string, anchorX: 
     ctx.filter = `blur(${Math.hypot(paint.blurPx, unitPx).toFixed(3)}px)`;
   }
   ctx.translate(anchorX, baselineY);
-  if (visual.translateY !== 0) ctx.translate(0, visual.translateY * fontPx);
+  if (visual.translateX !== 0 || visual.translateY !== 0) ctx.translate(visual.translateX * fontPx, visual.translateY * fontPx);
   if (visual.rotateDeg !== 0) ctx.rotate((visual.rotateDeg * Math.PI) / 180);
   if (visual.scale !== 1) ctx.scale(visual.scale, visual.scale);
   paintTextRun(ctx, text, 0, 0, paint, elementAlpha * visual.opacity);
@@ -290,7 +290,7 @@ function drawSlicedLine(
       ctx.filter = `blur(${Math.hypot(paint.blurPx, unitPx).toFixed(3)}px)`;
     }
     ctx.translate(edge, baselineY);
-    if (visual.translateY !== 0) ctx.translate(0, visual.translateY * fontPx);
+    if (visual.translateX !== 0 || visual.translateY !== 0) ctx.translate(visual.translateX * fontPx, visual.translateY * fontPx);
     if (visual.rotateDeg !== 0) ctx.rotate((visual.rotateDeg * Math.PI) / 180);
     if (visual.scale !== 1) ctx.scale(visual.scale, visual.scale);
     // الطرفان يتجاوزان الحدَّ بنصف بكسل فلا يظهر شقٌّ بين شريحتين ساكنتين؛ وأوّلُ شريحةٍ

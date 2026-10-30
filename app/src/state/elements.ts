@@ -380,7 +380,7 @@ export type StaggerUnit = 'char' | 'word' | 'line';
 export type StaggerDirection = 'start' | 'end' | 'center' | 'random';
 /** `blur` تنقشع من ضبابيّة؛ `none` ظهورٌ فوريٌّ بلا مدّة؛ `type` «كتابة»: بادئةُ النصّ
  * تظهر مُشكَّلةً وحدها كما يراها من يكتب (انظر `textStagger.ts`). */
-export type StaggerEffect = 'fade' | 'slide' | 'scale' | 'rotate' | 'blur' | 'none' | 'type';
+export type StaggerEffect = 'fade' | 'slide' | 'scale' | 'rotate' | 'blur' | 'none' | 'type' | 'gather';
 
 /** Per-text-element stagger layer (roadmap #6): splits the element's own text content
  * into units (grapheme/word/authored-line) and reveals each with a sequential delay,
