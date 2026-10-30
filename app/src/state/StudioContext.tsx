@@ -3870,7 +3870,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           let elements = s.elements;
           for (const mid of ids) {
           const el = elements.find((e) => e.id === mid);
-          if (!el || el.anim.preset === 'none' || hasCustomAnimation(motionTracks(el.anim.tracks))) continue;
+          if (!el || el.anim.preset === 'none' || hasCustomAnimation(motionTracks(el.anim.tracks), el.anim.preset)) continue;
           const span = Math.max(0.05, Math.min(seconds, el.anim.duration));
           const keyframes = el.anim.keyframes.length >= 2 ? el.anim.keyframes : defaultAnim(el.anim.preset, el.anim.start, el.anim.duration, el.anim.easing).keyframes;
           const base = tracksFromPreset(el.anim.preset, keyframes, el.anim.easing, el.anim.bezier, el.anim.duration, span);
