@@ -66,6 +66,28 @@ export function AnimPresetMenu() {
           );
         })}
       </div>
+      {/* **مدّة الدخول لكلّ عنصر** (٣٠ أكتوبر): كانت حاضرةً للنصوص وحدها (منزلقٌ في لوح النص)، فالشكلُ
+          والمجموعةُ يدخلان دائمًا في ٠٫٦ ث — خريطةٌ تقفز في عُشرَي ثانية كانت تزحف ثلاثةَ أضعاف ذلك. */}
+      {el.anim.preset !== 'none' && !blocked && (
+        <div data-testid="anim-entrance-duration" style={{ display: 'flex', padding: 2, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
+          {[0.2, 0.4, 0.6, 1].map((sec) => {
+            const tr = motionTracks(el.anim.tracks);
+            const ends = Object.values(tr).flatMap((k) => (k ?? []).map((f) => f.time - (el.anim.sourceIn ?? 0)));
+            const cur = ends.length ? Math.max(...ends) : 0.6;
+            const on = Math.abs(cur - Math.min(sec, el.anim.duration)) < 0.02;
+            return (
+              <button
+                key={sec}
+                data-testid={`anim-entrance-${sec}`}
+                onClick={() => actions.setEntranceDuration(el.id, sec)}
+                style={{ height: 22, padding: '0 7px', border: 0, borderRadius: 'calc(var(--rs) - 2px)', background: on ? 'var(--seg)' : 'transparent', color: on ? 'var(--text)' : 'var(--muted)', fontSize: 11, fontWeight: on ? 600 : 500, fontVariantNumeric: 'tabular-nums' }}
+              >
+                {`${sec}${L.sec_short}`}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

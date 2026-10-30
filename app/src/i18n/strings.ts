@@ -103,7 +103,7 @@ export interface Dictionary {
   kf_value_field_hint: string;
   prop_opacity: string; prop_x: string; prop_y: string; prop_scale: string; prop_scaleX: string; prop_scaleY: string; prop_rotation: string; prop_blur: string;
   expand_tracks: string; collapse_tracks: string; kf_easing: string;
-  entrance: string; tl_beyond_doc: string;
+  entrance: string; tl_beyond_doc: string; sec_short: string;
   /** المرحلة ٢ — المقاطعُ الحيّة: التقسيمُ وأسبابُ تعطيله، وحرسُ النمط الجاهز،
    * وأسماءُ خطوات التراجع. */
   split_clip: string; split_consequence: string; split_no_selection: string; split_locked: string; split_outside: string;
@@ -339,6 +339,7 @@ export const AR: Dictionary = {
   prop_opacity: 'الشفافية', prop_x: 'الموضع X', prop_y: 'الموضع Y', prop_scale: 'المقياس', prop_scaleX: 'العرض', prop_scaleY: 'الارتفاع', prop_rotation: 'الدوران', prop_blur: 'الضبابية',
   expand_tracks: 'إظهار مسارات الخصائص', collapse_tracks: 'إخفاء مسارات الخصائص', kf_easing: 'منحنى المفتاح',
   entrance: 'حركة الدخول',
+  sec_short: 'ث',
   // يُقال للمصمّم **لماذا** تعطَّل المفتاح، لا أنه معطَّل: المفتاح يُضاف عند المؤشّر،
   // والمؤشّر واقع خارج مقطع هذه الطبقة، فلا موضع له أصلًا.
   ex_estimate: (seconds, files, mb) =>
@@ -626,6 +627,7 @@ export const EN: Dictionary = {
   prop_opacity: 'Opacity', prop_x: 'Position X', prop_y: 'Position Y', prop_scale: 'Scale', prop_scaleX: 'Width', prop_scaleY: 'Height', prop_rotation: 'Rotation', prop_blur: 'Blur',
   expand_tracks: 'Show property tracks', collapse_tracks: 'Hide property tracks', kf_easing: 'Keyframe easing',
   entrance: 'Entrance',
+  sec_short: 's',
   ex_estimate: (seconds, files, mb) => `${seconds}s · ${files} file${files === 1 ? '' : 's'} · ≈${mb} MB`,
   ex_only_project_size: 'Project size only', ex_only_project_size_hint: 'Keeps one target: this artboard’s own size',
   ex_video_scale_locked: 'Video exports at the artboard’s own resolution — the multiplier is for still images',
