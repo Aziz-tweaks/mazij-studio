@@ -974,6 +974,8 @@ export interface StudioActions {
   /** شفافيّةٌ حيّةٌ أثناء سحب الشريط — بين `beginElementEdit`/`commitElementEdit`. */
   liveUpdateElementOpacity: (id: ElementId, opacity: number) => void;
   setElementGeoPx: (id: ElementId, patch: { x?: number; y?: number; w?: number; h?: number; rotation?: number }) => void;
+  /** موضعُ المجموعة ومقاسُها بالبكسل: يُحرِّك أعضاءها ويُحجِّمهم معًا حول إطارها الجامع. */
+  setGroupGeoPx: (ids: ElementId[], patch: { x?: number; y?: number; w?: number; h?: number }) => void;
   /** نقطةُ ارتكاز الحركة (`ElementBase.pivot`)، كسرًا من صندوق العنصر — و`null` أو المركزُ
    * يحذفانها فيعود المستندُ كما كان بايتًا ببايت. خطوةُ تراجعٍ واحدة. */
   setElementPivot: (id: ElementId, pivot: { x: number; y: number } | null) => void;
@@ -3394,6 +3396,37 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             return { ...e, pivot: { x, y } };
           }),
         ),
+      setGroupGeoPx: (ids, p) =>
+        commitElements((els) => {
+          const size = sizeAt(state.sizeIdx, state.customW, state.customH);
+          const members = els.filter((e) => ids.includes(e.id));
+          if (!members.length) return els;
+          const x0 = Math.min(...members.map((e) => e.geo.x)) * size.w;
+          const y0 = Math.min(...members.map((e) => e.geo.y)) * size.h;
+          const x1 = Math.max(...members.map((e) => e.geo.x + e.geo.w)) * size.w;
+          const y1 = Math.max(...members.map((e) => e.geo.y + e.geo.h)) * size.h;
+          const bw = Math.max(1e-6, x1 - x0);
+          const bh = Math.max(1e-6, y1 - y0);
+          const nx = p.x ?? x0;
+          const ny = p.y ?? y0;
+          const sx = (p.w ?? bw) / bw;
+          const sy = (p.h ?? bh) / bh;
+          return els.map((e) => {
+            if (!ids.includes(e.id)) return e;
+            const px = e.geo.x * size.w;
+            const py = e.geo.y * size.h;
+            const geo = {
+              ...e.geo,
+              x: (nx + (px - x0) * sx) / size.w,
+              y: (ny + (py - y0) * sy) / size.h,
+              w: (e.geo.w * size.w * sx) / size.w,
+              h: (e.geo.h * size.h * sy) / size.h,
+            };
+            // النصُّ داخل المجموعة يكبر مع إطاره، وإلا بقي رمزٌ صغيرٌ في دائرةٍ كبرت.
+            if (e.type === 'text' && sy !== 1) return { ...e, geo, fontSize: Math.max(1, e.fontSize * sy) };
+            return { ...e, geo };
+          });
+        }),
       setElementGeoPx: (id, p) =>
         commitElements((els) =>
           els.map((e) => {

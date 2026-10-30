@@ -62,6 +62,25 @@ const OBJECT_ALIGN: Array<{ d: string; edge: 'left' | 'center' | 'right' | 'top'
   { d: 'M3 17h14M6 4v9M11 7v6', edge: 'bottom' },
 ];
 
+/** معرّفاتُ التحديد متى كان مجموعةً واحدةً كاملة، وإلا `null`. */
+function groupSelectionIds(state: { selectedIds: string[]; elements: DocElement[] }): string[] | null {
+  if (state.selectedIds.length < 2) return null;
+  const sel = state.elements.filter((e) => state.selectedIds.includes(e.id));
+  const gid = sel[0]?.groupId;
+  if (!gid || sel.some((e) => e.groupId !== gid)) return null;
+  if (state.elements.filter((e) => e.groupId === gid).length !== sel.length) return null;
+  return sel.map((e) => e.id);
+}
+
+function groupBoxPx(elements: DocElement[], ids: string[], size: { w: number; h: number }) {
+  const m = elements.filter((e) => ids.includes(e.id));
+  const x0 = Math.min(...m.map((e) => e.geo.x));
+  const y0 = Math.min(...m.map((e) => e.geo.y));
+  const x1 = Math.max(...m.map((e) => e.geo.x + e.geo.w));
+  const y1 = Math.max(...m.map((e) => e.geo.y + e.geo.h));
+  return { x: x0 * size.w, y: y0 * size.h, w: (x1 - x0) * size.w, h: (y1 - y0) * size.h };
+}
+
 export function PropsTab() {
   const { state, actions, dict: L } = useStudio();
   const isPen = state.tool === 'pen';
@@ -204,9 +223,14 @@ export function PropsTab() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                   {TFIELDS.map((f) => {
-                    const box = geoToPx(el.geo, size);
+                    // **مجموعةٌ محدَّدة = جسمٌ واحد** (٣٠ أكتوبر): كانت الحقولُ كلّها معطَّلةً متى حُدِّدت مجموعة
+                    // (عضوان فأكثر)، فلا يُكتب موضعُها ولا مقاسُها — والنقرُ على حقلٍ معطَّلٍ يُرسل الأرقامَ إلى
+                    // اللوحة فتُطلق اختصاراتِ الأدوات. الآن X/Y/W/H تخصّ إطارَ المجموعة الجامع.
+                    const groupIds = groupSelectionIds(state);
+                    const box = groupIds ? groupBoxPx(state.elements, groupIds, size) : geoToPx(el.geo, size);
                     const raw = f.prop === 'rotation' ? el.geo.rotation : f.prop === 'opacity' ? el.opacity : (box as unknown as Record<string, number>)[f.prop];
-                    const disabled = state.selectedIds.length !== 1;
+                    const geoProp = f.prop === 'x' || f.prop === 'y' || f.prop === 'w' || f.prop === 'h';
+                    const disabled = groupIds ? !geoProp : state.selectedIds.length !== 1;
                     return (
                       <label key={f.k} style={{ display: 'flex', alignItems: 'center', gap: 6, height: 30, padding: '0 4px 0 8px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12 }}>
                         <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 14, fontSize: 11 }}>{f.k}</span>
@@ -214,6 +238,13 @@ export function PropsTab() {
                           disabled={disabled}
                           value={raw}
                           onCommit={(v) => {
+                            if (groupIds && geoProp) {
+                              if ((f.prop === 'w' || f.prop === 'h') && state.lockAspect && box.w > 0 && box.h > 0) {
+                                const ratio = box.w / box.h;
+                                actions.setGroupGeoPx(groupIds, f.prop === 'w' ? { w: v, h: v / ratio } : { h: v, w: v * ratio });
+                              } else actions.setGroupGeoPx(groupIds, { [f.prop]: v });
+                              return;
+                            }
                             if (f.prop === 'opacity') actions.setElementOpacity(el.id, v);
                             else if (f.prop === 'rotation') actions.setElementGeoPx(el.id, { rotation: v });
                             else if (f.prop === 'x') actions.setElementGeoPx(el.id, { x: v });
