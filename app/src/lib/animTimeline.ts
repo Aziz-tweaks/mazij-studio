@@ -583,7 +583,7 @@ export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0,
   // المئويّة — و`translate(%)` في CSS تُقاس بصندوق العنصر نفسه، فلا يحتاج هذا الموضعُ
   // أن يعرف مقاسًا. ولا يُنبعث شيءٌ منها متى كانت في المركز أو لم يكن مقياسٌ ولا دوران:
   // فكلُّ مستندٍ قائمٍ يُنتج النصَّ نفسَه الذي كان يُنتجه — العقدُ نفسُه أدناه.
-  const pv = pivot ? { dx: Math.min(1, Math.max(0, pivot.x)) - 0.5, dy: Math.min(1, Math.max(0, pivot.y)) - 0.5 } : { dx: 0, dy: 0 };
+  const pv = pivot ? { dx: Math.min(50, Math.max(-50, pivot.x)) - 0.5, dy: Math.min(50, Math.max(-50, pivot.y)) - 0.5 } : { dx: 0, dy: 0 };
   const { sx: psx, sy: psy } = effectiveScale(v);
   const pivoted = (pv.dx !== 0 || pv.dy !== 0) && Number.isFinite(pv.dx) && Number.isFinite(pv.dy) && (psx !== 1 || psy !== 1 || v.rotation !== 0);
   if (pivoted) transformParts.push(`translate(${(pv.dx * 100).toFixed(3)}%, ${(pv.dy * 100).toFixed(3)}%)`);

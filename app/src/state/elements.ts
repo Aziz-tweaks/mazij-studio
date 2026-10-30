@@ -604,7 +604,8 @@ export function firstBaselineShift(el: { lineHeight?: number }, fontPx: number):
 export function pivotOf(el: { pivot?: { x: number; y: number } | null }): { x: number; y: number } {
   const p = el.pivot;
   if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return { x: 0.5, y: 0.5 };
-  return { x: Math.min(1, Math.max(0, p.x)), y: Math.min(1, Math.max(0, p.y)) };
+  // خارجَ الصندوق مسموحٌ (كمرساة After Effects): أعضاءُ المجموعة يرتكزون على مركزها المشترك.
+  return { x: Math.min(50, Math.max(-50, p.x)), y: Math.min(50, Math.max(-50, p.y)) };
 }
 
 /** بُعدُ نقطة الارتكاز عن مركز الصندوق، كسرًا من ضلعيه (`-0.5..0.5`) — وصفرٌ تامٌّ للمركز،

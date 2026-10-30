@@ -3329,9 +3329,23 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           // **حركةُ المجموعة لكلّ أعضائها** (٣٠ أكتوبر): دائرةٌ ورمزٌ مجمَّعان كانت تُكبَّر فيهما الدائرةُ
           // وحدها والرمزُ ظاهرٌ قبلها في الفراغ. المجموعةُ تُحدَّد وتُسحب كوحدة، فتدخل كوحدة.
           const gid = s.elements.find((e) => e.id === id)?.groupId;
-          const elements = s.elements.map((e) =>
-            e.id === id || (!!gid && e.groupId === gid) ? { ...e, anim: withPreset(e.anim, preset) } : e,
-          );
+          // والتكبيرُ والدورانُ حول **مركز المجموعة** لا مركزِ كلّ عضو: خريطةٌ من عشرين شكلًا
+          // كانت «تتكبّر» عشرين تكبيرًا منفصلًا فتتفكّك بدل أن تقترب ككتلةٍ واحدة.
+          const members = gid ? s.elements.filter((e) => e.groupId === gid) : [];
+          const gx0 = members.length ? Math.min(...members.map((e) => e.geo.x)) : 0;
+          const gy0 = members.length ? Math.min(...members.map((e) => e.geo.y)) : 0;
+          const gx1 = members.length ? Math.max(...members.map((e) => e.geo.x + e.geo.w)) : 0;
+          const gy1 = members.length ? Math.max(...members.map((e) => e.geo.y + e.geo.h)) : 0;
+          const gcx = (gx0 + gx1) / 2;
+          const gcy = (gy0 + gy1) / 2;
+          const elements = s.elements.map((e) => {
+            if (!(e.id === id || (!!gid && e.groupId === gid))) return e;
+            const next = { ...e, anim: withPreset(e.anim, preset) };
+            if (members.length > 1 && e.geo.w > 0 && e.geo.h > 0) {
+              next.pivot = { x: (gcx - e.geo.x) / e.geo.w, y: (gcy - e.geo.y) / e.geo.h };
+            }
+            return next;
+          });
           const after = elements.find((e) => e.id === id);
           // تطبيقُ حركةِ دخولٍ يعرضها فورًا من بداية المقطع (كما في محرّر فيديو شائع)، بدل القفز إلى نهايته.
           if (after && preset !== 'none' && s.medium === 'timed') {
