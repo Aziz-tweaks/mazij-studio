@@ -2040,12 +2040,27 @@ function NumField({
   const [draft, setDraft] = useState<string | null>(null);
   const shown = decimals ? String(Number(value.toFixed(decimals))) : String(Math.round(value));
   return (
+    // **نصٌّ رقميّ لا `type="number"`** (٣٠ أكتوبر): حقلُ الرقم الأصليّ في WebKit لا يقبل «تحديد الكلّ»
+    // ولا يُعرّف نفسَه حقلَ كتابة، فكان لصقُ قيمةٍ أو استبدالُها يذهب أحيانًا إلى اللوحة ويُطلق
+    // اختصاراتِ الأدوات. والأسهمُ تعمل كما في أدوات التصميم: ↑/↓ بواحد، ومع Shift بعشرة.
     <input
       data-testid={testId}
       dir="ltr"
-      type="number"
+      type="text"
+      inputMode="decimal"
+      spellCheck={false}
       disabled={disabled}
       value={draft ?? shown}
+      onKeyDown={(e) => {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        e.preventDefault();
+        const base = Number(draft ?? shown);
+        if (!Number.isFinite(base)) return;
+        const step = (e.shiftKey ? 10 : 1) * (e.key === 'ArrowUp' ? 1 : -1);
+        const next = decimals ? Number((base + step).toFixed(decimals)) : base + step;
+        setDraft(String(next));
+        onCommit(next);
+      }}
       onChange={(e) => {
         const raw = e.target.value;
         setDraft(raw);
