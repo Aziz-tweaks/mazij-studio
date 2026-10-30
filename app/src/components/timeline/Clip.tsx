@@ -252,10 +252,21 @@ export function Clip({ el, color, expanded, pro, selectedKf, onSelectKf }: ClipP
       delete rowEl.dataset.trimApplied;
       delete rowEl.dataset.trimClamped;
     };
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       finish();
       resolveKfDrag();
       actions.commitElementEdit();
+      // **نقرةٌ ساكنةٌ على حافّةٍ فوقها ماسة تفتح الماسة** (٣٠ أكتوبر). الحافّةُ تَغلب الماسةَ في
+      // الإصابة كي لا يُحرّك سحبُ التقليم مفتاحَ الدخول — لكنّ ذلك جعل مفتاحَ أوّلِ المقطع لا يُفتَح
+      // أبدًا. فالسحبُ يبقى تقليمًا، والنقرةُ بلا حركةٍ تُحدّد أقربَ ماسةٍ تحت المؤشّر.
+      if (kind === 'trim' && Math.abs(ev.clientX - startClientX) < 3) {
+        const localX = ev.clientX - rect.left;
+        const near = (anim.tracks[property] ?? [])
+          .map((k) => ({ k, dx: Math.abs((timelineTimeOf(anim, k.time) / span) * rect.width - localX) }))
+          .filter((c) => c.dx <= 8)
+          .sort((p1, p2) => p1.dx - p2.dx)[0];
+        if (near && pro) onSelectKf({ elId: el.id, property, kfId: near.k.id });
+      }
     };
     /** **Escape يُلغي أيَّ سحب، والإفلاتُ بعده لا يُثبِّت شيئًا**
      * (`timeline.rs:2519-2546`, `:2681`). والإلغاءُ يُعيد المستند إلى لقطة بداية

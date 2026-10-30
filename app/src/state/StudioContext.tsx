@@ -25,7 +25,7 @@ import type { Bezier, EasingId } from '../lib/easing';
 import { DEFAULT_BEZIER } from '../lib/easing';
 import type { PathCmd } from '../lib/pathGeometry';
 import type { TraceOptions } from '../lib/imageTrace';
-import { DEFAULT_DOC_FPS, animTimeAt, documentDuration, effectiveScale, frameDuration, quantizeKfValue, resolveAnimAt, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
+import { DEFAULT_DOC_FPS, animTimeAt, clipShowsAt, documentDuration, effectiveScale, frameDuration, quantizeKfValue, resolveAnimAt, resolvePropertyAt, setKeyframe, snapToFrame, timelineSpan } from '../lib/animTimeline';
 import { moveClip, splitAt, trim } from '../lib/timelineEdit';
 import { revealUnitCount, revealValueAt, startedUnitCount } from '../lib/textStagger';
 import { fetchAndRegisterFont } from '../lib/loadFont';
@@ -644,6 +644,25 @@ function migrateToDocFile(raw: unknown, lang: StudioState['lang']): LoadedDocFil
 /** أوّل لحظةٍ على الخط الزمني تكون فيها كل حركات الدخول قد انتهت — أي نهاية أطول
  * مقطع. مستندٌ بلا عناصر (أو بلا حركة) يُعيد صفرًا، وهو المطلوب لمشروعٍ جديد: المؤشّر
  * عند البداية حيث يتوقّع المصمّم أن يبدأ. */
+/** لونٌ يُقرأ للنصّ الجديد (٣٠ أكتوبر): كان يأخذ لونَ اللوحة الافتراضيّ (أبيض في اللوحات الداكنة)
+ * ولو كانت تحته طبقةٌ بيضاء تغطّي المساحة، فيُضاف عنوانٌ لا يُرى. يُنظر إلى أعلى شكلٍ ظاهرٍ الآن
+ * يغطّي وسطَ اللوحة: فاتحٌ ← نصٌّ داكن، داكنٌ ← أبيض. ولا شكلَ هناك ← لونُ اللوحة كما كان. */
+function contrastingTextColor(s: StudioState): string | null {
+  for (let i = s.elements.length - 1; i >= 0; i--) {
+    const e = s.elements[i];
+    if (e.type !== 'shape' || !e.visible || !clipShowsAt(e.anim, s.t)) continue;
+    const g = e.geo;
+    if (!(g.x <= 0.5 && g.x + g.w >= 0.5 && g.y <= 0.5 && g.y + g.h >= 0.5)) continue;
+    const base = e.appearance?.fills?.[0]?.color ?? e.fill;
+    const hex = typeof base === 'string' && /^#[0-9a-f]{6}$/i.test(base) ? base : null;
+    if (!hex) return null;
+    const n = parseInt(hex.slice(1), 16);
+    const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+    return lum > 0.6 ? '#111827' : '#FFFFFF';
+  }
+  return null;
+}
+
 function settledTime(elements: DocElement[], fps: number): number {
   if (!elements.length) return 0;
   return documentDuration(elements.map((el) => el.anim), fps);
@@ -2891,6 +2910,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       addTextPreset: (preset: TextPreset) =>
         setState((s) => {
           const def = TEXT_PRESETS[preset];
+          const autoColor = contrastingTextColor(s);
           const id = newElementId('text');
           const el: DocElement = {
             id,
@@ -2905,7 +2925,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             fontSize: def.fontSize,
             ...(def.tracking ? { tracking: def.tracking } : {}),
             weight: def.weight,
-            color: null,
+            color: autoColor,
             halign: def.halign,
             valign: 'top',
             anim: defaultAnim('none', 0, 0.6),
@@ -3335,8 +3355,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         commitElements((els) =>
           els.map((e) => {
             if (e.id !== id) return e;
-            if (e.type === 'text') return { ...e, color: hex };
-            if (e.type === 'shape') return { ...e, fill: hex };
+            // والكومةُ إن وُجدت (٣٠ أكتوبر): لونُ النصّ الظاهر هو طبقتُها القاعديّة متى وُجدت،
+            // فكان رمزُ الهكس يُكتب في `color` ويبقى النصُّ بلونه القديم.
+            if (e.type === 'text') return { ...e, color: hex, appearance: withBaseLayerColor(e, hex) };
+            if (e.type === 'shape') return { ...e, fill: hex, appearance: withBaseLayerColor(e, hex) };
             return e;
           }),
         ),
