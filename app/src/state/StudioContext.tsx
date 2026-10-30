@@ -948,6 +948,7 @@ export interface StudioActions {
    * تراجعٍ واحدةٌ لكلّ نداء — فلا تُستعمل من سحبِ شريط، وهذا ما
    * `liveUpdateElementBlur` له. */
   setElementBlur: (id: ElementId, blur: number) => void;
+  setElementBlend: (id: ElementId, blend: import('./elements').ElementBlend) => void;
   /** نفسُ الكتابة بلا دفعٍ في التاريخ، لمدّة سحبةٍ واحدةٍ على الشريط — نفسُ نمط
    * `liveUpdateShapeSmoothAmount`: سحبةٌ واحدةٌ = خطوةُ تراجعٍ واحدة. */
   liveUpdateElementBlur: (id: ElementId, blur: number) => void;
@@ -3348,6 +3349,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // كسرٌ من عرض اللوح، غيرُ سالبٍ — فالساكنةُ لا معنى لسلبها (بخلاف مفتاحِ
       // المسار، وهو فرقٌ فيُسمَح له). والسقفُ `1` أي عرضُ اللوح كلُّه: حدٌّ
       // للمعنى لا للذوق، وشريطُ اللوح يَعرض ٠..١٠٪ منه.
+      setElementBlend: (id, blend) => commitElements((els) => els.map((e) => (e.id === id ? { ...e, blend: blend === 'normal' ? undefined : blend } : e))),
       setElementBlur: (id, blur) => commitElements((els) => els.map((e) => (e.id === id ? { ...e, blur: clamp(blur, 0, 1) } : e))),
       liveUpdateElementOpacity: (id, opacity) =>
         liveUpdateElements((els) => els.map((e) => (e.id === id ? { ...e, opacity: clamp(opacity, 0, 100) } : e))),

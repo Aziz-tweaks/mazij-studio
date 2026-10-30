@@ -6,7 +6,7 @@ import type { HAlign, VAlign } from '../../state/types';
 import { firstSelectedElement, selectedElements, useStudio } from '../../state/StudioContext';
 import { geoToPx } from '../../lib/geometry';
 import type { AnimProperty, DocElement, StaggerDirection, StaggerEffect, StaggerUnit, TextElement } from '../../state/elements';
-import { ANIM_PRESETS, animPropertiesFor, hasCustomAnimation, lineHeightOf, pivotOf, resolveTextColor } from '../../state/elements';
+import { ANIM_PRESETS, ELEMENT_BLENDS, animPropertiesFor, hasCustomAnimation, lineHeightOf, pivotOf, resolveTextColor } from '../../state/elements';
 import { documentDuration, keyframeAt } from '../../lib/animTimeline';
 import { isInstantEffect, revealUnitCount, revealValueAt } from '../../lib/textStagger';
 import type { EasingId } from '../../lib/easing';
@@ -241,21 +241,22 @@ export function PropsTab() {
               <ArrangeSection />
               {shapeSelection && <BooleanOpsSection shapes={shapeSelection} />}
 
-              <section data-soon="blend" style={{ display: 'flex', flexDirection: 'column', gap: 10, opacity: 0.45, pointerEvents: 'none' }} aria-disabled title="قريبًا">
-                <div className="mz-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {L.blend} <SoonBadge />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, alignItems: 'center' }}>
-                  <button disabled style={{ display: 'flex', alignItems: 'center', gap: 8, height: 30, padding: '0 10px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'var(--surface2)', fontSize: 12, textAlign: 'start' }}>
-                    <span style={{ flex: 1 }}>{L.blend_normal}</span>
-                    <Icon size={14} path="M5 8l5 5 5-5" />
-                  </button>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input type="range" defaultValue={100} disabled style={{ flex: 1, accentColor: 'var(--accent)' }} />
-                    <span dir="ltr" style={{ fontSize: 11, color: 'var(--muted)', minWidth: 34, textAlign: 'end' }}>100%</span>
+              {state.selectedIds.length === 1 && (
+                <section data-testid="blend-section" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="mz-label">{L.blend}</div>
+                  {/* أزرارٌ لا قائمةٌ منسدلة: الأوضاعُ ثمانيةٌ تُرى كلُّها وتُختار بنقرة. */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {ELEMENT_BLENDS.map((b) => {
+                      const on = (el.blend ?? 'normal') === b;
+                      return (
+                        <button key={b} data-testid={`blend-${b}`} onClick={() => actions.setElementBlend(el.id, b)} style={{ height: 28, padding: '0 10px', border: `1px solid ${on ? 'var(--accent)' : 'transparent'}`, borderRadius: 999, fontSize: 11.5, background: on ? 'var(--accentSoft)' : 'var(--surface2)', color: on ? 'var(--accentText)' : 'var(--text)' }}>
+                          {L[(`blend_${b.replace('-', '_')}`) as 'blend_normal']}
+                        </button>
+                      );
+                    })}
                   </div>
-                </div>
-              </section>
+                </section>
+              )}
               {state.selectedIds.length === 1 && <EffectsSection el={el} />}
             </>}
         </>
@@ -2535,9 +2536,6 @@ function PenProps() {
   );
 }
 
-function SoonBadge() {
-  return <span style={{ padding: '1px 7px', borderRadius: 999, fontSize: 10, fontWeight: 700, background: 'var(--surface2)', color: 'var(--muted)' }}>قريبًا</span>;
-}
 
 function BoolButton({ label, path, fill, onClick, testId }: { label: string; path: string; fill?: boolean; onClick: () => void; testId: string }) {
   return (

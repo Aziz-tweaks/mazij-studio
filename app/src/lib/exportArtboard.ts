@@ -522,6 +522,9 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     const visual = entranceVisualAt(el.anim, time);
     ctx.save();
     ctx.globalAlpha = ((el.opacity ?? 100) / 100) * visual.opacity;
+    // وضعُ المزج — نفسُ `mix-blend-mode` في المعاينة. كلُّ عمليّةِ رسمٍ للعنصر تُمزَج بما تحته.
+    const blendOp = el.blend && el.blend !== 'normal' ? (el.blend as GlobalCompositeOperation) : null;
+    if (blendOp) ctx.globalCompositeOperation = blendOp;
     // **ضبابيّةُ العنصر، من `canvasBlurRadiusPx` الواحدة.** تُضبَط هنا — بعد
     // `save()` وقبل أيّ رسم — فتَسري على كلّ عمليّات الرسم في هذا العنصر، ويُعيدها
     // `restore()` أدناه إلى `'none'` بحكم مواصفة القُماش (مقيسٌ: `ctx.filter` بعد
@@ -902,7 +905,12 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         const ry = Math.max(0, Math.floor(dcy - R));
         const rw = Math.min(CW, Math.ceil(dcx + R)) - rx;
         const rh = Math.min(CH, Math.ceil(dcy + R)) - ry;
-        if (rw > 0 && rh > 0) drawBlurred(mainCtx, softLayer.canvas, rx, ry, rw, rh, rx, ry, blurPx);
+        if (rw > 0 && rh > 0) {
+          const prevOp = mainCtx.globalCompositeOperation;
+          if (blendOp) mainCtx.globalCompositeOperation = blendOp;
+          drawBlurred(mainCtx, softLayer.canvas, rx, ry, rw, rh, rx, ry, blurPx);
+          mainCtx.globalCompositeOperation = prevOp;
+        }
       }
     }
   }

@@ -9,6 +9,8 @@ import type { FxKind } from '../lib/effects';
 export type ElementId = string;
 export type ElementKind = 'text' | 'shape' | 'image' | 'lottie';
 export type ShapeKind = 'rect' | 'ellipse' | 'path';
+export type ElementBlend = 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'soft-light' | 'difference';
+export const ELEMENT_BLENDS: ElementBlend[] = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'soft-light', 'difference'];
 export type PaletteToken = 'bg' | 'fg' | 'ac';
 
 /** x/y/w/h are fractions (0..1) of the current artboard size, so elements keep
@@ -563,6 +565,8 @@ interface ElementBase {
    * أيّ ترحيلٍ يُجرى على بايتٍ قائم — نفسُ عقد «ترحيل بلا فقد» الذي حمله
    * `appearance` و`groupId` و`widthProfile`. */
   blur?: number;
+  /** وضعُ مزج العنصر مع ما تحته (٣٠ أكتوبر). غيابُه = عادي. «ضرب» يصبغ ما تحته ولا يغطّيه. */
+  blend?: ElementBlend;
   /** **نقطةُ الارتكاز** (٢٥ أكتوبر ٢٠٢٦) — النقطةُ التي **يدور حولها ويتكبّر منها
    * تحريكُ** العنصر: مسارات `rotation` و`scale` و`scaleX` و`scaleY`. كسرٌ من صندوق
    * العنصر نفسه (`0,0` ركنُه الأعلى الأيسر، `1,1` الأسفل الأيمن)؛ وغيابُها = المركز.

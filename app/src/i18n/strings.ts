@@ -17,7 +17,7 @@ export interface Dictionary {
   tracking: string;
   justify_kashida: string;
   effects: string; stroke: string; more: string;
-  w_regular: string; w_medium: string; w_bold: string; blend_normal: string; blend_multiply: string; blend_screen: string; blend_overlay: string; blend_darken: string; blend_lighten: string; fx_shadow: string;
+  w_regular: string; w_medium: string; w_bold: string; blend_normal: string; blend_multiply: string; blend_screen: string; blend_overlay: string; blend_darken: string; blend_lighten: string; blend_soft_light: string; blend_difference: string; fx_shadow: string;
   fx_blur: string; add_fx: string;
   path: string; anchors: string; close_path: string; boolean: string; union: string; subtract: string;
   intersect: string; smooth: string; exclude: string; smooth_amount: string; corner_points: string;
@@ -214,7 +214,7 @@ export const AR: Dictionary = {
   tracking: 'تتبُّع الأحرف',
   justify_kashida: 'تبرير بالكشيدة',
   blend: 'المزج', effects: 'التأثيرات', stroke: 'الحدود', more: 'خيارات متقدمة',
-  w_regular: 'عادي', w_medium: 'متوسط', w_bold: 'عريض', blend_normal: 'عادي', blend_multiply: 'مضاعفة', blend_screen: 'شاشة', blend_overlay: 'تراكب', blend_darken: 'تغميق', blend_lighten: 'تفتيح', fx_shadow: 'ظل',
+  w_regular: 'عادي', w_medium: 'متوسط', w_bold: 'عريض', blend_normal: 'عادي', blend_multiply: 'مضاعفة', blend_screen: 'شاشة', blend_overlay: 'تراكب', blend_darken: 'تغميق', blend_lighten: 'تفتيح', blend_soft_light: 'ضوء ناعم', blend_difference: 'فرق', fx_shadow: 'ظل',
   fx_blur: 'ضبابية', add_fx: 'إضافة تأثير',
   path: 'المسار', anchors: 'نقاط الربط', close_path: 'إغلاق المسار', boolean: 'عمليات الأشكال البوليانية',
   union: 'دمج', subtract: 'طرح', intersect: 'تقاطع', smooth: 'تنعيم', exclude: 'استثناء',
@@ -502,7 +502,7 @@ export const EN: Dictionary = {
   tracking: 'Letter spacing',
   justify_kashida: 'Kashida justify',
   blend: 'Blend', effects: 'Effects', stroke: 'Stroke', more: 'Advanced options',
-  w_regular: 'Regular', w_medium: 'Medium', w_bold: 'Bold', blend_normal: 'Normal', blend_multiply: 'Multiply', blend_screen: 'Screen', blend_overlay: 'Overlay', blend_darken: 'Darken', blend_lighten: 'Lighten', fx_shadow: 'Drop shadow',
+  w_regular: 'Regular', w_medium: 'Medium', w_bold: 'Bold', blend_normal: 'Normal', blend_multiply: 'Multiply', blend_screen: 'Screen', blend_overlay: 'Overlay', blend_darken: 'Darken', blend_lighten: 'Lighten', blend_soft_light: 'Soft light', blend_difference: 'Difference', fx_shadow: 'Drop shadow',
   fx_blur: 'Blur', add_fx: 'Add effect',
   path: 'Path', anchors: 'Anchor points', close_path: 'Close path', boolean: 'Boolean operations', union: 'Union',
   subtract: 'Subtract', intersect: 'Intersect', smooth: 'Smooth', exclude: 'Exclude',
