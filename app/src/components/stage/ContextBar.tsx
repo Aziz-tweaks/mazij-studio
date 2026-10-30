@@ -11,7 +11,11 @@ const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase
 export const CMD = isMac ? '⌘' : 'Ctrl ';
 export const ALT = isMac ? '⌥' : 'Alt ';
 
-type PopId = 'font' | 'color' | 'anim' | 'more' | 'align' | null;
+/** تعديلٌ بدأ من شريطٍ في هذا الشريط نفسه (الشفافية): الشريطُ يختفي أثناء إيماءات السحب على
+ * اللوحة، لكنّ إخفاءه هنا يَفكّ المنزلقَ من تحت الإصبع فلا يصل الإفلاتُ ويبقى التعديلُ معلّقًا. */
+export const barEdit = { active: false };
+
+type PopId = 'font' | 'color' | 'anim' | 'more' | 'align' | 'opacity' | 'pos' | null;
 
 const PRESETS: AnimPreset[] = ANIM_PRESETS;
 const ALIGN_NEXT: Record<HAlign, HAlign> = { start: 'center', center: 'end', end: 'start' };
@@ -94,8 +98,23 @@ export function ContextBar() {
     const base = baseLayerColorOf(el);
     return base ? resolveLayerColor(base.color, base.colorToken, pal) : (el.fill ?? pal[el.fillToken]);
   })() : null;
+  // (٣٠ أكتوبر) الشفافيّةُ والوضعُ لكلّ عنصرٍ مفرد — كانتا في المفتش وحده، وهما من أكثر ما
+  // يُعدَّل في تصميم صورة. «الوضع» محاذاةٌ إلى الصفحة بنقرة.
+  const common = el ? (
+    <>
+      <Sep />
+      <button data-testid="ctx-opacity" aria-label={L.ctx_opacity} title={L.ctx_opacity} aria-expanded={pop === 'opacity'} onClick={(e) => toggle('opacity', e)} style={iconBtn}>
+        <Icon size={17} path="M4 4h12v12H4zM4 4h6v6H4zM10 10h6v6h-6z" fill="currentColor" style={{ opacity: 0.85 }} />
+      </button>
+      <button data-testid="ctx-position" aria-expanded={pop === 'pos'} onClick={(e) => toggle('pos', e)} title={L.ctx_position} style={{ ...pillBtn, gap: 6 }}>
+        <Icon size={15} path="M3 10h14M10 3v14M7 7h6v6H7z" />
+        {L.ctx_position}
+      </button>
+    </>
+  ) : null;
   const anim = el ? (
     <>
+      {common}
       <Sep />
       <button
         data-testid="ctx-animate"
@@ -290,6 +309,56 @@ export function ContextBar() {
                 </button>
               );
             })}
+          </div>
+        </Pop>
+      )}
+
+      {pop === 'opacity' && el && (
+        <Pop anchor={anchor}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 220 }}>
+            <input
+              data-testid="ctx-opacity-range"
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(el.opacity)}
+              onPointerDown={() => {
+                barEdit.active = true;
+                actions.beginElementEdit(L.ctx_opacity);
+              }}
+              onChange={(e) => actions.liveUpdateElementOpacity(el.id, Number(e.target.value))}
+              onPointerUp={() => {
+                actions.commitElementEdit();
+                barEdit.active = false;
+              }}
+              onKeyUp={() => {
+                actions.commitElementEdit();
+                barEdit.active = false;
+              }}
+              style={{ flex: 1 }}
+            />
+            <span dir="ltr" style={{ minWidth: 38, textAlign: 'end', fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{Math.round(el.opacity)}%</span>
+          </div>
+        </Pop>
+      )}
+
+      {pop === 'pos' && el && (
+        <Pop anchor={anchor}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span className="mz-label">{L.ctx_align_page}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 34px)', gap: 4 }}>
+              {(['right', 'center', 'left', 'top', 'middle', 'bottom'] as const).map((edge) => (
+                <button key={edge} data-testid={`ctx-pos-${edge}`} onClick={() => actions.alignSelected(edge)} title={L[`align_${edge}` as const]} style={{ ...iconBtn, background: 'var(--surface2)' }}>
+                  <Icon size={15} path={ALIGN_EDGE_ICON[edge]} />
+                </button>
+              ))}
+            </div>
+            {el.type === 'image' && (
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button data-testid="ctx-flip-h" onClick={() => actions.setImageFlip(el.id, 'h')} style={{ ...pillBtn, background: 'var(--surface2)', flex: 1 }}>{L.flip_h}</button>
+                <button data-testid="ctx-flip-v" onClick={() => actions.setImageFlip(el.id, 'v')} style={{ ...pillBtn, background: 'var(--surface2)', flex: 1 }}>{L.flip_v}</button>
+              </div>
+            )}
           </div>
         </Pop>
       )}

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArtboardSizeMenu } from './stage/ArtboardSizeMenu';
 import { ToolPill } from './stage/ToolPill';
 import { ArtboardsChip } from './stage/ArtboardsChip';
-import { ContextBar } from './stage/ContextBar';
+import { ContextBar, barEdit } from './stage/ContextBar';
 import { StageMenu } from './stage/StageMenu';
 import { ElementView } from './stage/ElementView';
 import { Handles, GuideLines } from './stage/Handles';
@@ -1105,7 +1105,7 @@ export function Stage() {
     pointerEvents: 'none',
   };
 
-  const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id) && e.type !== 'audio' && e.type !== 'fx') && !state.pendingEditSnapshot && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
+  const showContextBar = selected.length > 0 && state.elements.some((e) => selected.includes(e.id) && e.type !== 'audio' && e.type !== 'fx') && (!state.pendingEditSnapshot || barEdit.active) && !shapeDraft && !state.penDraft.length && (state.tool === 'select' || state.tool === 'direct');
 
   // المسودّة كشكل مسار كامل الهيئة، بإحداثيات المستند (لا كسور صندوق) — فالمعاينة
   // تمرّ بنفس مُصيِّر الهندسة الذي سيرسم العنصر النهائي بعد `penFinish`.

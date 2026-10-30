@@ -949,6 +949,8 @@ export interface StudioActions {
   /** نفسُ الكتابة بلا دفعٍ في التاريخ، لمدّة سحبةٍ واحدةٍ على الشريط — نفسُ نمط
    * `liveUpdateShapeSmoothAmount`: سحبةٌ واحدةٌ = خطوةُ تراجعٍ واحدة. */
   liveUpdateElementBlur: (id: ElementId, blur: number) => void;
+  /** شفافيّةٌ حيّةٌ أثناء سحب الشريط — بين `beginElementEdit`/`commitElementEdit`. */
+  liveUpdateElementOpacity: (id: ElementId, opacity: number) => void;
   setElementGeoPx: (id: ElementId, patch: { x?: number; y?: number; w?: number; h?: number; rotation?: number }) => void;
   /** نقطةُ ارتكاز الحركة (`ElementBase.pivot`)، كسرًا من صندوق العنصر — و`null` أو المركزُ
    * يحذفانها فيعود المستندُ كما كان بايتًا ببايت. خطوةُ تراجعٍ واحدة. */
@@ -3311,6 +3313,8 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // المسار، وهو فرقٌ فيُسمَح له). والسقفُ `1` أي عرضُ اللوح كلُّه: حدٌّ
       // للمعنى لا للذوق، وشريطُ اللوح يَعرض ٠..١٠٪ منه.
       setElementBlur: (id, blur) => commitElements((els) => els.map((e) => (e.id === id ? { ...e, blur: clamp(blur, 0, 1) } : e))),
+      liveUpdateElementOpacity: (id, opacity) =>
+        liveUpdateElements((els) => els.map((e) => (e.id === id ? { ...e, opacity: clamp(opacity, 0, 100) } : e))),
       liveUpdateElementBlur: (id, blur) =>
         liveUpdateElements((els) => els.map((e) => (e.id === id ? { ...e, blur: clamp(blur, 0, 1) } : e))),
       setElementPivot: (id, pivot) =>
