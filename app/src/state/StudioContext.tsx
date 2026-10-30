@@ -3324,7 +3324,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
        * عدمًا. */
       setElementAnimPreset: (id, preset) =>
         patch((s) => {
-          const elements = s.elements.map((e) => (e.id === id ? { ...e, anim: withPreset(e.anim, preset) } : e));
+          // **حركةُ المجموعة لكلّ أعضائها** (٣٠ أكتوبر): دائرةٌ ورمزٌ مجمَّعان كانت تُكبَّر فيهما الدائرةُ
+          // وحدها والرمزُ ظاهرٌ قبلها في الفراغ. المجموعةُ تُحدَّد وتُسحب كوحدة، فتدخل كوحدة.
+          const gid = s.elements.find((e) => e.id === id)?.groupId;
+          const elements = s.elements.map((e) =>
+            e.id === id || (!!gid && e.groupId === gid) ? { ...e, anim: withPreset(e.anim, preset) } : e,
+          );
           const after = elements.find((e) => e.id === id);
           // تطبيقُ حركةِ دخولٍ يعرضها فورًا من بداية المقطع (كما في محرّر فيديو شائع)، بدل القفز إلى نهايته.
           if (after && preset !== 'none' && s.medium === 'timed') {
