@@ -284,6 +284,23 @@ function trackValueAt(track: PropertyKeyframe[] | undefined, animTime: number, f
  * the one place video/GIF export, the canvas preview, and the DOM preview all read
  * from — see `AnimVisual` above. */
 export function resolveAnimAt(anim: ElementAnim, time: number): AnimVisual {
+  const v = resolveTracksAt(anim, time);
+  const ex = anim.exit;
+  if (!ex || ex.seconds <= 0) return v;
+  // الخروج: آخرُ `seconds` من المقطع، بتسارعٍ (ease-in تكعيبيّ) كي يبدأ هادئًا وينتهي سريعًا.
+  const end = anim.start + anim.duration;
+  const p = Math.max(0, Math.min(1, (time - (end - ex.seconds)) / ex.seconds));
+  if (p <= 0) return v;
+  const e = p * p * p;
+  const out = { ...v, opacity: v.opacity * (1 - e) };
+  if (ex.kind === 'focus') out.blur = v.blur + 0.02 * e;
+  if (ex.kind === 'shrink') out.scale = v.scale * (1 - 0.4 * e);
+  if (ex.kind === 'grow') { out.scale = v.scale * (1 + 0.25 * e); out.blur = v.blur + 0.01 * e; }
+  if (ex.kind === 'up') out.y = v.y - 0.08 * e;
+  return out;
+}
+
+function resolveTracksAt(anim: ElementAnim, time: number): AnimVisual {
   const m = animTimeAt(anim, time);
   return {
     opacity: trackValueAt(anim.tracks.opacity, m, ANIM_PROPERTY_DEFAULT.opacity),

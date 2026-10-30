@@ -88,6 +88,36 @@ export function AnimPresetMenu() {
           })}
         </div>
       )}
+      {/* **حركة الخروج** (٣٠ أكتوبر): كلُّ عنصرٍ كان يختفي بقطعٍ حادٍّ عند نهاية مقطعه. */}
+      <div data-testid="anim-exit" style={{ display: 'flex', flexWrap: 'wrap', padding: 2, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2, alignItems: 'center' }}>
+        {(['none', 'fade', 'focus', 'shrink', 'grow', 'up'] as const).map((k) => {
+          const on = (el.anim.exit?.kind ?? 'none') === k;
+          return (
+            <button
+              key={k}
+              data-testid={`anim-exit-${k}`}
+              title={L.exit_anim}
+              onClick={() => actions.setExitAnim(el.id, k === 'none' ? null : { kind: k, seconds: el.anim.exit?.seconds ?? 0.3 })}
+              style={{ height: 22, padding: '0 7px', border: 0, borderRadius: 'calc(var(--rs) - 2px)', background: on ? 'var(--seg)' : 'transparent', color: on ? 'var(--text)' : 'var(--muted)', fontSize: 11, fontWeight: on ? 600 : 500 }}
+            >
+              {L[`exit_${k}` as const]}
+            </button>
+          );
+        })}
+        {el.anim.exit && [0.2, 0.3, 0.5].map((sec) => {
+          const on = Math.abs((el.anim.exit?.seconds ?? 0) - sec) < 0.01;
+          return (
+            <button
+              key={`x${sec}`}
+              data-testid={`anim-exit-sec-${sec}`}
+              onClick={() => el.anim.exit && actions.setExitAnim(el.id, { kind: el.anim.exit.kind, seconds: sec })}
+              style={{ height: 22, padding: '0 7px', border: 0, borderRadius: 'calc(var(--rs) - 2px)', background: on ? 'var(--seg)' : 'transparent', color: on ? 'var(--text)' : 'var(--muted)', fontSize: 11, fontWeight: on ? 600 : 500, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {`${sec}${L.sec_short}`}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -173,10 +173,15 @@ export type PropertyTracks = Partial<Record<AnimProperty, PropertyKeyframe[]>>;
  * preset chooser (PropsTab's head-only section) — real rendering and the pro-mode
  * timeline read and write `tracks` exclusively; see `tracksFromPreset` for how a
  * preset is mapped onto the equivalent tracks so old documents render unchanged. */
+export type ExitKind = 'fade' | 'focus' | 'shrink' | 'grow' | 'up';
+
 export interface ElementAnim {
   preset: AnimPreset;
   start: number;
   duration: number;
+  /** خروجُ العنصر في آخر `seconds` من مقطعه (٣٠ أكتوبر): بدل القطع الحادّ عند نهاية المقطع
+   * يتلاشى أو يضبُب أو يصغر بمنحنى تسارع. اختياريٌّ وغيابُه «بلا خروج». */
+  exit?: { kind: ExitKind; seconds: number };
   /** أصلُ زمنِ الحركة بالثواني: اللحظةُ التي يقابلها `start` على الخطّ الزمنيّ.
    *
    * حقلان لا حقلٌ واحد، وهذا هو بيتُ القصيد. الفائدةُ ليست في كون الزمن مطلقًا
@@ -359,7 +364,7 @@ export function hasCustomAnimation(tracks: PropertyTracks, preset?: AnimPreset):
   });
 }
 
-export function defaultAnim(preset: AnimPreset, start: number, duration: number, easing: EasingId = 'easeOut'): ElementAnim {
+export function defaultAnim(preset: AnimPreset, start: number, duration: number, easing: EasingId = 'expoOut'): ElementAnim {
   const keyframes: AnimKeyframe[] = [
     { id: newElementId('kf'), t: 0, v: 0 },
     { id: newElementId('kf'), t: 1, v: 1 },

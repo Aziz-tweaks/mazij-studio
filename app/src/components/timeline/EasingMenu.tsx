@@ -11,6 +11,7 @@ export const EASE_LABEL_KEY: Record<EasingId, string> = {
   linear: 'ease_linear',
   easeIn: 'ease_in',
   easeOut: 'ease_out',
+  expoOut: 'ease_expo',
   easeInOut: 'ease_in_out',
   back: 'ease_back',
   bounce: 'ease_bounce',

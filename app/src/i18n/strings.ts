@@ -93,7 +93,7 @@ export interface Dictionary {
   decor_title: string; decor_accent: string; decor_hint: string;
   apply_palette_all: string; apply_palette_hint: string;
   'l_badge-label': string; 'l_logo-label': string;
-  ease_linear: string; ease_in: string; ease_in_out: string; ease_back: string; ease_bounce: string; ease_hold: string; ease_custom: string;
+  ease_linear: string; ease_expo: string; ease_in: string; ease_in_out: string; ease_back: string; ease_bounce: string; ease_hold: string; ease_custom: string;
   no_easing_target: string; add_keyframe: string; delete_keyframe: string; kf_value: string; soon: string;
   /** اسمُ خطوةِ التراجع لتغييرِ قيمةِ مفتاح — انظر `pushHistory`: كلُّ ما يُغيّر
    * المستند خطوةٌ واحدةٌ **مُسمّاة**. */
@@ -104,6 +104,7 @@ export interface Dictionary {
   prop_opacity: string; prop_x: string; prop_y: string; prop_scale: string; prop_scaleX: string; prop_scaleY: string; prop_rotation: string; prop_blur: string;
   expand_tracks: string; collapse_tracks: string; kf_easing: string;
   entrance: string; tl_beyond_doc: string; sec_short: string;
+  exit_anim: string; exit_none: string; exit_fade: string; exit_focus: string; exit_shrink: string; exit_grow: string; exit_up: string;
   /** المرحلة ٢ — المقاطعُ الحيّة: التقسيمُ وأسبابُ تعطيله، وحرسُ النمط الجاهز،
    * وأسماءُ خطوات التراجع. */
   split_clip: string; split_consequence: string; split_no_selection: string; split_locked: string; split_outside: string;
@@ -323,7 +324,7 @@ export const AR: Dictionary = {
   apply_palette_all: 'تطبيق اللوحة على كل عنصر',
   apply_palette_hint: 'يلوّن كل النصوص والأشكال باللوحة الحالية — حتى اللي لوّنتها بيدك. وتقدر تتراجع.',
   'l_badge-label': 'نص الشارة', 'l_logo-label': 'نص الشعار',
-  ease_linear: 'خطي', ease_in: 'تسريع في البداية', ease_in_out: 'تسريع وتباطؤ', ease_back: 'قفزة للخلف',
+  ease_linear: 'خطي', ease_expo: 'انسيابي', ease_in: 'تسريع في البداية', ease_in_out: 'تسريع وتباطؤ', ease_back: 'قفزة للخلف',
   ease_bounce: 'ارتداد', ease_hold: 'تثبيت', ease_custom: 'مخصص',
   no_easing_target: 'حدّد عنصر وغيّر منحناه', add_keyframe: 'إضافة مفتاح عند المؤشر',
   delete_keyframe: 'حذف المفتاح', kf_value: 'القيمة', soon: 'قريبًا',
@@ -339,6 +340,7 @@ export const AR: Dictionary = {
   prop_opacity: 'الشفافية', prop_x: 'الموضع X', prop_y: 'الموضع Y', prop_scale: 'المقياس', prop_scaleX: 'العرض', prop_scaleY: 'الارتفاع', prop_rotation: 'الدوران', prop_blur: 'الضبابية',
   expand_tracks: 'إظهار مسارات الخصائص', collapse_tracks: 'إخفاء مسارات الخصائص', kf_easing: 'منحنى المفتاح',
   entrance: 'حركة الدخول',
+  exit_anim: 'حركة الخروج', exit_none: 'بلا خروج', exit_fade: 'تلاشٍ', exit_focus: 'ضبابيّة', exit_shrink: 'تصغير', exit_grow: 'تكبير', exit_up: 'صعود',
   sec_short: 'ث',
   // يُقال للمصمّم **لماذا** تعطَّل المفتاح، لا أنه معطَّل: المفتاح يُضاف عند المؤشّر،
   // والمؤشّر واقع خارج مقطع هذه الطبقة، فلا موضع له أصلًا.
@@ -611,7 +613,7 @@ export const EN: Dictionary = {
   apply_palette_all: 'Apply palette to every element',
   apply_palette_hint: 'Re-colors every text and shape in the design to the current palette, even elements you manually recolored — one undo step (Cmd+Z to revert).',
   'l_badge-label': 'Badge text', 'l_logo-label': 'Logo text',
-  ease_linear: 'Linear', ease_in: 'Ease in', ease_in_out: 'Ease in-out', ease_back: 'Back', ease_bounce: 'Bounce',
+  ease_linear: 'Linear', ease_expo: 'Smooth', ease_in: 'Ease in', ease_in_out: 'Ease in-out', ease_back: 'Back', ease_bounce: 'Bounce',
   ease_hold: 'Hold', ease_custom: 'Custom',
   no_easing_target: 'Select an element to edit its easing curve', add_keyframe: 'Add keyframe at playhead',
   delete_keyframe: 'Delete keyframe', kf_value: 'Value', soon: 'Coming soon',
@@ -627,6 +629,7 @@ export const EN: Dictionary = {
   prop_opacity: 'Opacity', prop_x: 'Position X', prop_y: 'Position Y', prop_scale: 'Scale', prop_scaleX: 'Width', prop_scaleY: 'Height', prop_rotation: 'Rotation', prop_blur: 'Blur',
   expand_tracks: 'Show property tracks', collapse_tracks: 'Hide property tracks', kf_easing: 'Keyframe easing',
   entrance: 'Entrance',
+  exit_anim: 'Exit', exit_none: 'No exit', exit_fade: 'Fade', exit_focus: 'Blur', exit_shrink: 'Shrink', exit_grow: 'Grow', exit_up: 'Rise',
   sec_short: 's',
   ex_estimate: (seconds, files, mb) => `${seconds}s · ${files} file${files === 1 ? '' : 's'} · ≈${mb} MB`,
   ex_only_project_size: 'Project size only', ex_only_project_size_hint: 'Keeps one target: this artboard’s own size',

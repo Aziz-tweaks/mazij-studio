@@ -1163,6 +1163,8 @@ export interface StudioActions {
   insertFx: (kind: FxKind, at?: number) => void;
   /** يعيد بناء مفاتيح نمط الدخول الجاهز على مدّةٍ بالثواني (حدٌّ أعلى: طولُ المقطع). خطوةُ تراجعٍ واحدة لكلّ قيمة. */
   setEntranceDuration: (id: ElementId, seconds: number) => void;
+  /** خروجُ العنصر (أو كلّ أعضاء مجموعته) — `null` يلغيه. خطوةُ تراجعٍ واحدة. */
+  setExitAnim: (id: ElementId, exit: { kind: import('./elements').ExitKind; seconds: number } | null) => void;
   /** خصائصُ طبقة المؤثّر (النوع، القوّة، التلاشي) — خطوةُ تراجعٍ لكلّ التزام. */
   setFxProps: (id: ElementId, patch: Partial<{ fx: FxKind; amount: number; fadeIn: number; fadeOut: number }>) => void;
   /** القوّةُ أثناء سحب الشريط — حيٌّ بلا تاريخ، بين `beginElementEdit`/`commitElementEdit`. */
@@ -3225,7 +3227,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           const time = snapToFrame(animTimeAt(el.anim, s.t), s.fps);
           // و«الظهور» يولد بـ«تثبيت»: مفتاحُه توقيتُ وحدةٍ لا منحنى حركة، فالكلمةُ تظهر عنده
           // لا في منتصف ما بينه وبين التالي. ومن أراد آلةً كاتبةً منتظمة غيّره خطّيًّا.
-          const key: PropertyKeyframe = { id: newElementId('kf'), time, value, easing: (property === 'reveal' ? 'hold' : 'easeOut') as EasingId, bezier: [...DEFAULT_BEZIER] as Bezier };
+          const key: PropertyKeyframe = { id: newElementId('kf'), time, value, easing: (property === 'reveal' ? 'hold' : 'expoOut') as EasingId, bezier: [...DEFAULT_BEZIER] as Bezier };
           // قُمعُ الكتابة الواحد — انظر `setKeyframe`. وهو نفسه الذي يَكتب سحبُ
           // الماسة في `Clip.tsx`، فلا يبقى مسارانِ يختلفان في معالجة التصادم.
           const nextTrack = setKeyframe(el.anim.tracks[property], key);
@@ -3846,6 +3848,18 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           return els.map((e) => (ids.has(e.id) ? { ...e, geo: { ...e.geo, x: e.geo.x + dx / size.w, y: e.geo.y + dy / size.h } } : e));
         }),
       startTextEdit: (id) => patch({ editingTextId: id }),
+      setExitAnim: (id, exit) =>
+        setState((s) => {
+          const el0 = s.elements.find((e) => e.id === id);
+          if (!el0) return s;
+          const ids = new Set(el0.groupId ? s.elements.filter((e) => e.groupId === el0.groupId).map((e) => e.id) : [id]);
+          const elements = s.elements.map((e) => {
+            if (!ids.has(e.id)) return e;
+            const { exit: _old, ...rest } = e.anim;
+            return { ...e, anim: exit ? { ...rest, exit } : rest };
+          });
+          return { ...s, elements, ...pushHistory(s, (s.lang === 'ar' ? AR : EN).exit_anim) };
+        }),
       setEntranceDuration: (id, seconds) =>
         setState((s) => {
           const el0 = s.elements.find((e) => e.id === id);

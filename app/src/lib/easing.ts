@@ -12,11 +12,11 @@
  * ويكذب بين الإطارين: ضبابُ الحركة يأخذ عيّناتٍ **بين** الإطارين
  * (`shutterSampleTimes`)، فيُرسَم آخرُ إطارٍ قبل القطع نصفَ شفّاف. والدرجةُ لا
  * قيمةَ وسطى لها، فلا يراها الغالق. */
-export type EasingId = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'back' | 'bounce' | 'hold' | 'custom';
+export type EasingId = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'back' | 'bounce' | 'hold' | 'custom' | 'expoOut';
 
 export type Bezier = [number, number, number, number];
 
-export const EASING_IDS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'back', 'bounce', 'hold', 'custom'];
+export const EASING_IDS: EasingId[] = ['linear', 'easeIn', 'easeOut', 'expoOut', 'easeInOut', 'back', 'bounce', 'hold', 'custom'];
 
 export const DEFAULT_BEZIER: Bezier = [0.42, 0, 0.58, 1];
 
@@ -24,6 +24,8 @@ export const EASING_BEZIER: Record<Exclude<EasingId, 'bounce' | 'hold' | 'custom
   linear: [0, 0, 1, 1],
   easeIn: [0.42, 0, 1, 1],
   easeOut: [0, 0, 0.58, 1],
+  // Fast start, long silky settle — the curve polished motion-design promos use.
+  expoOut: [0.16, 1, 0.3, 1],
   easeInOut: [0.42, 0, 0.58, 1],
   // Overshoots past 1 and settles — the standard CSS "easeOutBack" curve.
   back: [0.34, 1.56, 0.64, 1],
