@@ -3848,8 +3848,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       startTextEdit: (id) => patch({ editingTextId: id }),
       setEntranceDuration: (id, seconds) =>
         setState((s) => {
-          const el = s.elements.find((e) => e.id === id);
-          if (!el || el.anim.preset === 'none' || hasCustomAnimation(motionTracks(el.anim.tracks))) return s;
+          const el0 = s.elements.find((e) => e.id === id);
+          if (!el0) return s;
+          // **ومدّةُ دخول المجموعة لكلّ أعضائها** (٣٠ أكتوبر)، كما النمطُ نفسُه: خريطةٌ من عشرين شكلًا
+          // كان يُسرَّع شكلٌ واحدٌ منها والباقي يزحف على المدّة القديمة.
+          const ids = el0.groupId ? s.elements.filter((e) => e.groupId === el0.groupId).map((e) => e.id) : [id];
+          let elements = s.elements;
+          for (const mid of ids) {
+          const el = elements.find((e) => e.id === mid);
+          if (!el || el.anim.preset === 'none' || hasCustomAnimation(motionTracks(el.anim.tracks))) continue;
           const span = Math.max(0.05, Math.min(seconds, el.anim.duration));
           const keyframes = el.anim.keyframes.length >= 2 ? el.anim.keyframes : defaultAnim(el.anim.preset, el.anim.start, el.anim.duration, el.anim.easing).keyframes;
           const base = tracksFromPreset(el.anim.preset, keyframes, el.anim.easing, el.anim.bezier, el.anim.duration, span);
@@ -3857,7 +3864,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           const shifted = Object.fromEntries(Object.entries(base).map(([p, tr]) => [p, (tr ?? []).map((k) => ({ ...k, time: k.time + src0 }))]));
           const reveal = el.anim.tracks.reveal;
           const tracks = reveal ? { ...shifted, reveal } : shifted;
-          return { ...s, elements: s.elements.map((e) => (e.id === id ? { ...e, anim: { ...e.anim, tracks } } : e)), ...pushHistory(s, (s.lang === 'ar' ? AR : EN).entrance) };
+          elements = elements.map((e) => (e.id === mid ? { ...e, anim: { ...e.anim, tracks } } : e));
+          }
+          if (elements === s.elements) return s;
+          return { ...s, elements, ...pushHistory(s, (s.lang === 'ar' ? AR : EN).entrance) };
         }),
       liveWidenText: (id, text) => {
         const s0 = stateRef.current;
