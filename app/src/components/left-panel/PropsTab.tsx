@@ -236,6 +236,7 @@ export function PropsTab() {
                         <span dir="ltr" style={{ color: 'var(--muted)', minWidth: 14, fontSize: 11 }}>{f.k}</span>
                         <NumField
                           disabled={disabled}
+                          deferCommit={!!groupIds}
                           value={raw}
                           onCommit={(v) => {
                             if (groupIds && geoProp) {
@@ -2059,9 +2060,13 @@ function NumField({
   style,
   testId,
   decimals,
+  deferCommit,
 }: {
   value: number;
   onCommit: (v: number) => void;
+  /** يُلتزَم عند Enter أو الخروج من الحقل لا عند كل ضغطة — لِما تتراكم فيه القيمُ الوسيطة
+   * (تحجيمُ مجموعةٍ يضرب مقاسَ خطّها في كلّ «١» ثم «١٨» ثم «١٨٠»). */
+  deferCommit?: boolean;
   disabled?: boolean;
   style?: React.CSSProperties;
   testId?: string;
@@ -2083,6 +2088,10 @@ function NumField({
       disabled={disabled}
       value={draft ?? shown}
       onKeyDown={(e) => {
+        if (e.key === 'Enter' && deferCommit) {
+          (e.target as HTMLInputElement).blur();
+          return;
+        }
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
         e.preventDefault();
         const base = Number(draft ?? shown);
@@ -2096,11 +2105,17 @@ function NumField({
         const raw = e.target.value;
         setDraft(raw);
         // الفراغ ليس رقمًا: هو «‑» أو «2.» أو حقلٌ أُفرغ — حالةٌ وسيطة لا تُلزِم.
-        if (raw.trim() === '') return;
+        if (raw.trim() === '' || deferCommit) return;
         const v = Number(raw);
         if (Number.isFinite(v)) onCommit(v);
       }}
-      onBlur={() => setDraft(null)}
+      onBlur={() => {
+        if (deferCommit && draft !== null && draft.trim() !== '') {
+          const v = Number(draft);
+          if (Number.isFinite(v) && v !== value) onCommit(v);
+        }
+        setDraft(null);
+      }}
       style={style}
     />
   );
