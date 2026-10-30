@@ -100,7 +100,7 @@ function withPreset(anim: ElementAnim, preset: AnimPreset): ElementAnim {
   // يُطبَّق على الصندوق كلِّه، ولا يجعل النصَّ «مبنيًّا باليد» فيُرفَض النمط: الحرسُ يسأل
   // عن مسارات الحركة وحدها، والنمطُ يُعيد بناءها وحدها.
   const reveal = anim.tracks.reveal;
-  if (hasCustomAnimation(motionTracks(anim.tracks))) return anim;
+  if (hasCustomAnimation(motionTracks(anim.tracks), anim.preset)) return anim;
   const keyframes = anim.keyframes.length >= 2 ? anim.keyframes : defaultAnim(preset, anim.start, anim.duration, anim.easing).keyframes;
   const tracks = tracksFromPreset(preset, keyframes, anim.easing, anim.bezier, anim.duration, Math.min(anim.duration, PRESET_ENTRANCE_SECONDS));
   return { ...anim, preset, keyframes, tracks: reveal ? { ...tracks, reveal } : tracks };
