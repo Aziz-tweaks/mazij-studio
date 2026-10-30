@@ -692,6 +692,20 @@ export function Stage() {
     }
 
     const additive = e.shiftKey;
+    // **نقرةٌ على نصٍّ محدَّدٍ أصلًا تفتح تحريره** (كما في الأداة الشائعة): بلا نقرٍ مزدوج. إن رُفع المؤشّرُ
+    // دون أن يتحرّك (أقلّ من ٣ بكسلات) فهي نقرةُ تحرير، والمؤشّرُ عندها موضعُ المؤشّر النصّيّ؛
+    // وإن سُحب فهو سحبٌ عاديّ.
+    if (!additive && !e.altKey && el.type === 'text' && state.selectedIds.length === 1 && state.selectedIds[0] === targetId) {
+      const x0 = e.clientX;
+      const y0 = e.clientY;
+      const onUp = (ev: PointerEvent) => {
+        window.removeEventListener('pointerup', onUp, true);
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > 3) return;
+        dblClickPointRef.current = { x: ev.clientX, y: ev.clientY };
+        actions.startTextEdit(targetId);
+      };
+      window.addEventListener('pointerup', onUp, true);
+    }
     let nextSelection = state.selectedIds;
     if (!state.selectedIds.includes(targetId) || e.altKey) {
       nextSelection = additive ? [...state.selectedIds, targetId] : [targetId];

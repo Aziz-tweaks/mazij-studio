@@ -21,8 +21,13 @@ export const EXPANDABLE_PROPERTIES: AnimProperty[] = ANIM_PROPERTIES.filter((p) 
 
 /** صفوفُ الخصائص التي تُفتَح تحت مقطع **هذا** العنصر — `animPropertiesFor` بلا الشفافيّة
  * (صفُّ المقطع نفسُه). فشكلٌ يحمل «بداية الخط» و«نهاية الخط» ونصٌّ لا يحملهما. */
-export function expandablePropertiesFor(el: { type: string; textAnim?: { enabled: boolean } }): AnimProperty[] {
-  return animPropertiesFor(el).filter((p) => p !== 'opacity');
+export function expandablePropertiesFor(el: { type: string; textAnim?: { enabled: boolean }; anim?: { tracks?: Partial<Record<AnimProperty, unknown[] | undefined>> } }): AnimProperty[] {
+  const props = animPropertiesFor(el).filter((p) => p !== 'opacity');
+  // **الخصائصُ المتحرّكة أوّلًا** (٣٠ أكتوبر): فتحُ صفٍّ يُظهر مباشرةً تحت المقطع ما له مفاتيح
+  // (الموضع، المقياس…)، وما لا مفاتيحَ له بعدها لمن أراد أن يضيف. كان الترتيبُ ثابتًا، فتُدفَن
+  // ماساتُ «المقياس» تحت أربعة صفوفٍ فارغة.
+  const keyed = (p: AnimProperty) => ((el.anim?.tracks?.[p] as unknown[] | undefined)?.length ?? 0) > 0;
+  return [...props.filter(keyed), ...props.filter((p) => !keyed(p))];
 }
 
 export const CLIP_ROW_H = 30;

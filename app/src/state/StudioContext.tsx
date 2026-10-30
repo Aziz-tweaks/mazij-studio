@@ -4517,7 +4517,15 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       const st = mcpStateRef.current;
       if (st.screen !== 'editor' || editable(e.target) || overlayOpen(st)) return;
       const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
-      if (!file) return;
+      if (!file) {
+        // **«لصق» من قائمة «تحرير»** لا يمرّ بـ⌘V (لا ضغطةَ مفتاح)، فيصل حدثُ اللصق وحده: يُلصَق
+        // ما نُسخ من العناصر. أمّا ⌘V فقد جدولت اللصقَ أصلًا (`pendingPaste`) فلا يُكرَّر.
+        if (!pendingPaste) {
+          e.preventDefault();
+          mcpActionsRef.current.pasteClipboard();
+        }
+        return;
+      }
       pendingPaste = false;
       e.preventDefault();
       const size = sizeAt(st.sizeIdx, st.customW, st.customH);
@@ -4532,12 +4540,26 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     window.addEventListener('keyup', onUp);
     window.addEventListener('pointerdown', onPointer, true);
     window.addEventListener('paste', onPaste);
+    // **«نسخ» و«قص» من قائمة «تحرير»** يصلان حدثَي copy/cut بلا ضغطة مفتاح؛ و⌘C/⌘X تمنع حدثَهما
+    // (`preventDefault` على الضغطة) فلا ازدواج. ونصٌّ محدَّدٌ أو حقلٌ قيد الكتابة يأخذ النسخَ الأصليّ.
+    const onCopyCut = (e: ClipboardEvent) => {
+      const st = mcpStateRef.current;
+      if (st.screen !== 'editor' || editable(e.target) || overlayOpen(st) || !st.selectedIds.length) return;
+      if (String(window.getSelection() ?? '').length) return;
+      e.preventDefault();
+      if (e.type === 'cut') mcpActionsRef.current.cutSelected();
+      else mcpActionsRef.current.copySelected();
+    };
+    window.addEventListener('copy', onCopyCut);
+    window.addEventListener('cut', onCopyCut);
     return () => {
       window.removeEventListener('keydown', onDown, true);
       window.removeEventListener('keydown', onSpaceDown);
       window.removeEventListener('keyup', onUp);
       window.removeEventListener('pointerdown', onPointer, true);
       window.removeEventListener('paste', onPaste);
+      window.removeEventListener('copy', onCopyCut);
+      window.removeEventListener('cut', onCopyCut);
     };
   }, [patch]);
 

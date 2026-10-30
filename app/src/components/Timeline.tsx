@@ -333,16 +333,45 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
   // **تحديدُ عنصرٍ على اللوحة يُظهر صفَّه في الخطّ الزمنيّ.** كان المحدَّدُ يبقى خارج المنظر
   // (المستندُ بعشرات الطبقات)، فلا يُرى أيُّ مقطعٍ هو ولا متى يظهر. يُمرَّر إليه أقلَّ تمريرٍ يكفي.
   const lastSel = state.selectedIds[state.selectedIds.length - 1];
+  // **تحديدُ عنصرٍ يأخذك إلى وقته ويفتح مفاتيحه** (طلب المالك، ٣٠ أكتوبر): إن كان المؤشّرُ خارج
+  // مقطعه انتقل إلى بدايته (فيُرى ويُحرَّر)، ويُفتح صفُّه في الخطّ الزمنيّ لتظهر ماساتُ مفاتيحه
+  // وانتقالاتُها. وما فُتح آليًّا يُطوى إذا انتقل التحديدُ إلى غيره؛ وما فتحه المصمّمُ بيده يبقى.
+  const autoExpandedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!timed) return;
+    const prevAuto = autoExpandedRef.current;
+    const el = lastSel ? state.elements.find((e) => e.id === lastSel) : undefined;
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (prevAuto && prevAuto !== lastSel) next.delete(prevAuto);
+      if (el && el.type !== 'audio' && !next.has(el.id) && Object.entries(el.anim.tracks ?? {}).some(([p, t]) => p !== 'opacity' && (t?.length ?? 0) > 0)) {
+        next.add(el.id);
+        autoExpandedRef.current = el.id;
+      } else if (!el) autoExpandedRef.current = null;
+      return next;
+    });
+    if (el && state.selectedIds.length === 1) {
+      const a = el.anim;
+      const inside = state.t >= a.start - 1e-6 && state.t <= a.start + a.duration + 1e-6;
+      if (!inside) actions.scrubTo(a.start);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSel, timed]);
   useEffect(() => {
     if (!lastSel) return;
     const box = tracksScrollRef.current;
     const row = box?.querySelector<HTMLElement>(`[data-clip-row="${lastSel}-opacity"]`);
     if (!box || !row) return;
-    const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
-    const bottom = top + row.getBoundingClientRect().height;
-    if (top < box.scrollTop) box.scrollTop = top;
-    else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = bottom - box.clientHeight;
-    mirrorScroll(box, layersScrollRef.current);
+    // بعد أن يُفتح الصفّ (الإطارُ التالي) يُمرَّر بحيث يظهر المقطعُ وما تحته من مفاتيح.
+    const raf = requestAnimationFrame(() => {
+      const top = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+      const keyed = !!autoExpandedRef.current && autoExpandedRef.current === lastSel;
+      const bottom = top + (keyed ? Math.min(box.clientHeight, row.getBoundingClientRect().height + 3 * PROP_ROW_H) : row.getBoundingClientRect().height);
+      if (top < box.scrollTop) box.scrollTop = top;
+      else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = Math.min(top, bottom - box.clientHeight);
+      mirrorScroll(box, layersScrollRef.current);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [lastSel]);
 
   // **لوحُ المفتاح يُغلَق كما تُغلَق كلُّ نافذةٍ عائمة:** بـEsc من أيّ مكان، وبضغطةٍ خارجه وخارج
@@ -1096,11 +1125,10 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
                       {L.ease_custom}
                     </button>
                   </div>
-                  {selectedKfData.easing === 'custom' && (
-                    <div style={{ borderTop: '1px solid var(--line)', paddingTop: 6 }}>
-                      <BezierEditor elementId={selectedKfEl.id} target={{ property: selectedKf.property, kfId: selectedKf.kfId }} />
-                    </div>
-                  )}
+                  {/* **المنحنى ظاهرٌ دائمًا** لا بعد اختيار «مخصّص»: سحبُ مقبضيه يجعل الانتقالَ مخصّصًا تلقائيًّا. */}
+                  <div style={{ borderTop: '1px solid var(--line)', paddingTop: 6 }}>
+                    <BezierEditor elementId={selectedKfEl.id} target={{ property: selectedKf.property, kfId: selectedKf.kfId }} />
+                  </div>
                 </AnchoredPopover>
               );
             })()}
