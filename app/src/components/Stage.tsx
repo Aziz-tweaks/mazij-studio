@@ -19,7 +19,7 @@ import { defaultAnim, defaultTextStagger } from '../state/elements';
 import { NEW_TEXT_PLACEHOLDER, isPlaceholderText } from '../lib/textPresets';
 import { dragIsBigEnough, floorDegenerate, shapeDragBox, shapeGeometryFor } from '../lib/shapeFactory';
 import type { ShapeDrawKind } from '../state/types';
-import { useStudio } from '../state/StudioContext';
+import { expandGroups, useStudio } from '../state/StudioContext';
 import { AudioPlayback } from './stage/AudioPlayback';
 import { isAudioFile } from '../lib/audioFile';
 import { useCompact, useTouch } from '../lib/useCompact';
@@ -717,7 +717,9 @@ export function Stage() {
     if (!nextSelection.length) return;
     actions.beginElementEdit();
     const startGeosPx = new Map<string, PxBox>();
-    for (const eid of nextSelection) {
+    // أعضاءُ المجموعة كلُّهم — `selectMany` يوسّع التحديدَ إليهم، لكنّ هذه النسخة من
+    // التحديد سابقةٌ للتوسيع، فكان السحبُ يحرّك المضغوطَ وحده (نصٌّ داخل شكلٍ ينفصل عنه).
+    for (const eid of expandGroups(nextSelection, state.elements)) {
       const found = state.elements.find((x) => x.id === eid);
       if (found) startGeosPx.set(eid, geoToPx(found.geo, size));
     }
@@ -774,6 +776,9 @@ export function Stage() {
       // البوليانية مستثنيان: كلاهما هندسة مسطّحة لا تملك `points` قابلة للتحرير.
       if (state.nodeEditId === id) actions.endNodeEdit();
       else actions.startNodeEdit(id);
+    } else if (el?.type === 'shape' && el.shape !== 'path') {
+      // (٣٠ أكتوبر) الأداة الشائعة: النقرةُ المزدوجة على شكلٍ تكتب فيه. كانت لا تفعل شيئًا هنا.
+      actions.addTextInShape(id);
     } else if (el?.type === 'image' && el.src) {
       // Mirrors text's double-click-to-edit: toggles the same "crop editing" mode
       // reachable from the Design panel's crop button.

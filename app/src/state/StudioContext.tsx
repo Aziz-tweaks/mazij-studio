@@ -213,7 +213,7 @@ function normalizeDoc(doc: DocSnapshot): DocSnapshot {
  * MCP) تمرّ بهما، فلا يوجد بابٌ خلفيّ يحدّد نصف مجموعة.
  *
  * الترتيب محفوظ والنتيجة بلا تكرار، والعنصر الحرّ يمرّ كما هو. */
-function expandGroups(ids: ElementId[], elements: DocElement[]): ElementId[] {
+export function expandGroups(ids: ElementId[], elements: DocElement[]): ElementId[] {
   const groups = new Set<string>();
   for (const id of ids) {
     const el = elements.find((e) => e.id === id);
@@ -850,6 +850,8 @@ export interface StudioActions {
   selectAllElements: () => void;
   /** يضع نصًّا جاهزًا في وسط اللوحة محدَّدًا — بطاقات لوح «نصوص». */
   addTextPreset: (preset: TextPreset) => void;
+  /** نقرةٌ مزدوجة على شكل: نصٌّ في وسطه مجمَّعٌ معه، والمؤشّرُ فيه (الأداة الشائعة). خطوةُ تراجعٍ واحدة. */
+  addTextInShape: (shapeId: ElementId) => void;
   /** «حرّك» من الشريط السياقي: يطبّق نمط دخول على العنصر — وإن كان المستند ساكنًا
    * يصير مُوقَّتًا في الخطوة نفسها فيطلع الخطّ الزمنيّ ويشتغل («أي تصميم يصير مشهد»).
    * خطوة تراجع واحدة تُرجع الاثنين. */
@@ -2850,6 +2852,40 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           const elements = s.elements.map((e) => (targets.has(e.id) ? { ...e, anim: withPreset(e.anim, preset) } : e));
           const label = (s.lang === 'ar' ? AR : EN).ctx_animate;
           return { elements, medium: 'timed', tlOpen: true, t: 0, playing: true, ...pushHistory(s, label) };
+        }),
+      addTextInShape: (shapeId) =>
+        setState((s) => {
+          const shape = s.elements.find((e) => e.id === shapeId);
+          if (!shape || shape.type !== 'shape') return s;
+          // نصٌّ سبق ووُضع في هذا الشكل (نفسُ المجموعة ونفسُ الصندوق): يُحرَّر هو، لا يُضاف ثانٍ.
+          const existing = shape.groupId ? s.elements.find((e) => e.type === 'text' && e.groupId === shape.groupId && Math.abs(e.geo.x - shape.geo.x) < 1e-6 && Math.abs(e.geo.y - shape.geo.y) < 1e-6) : undefined;
+          if (existing) return { ...s, selectedIds: [existing.id], sel: existing.id, editingTextId: existing.id };
+          const gid = shape.groupId ?? newGroupId();
+          const id = newElementId('text');
+          const text: DocElement = {
+            id,
+            type: 'text',
+            visible: true,
+            locked: false,
+            opacity: 100,
+            maskId: null,
+            groupId: gid,
+            geo: { ...shape.geo },
+            text: s.lang === 'ar' ? 'اكتب هنا' : 'Type here',
+            fontFamily: 'Alexandria',
+            fontSize: Math.max(18, Math.round(shape.geo.w * 1080 * 0.14)),
+            weight: 'bold',
+            color: null,
+            halign: 'center',
+            valign: 'middle',
+            anim: { ...defaultAnim('none', shape.anim.start, shape.anim.duration), ...(shape.anim.bounded ? { bounded: true } : {}) },
+            textAnim: defaultTextStagger(),
+            pathId: null,
+          };
+          const at = s.elements.findIndex((e) => e.id === shapeId);
+          const elements = s.elements.map((e) => (e.id === shapeId ? { ...e, groupId: gid } : e));
+          elements.splice(at + 1, 0, text);
+          return { ...s, elements, selectedIds: [id], sel: id, editingTextId: id, ...pushHistory(s, 'نص') };
         }),
       addTextPreset: (preset: TextPreset) =>
         setState((s) => {
