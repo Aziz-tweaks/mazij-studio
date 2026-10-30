@@ -930,7 +930,11 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
               }}
             />
           )}
-          <div ref={tracksScrollRef} onScroll={() => mirrorScroll(tracksScrollRef.current, layersScrollRef.current)} data-testid="timeline-tracks" onPointerDown={startScrub} style={{ flex: 1, position: 'relative', cursor: 'ew-resize', overflowY: 'auto', touchAction: 'none' }}>
+          <div ref={tracksScrollRef} onScroll={() => mirrorScroll(tracksScrollRef.current, layersScrollRef.current)} data-testid="timeline-tracks" onPointerDown={(e) => {
+            // نقرةٌ على فراغ المسارات (لا مقطعَ تحتها — المقطعُ يوقف الحدث) تُلغي التحديد وتنقل المؤشّر.
+            if (state.selectedIds.length) actions.selectMany([]);
+            startScrub(e);
+          }} style={{ flex: 1, position: 'relative', cursor: 'ew-resize', overflowY: 'auto', touchAction: 'none' }}>
             {/* **البوّابةُ سقطت عن المقطع نفسه.** كان هذا الفرعُ يرسم في الوضع
                 البسيط شريطًا ساكنًا عند `opacity: .35` لا يُنقَل ولا يُقلَّم،
                 والوضعُ البسيط هو الافتراضيّ (`src/state/types.ts`) — فالمستندُ

@@ -4539,6 +4539,19 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     window.addEventListener('keydown', onSpaceDown);
     window.addEventListener('keyup', onUp);
     window.addEventListener('pointerdown', onPointer, true);
+    // **نقرةٌ على أيّ فراغٍ في الشاشة تُلغي التحديد** (طلب المالك، ٣٠ أكتوبر): الشريطُ العلويّ، وحاشيةُ
+    // الأدوات، وفراغُ قائمة الطبقات، وأرضيّةُ المحرّر — لا اللوحةُ وحدها. ويُستثنى كلُّ ما يُتفاعَل معه
+    // (أزرار، حقول، عناصر، مقابض، مقاطع، المسطرة، النوافذ العائمة) والمفتّشُ نفسُه لأنه يحرّر المحدَّد.
+    // في مرحلة الفقاعة: ما يوقف الحدثَ (عنصرٌ، مقطعٌ، مقبض) يُبقي التحديد كما هو.
+    const KEEP = 'button, input, select, textarea, label, a, [contenteditable="true"], [role], [data-el-id], [data-stage-overlay], [data-clip-row], [data-testid="timeline-ruler"], [data-testid="timeline-playhead"], [data-testid="inspector"], [data-testid="kf-popover"], [data-keep-selection], [data-stage-root], svg';
+    const onBlankDown = (e: PointerEvent) => {
+      const st = mcpStateRef.current;
+      if (st.screen !== 'editor' || !st.selectedIds.length || st.editingTextId || e.button !== 0) return;
+      const t = e.target as Element | null;
+      if (!t || t.closest(KEEP)) return;
+      mcpActionsRef.current.selectMany([]);
+    };
+    window.addEventListener('pointerdown', onBlankDown);
     window.addEventListener('paste', onPaste);
     // **«نسخ» و«قص» من قائمة «تحرير»** يصلان حدثَي copy/cut بلا ضغطة مفتاح؛ و⌘C/⌘X تمنع حدثَهما
     // (`preventDefault` على الضغطة) فلا ازدواج. ونصٌّ محدَّدٌ أو حقلٌ قيد الكتابة يأخذ النسخَ الأصليّ.
@@ -4557,6 +4570,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('keydown', onSpaceDown);
       window.removeEventListener('keyup', onUp);
       window.removeEventListener('pointerdown', onPointer, true);
+      window.removeEventListener('pointerdown', onBlankDown);
       window.removeEventListener('paste', onPaste);
       window.removeEventListener('copy', onCopyCut);
       window.removeEventListener('cut', onCopyCut);

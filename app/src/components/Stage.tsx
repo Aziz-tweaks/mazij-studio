@@ -1149,6 +1149,7 @@ export function Stage() {
   return (
     <div
       ref={viewportRef}
+      data-stage-root
       onPointerDown={onBackgroundPointerDown}
       onDoubleClick={onBackgroundDoubleClick}
       onContextMenu={onStageContextMenu}
