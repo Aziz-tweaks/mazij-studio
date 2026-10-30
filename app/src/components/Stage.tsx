@@ -114,6 +114,7 @@ export function Stage() {
   const [shapeDraft, setShapeDraft] = useState<ShapeDraft | null>(null);
   const shapeDraftRef = useRef<ShapeDraft | null>(null);
   const [spaceDown, setSpaceDown] = useState(false);
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   /** قائمة الزرّ الأيمن — موضعها على الشاشة، وهل فُتحت على عنصرٍ أم على فراغ اللوحة. */
   const [stageMenu, setStageMenu] = useState<{ x: number; y: number; onElement: boolean } | null>(null);
   const closeStageMenu = useCallback(() => setStageMenu(null), []);
@@ -847,7 +848,45 @@ export function Stage() {
     }
     if (e.button !== 0) return;
     if (state.tool === 'select') {
-      if (!e.shiftKey) actions.selectNone();
+      // **التحديدُ بالمستطيل** (٣٠ أكتوبر): كان الضغطُ على الفراغ يُلغي التحديدَ فقط، فلا سبيلَ
+      // لتحديد عشرة عناصر إلا بالنقر عليها واحدًا واحدًا مع Shift — والسحبُ نفسُه كان يُظلِّل
+      // نصوصَ الواجهة. الآن السحبُ من الفراغ يرسم مستطيلًا ويحدِّد ما وقع **داخله كاملًا** مما
+      // هو ظاهرٌ في هذه اللحظة (كي لا تُلتقَط الخلفيّاتُ الممتدّة على اللوحة كلّها)، وShift يُضيف.
+      e.preventDefault();
+      const additive = e.shiftKey;
+      if (!additive) actions.selectNone();
+      const rect = artboardRef.current!.getBoundingClientRect();
+      const p0 = docPointFromClient(e.clientX, e.clientY, rect, scale);
+      const base = additive ? state.selectedIds : [];
+      const candidates = state.elements.filter((el) => el.type !== 'audio' && el.type !== 'fx' && el.visible && !el.locked && clipShowsAt(el.anim, t));
+      const sx = e.clientX;
+      const sy = e.clientY;
+      let moved = false;
+      const move = (ev: PointerEvent) => {
+        if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+        moved = true;
+        setMarquee({ x0: sx, y0: sy, x1: ev.clientX, y1: ev.clientY });
+      };
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+        setMarquee(null);
+        if (!moved) return;
+        const p1 = docPointFromClient(ev.clientX, ev.clientY, rect, scale);
+        const l = Math.min(p0.x, p1.x);
+        const r = Math.max(p0.x, p1.x);
+        const tp = Math.min(p0.y, p1.y);
+        const bt = Math.max(p0.y, p1.y);
+        const hits = candidates
+          .filter((el) => {
+            const bx = geoToPx(el.geo, size);
+            return bx.x >= l && bx.y >= tp && bx.x + bx.w <= r && bx.y + bx.h <= bt;
+          })
+          .map((el) => el.id);
+        if (hits.length || additive) actions.selectMany(Array.from(new Set([...base, ...hits])));
+      };
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', up, true);
       return;
     }
     const rect = artboardRef.current!.getBoundingClientRect();
@@ -1173,6 +1212,22 @@ export function Stage() {
       }}
       className="mz-stage"
     >
+      {marquee && (
+        <div
+          data-testid="stage-marquee"
+          style={{
+            position: 'fixed',
+            left: Math.min(marquee.x0, marquee.x1),
+            top: Math.min(marquee.y0, marquee.y1),
+            width: Math.abs(marquee.x1 - marquee.x0),
+            height: Math.abs(marquee.y1 - marquee.y0),
+            border: '1px solid var(--accent)',
+            background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+            pointerEvents: 'none',
+            zIndex: 50,
+          }}
+        />
+      )}
       {/* صفّ اللوحة العلويّ: المقاس واللوحات على البداية، والشريط السياقي للمحدَّد على
           النهاية. الصفّ نفسه لا يلتقط النقرات (فراغه لوحة)، وأزراره تلتقطها. */}
       <div data-stage-overlay style={{ position: 'absolute', top: 12, insetInlineStart: 12, insetInlineEnd: 12, zIndex: 4, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 8, pointerEvents: 'none' }}>
