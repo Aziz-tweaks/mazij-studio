@@ -78,6 +78,7 @@ export interface Dictionary {
   replace_image: string; choose_image: string; fit_cover: string; fit_contain: string;
   arrange: string; bring_forward: string; send_backward: string; align_elements: string;
   distribute_h: string; distribute_v: string; no_selection: string; pen_hint: string;
+  ex_codec: string; ex_audio: string; ex_tip_mp4: string; ex_tip_mov: string; ex_tip_webm: string; ex_tip_gif: string; ex_alpha_note: string;
   fit_fill: string; crop_frame: string; crop_start: string; crop_done: string; crop_hint: string;
   crop_reset: string; zoom: string; flip_h: string; flip_v: string; lock_aspect: string;
   pivot_label: string; pivot_hint: string; pivot_reset: string; line_height: string;
@@ -297,7 +298,7 @@ export const AR: Dictionary = {
   sec_shape: 'الشكل', sec_image: 'الصورة', radius: 'الزوايا', on_state: 'فعّل', off_state: 'بدون',
   replace_image: 'استبدال الصورة', choose_image: 'اختر صورة', fit_cover: 'تعبئة', fit_contain: 'احتواء',
   arrange: 'الترتيب', bring_forward: 'للأمام', send_backward: 'للخلف', align_elements: 'محاذاة العناصر',
-  distribute_h: 'توزيع أفقي', distribute_v: 'توزيع عمودي', no_selection: 'حدّد عنصر وتطلع خصائصه هنا',
+  distribute_h: 'توزيع أفقي', distribute_v: 'توزيع عمودي', no_selection: 'حدّد عنصر وتطلع خصائصه هنا', ex_codec: 'الترميز', ex_audio: 'الصوت', ex_tip_mp4: 'MP4 — يعمل في كل مكان (سوشال، جوال، ويب)', ex_tip_mov: 'MOV ProRes — جودة مونتاج، ويحفظ الخلفية الشفافة (تفريغ)', ex_tip_webm: 'WebM VP9 — للويب، ويحفظ الخلفية الشفافة', ex_tip_gif: 'GIF — صورة متحركة بلا صوت', ex_alpha_note: 'الخلفية شفافة: الملف يُركَّب فوق فيديو آخر في أي برنامج مونتاج.',
   pen_hint: 'انقر نقاط المسار، ونقرتين أو Enter تخلّص. Esc يلغي.',
   fit_fill: 'تمديد', crop_frame: 'القص داخل الإطار', crop_start: 'تحريك الصورة', crop_done: 'تم',
   crop_hint: 'اسحب الصورة داخل الإطار، وكبّرها من الشريط.',
@@ -584,7 +585,7 @@ export const EN: Dictionary = {
   sec_shape: 'Shape', sec_image: 'Image', radius: 'Radius', on_state: 'On', off_state: 'Off',
   replace_image: 'Replace image', choose_image: 'Choose image', fit_cover: 'Cover', fit_contain: 'Contain',
   arrange: 'Arrange', bring_forward: 'Forward', send_backward: 'Backward', align_elements: 'Align elements',
-  distribute_h: 'Distribute H', distribute_v: 'Distribute V', no_selection: 'Select an element on the canvas to edit it',
+  distribute_h: 'Distribute H', distribute_v: 'Distribute V', no_selection: 'Select an element on the canvas to edit it', ex_codec: 'Codec', ex_audio: 'Audio', ex_tip_mp4: 'MP4 — plays everywhere (social, mobile, web)', ex_tip_mov: 'MOV ProRes — edit-grade, keeps a transparent background', ex_tip_webm: 'WebM VP9 — for the web, keeps a transparent background', ex_tip_gif: 'GIF — silent animated image', ex_alpha_note: 'Transparent background: layer this file over other footage in any editor.',
   pen_hint: 'Click to add straight-segment anchor points, then double-click or Enter to finish. Esc to cancel.',
   fit_fill: 'Stretch', crop_frame: 'Crop within frame', crop_start: 'Reposition image', crop_done: 'Done',
   crop_hint: 'Drag the image on the canvas to pan it, and use the zoom slider to scale it.',

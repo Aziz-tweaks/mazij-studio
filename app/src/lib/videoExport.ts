@@ -5,8 +5,9 @@ import { Command } from '@tauri-apps/plugin-shell';
 import { renderArtboardFrames, type ArtboardRenderSpec } from './exportArtboard';
 import { audioMixFilter, audioMixPlan, dataUrlBytes, extForDataUrl, type MixSegment } from './audioMix';
 import type { ShutterSpec } from './motionBlur';
+import { ExportCancelled, isExportCancelled, setRunningProcess, throwIfCancelled } from './exportCancel';
 
-export type VideoFormat = 'mp4' | 'gif';
+export type VideoFormat = 'mp4' | 'gif' | 'mov' | 'webm';
 
 export interface VideoExportOptions {
   format: VideoFormat;
@@ -18,6 +19,10 @@ export interface VideoExportOptions {
    * caller must pass `false` here when `format === 'mp4'` (ExportDialog disables the
    * transparent toggle for mp4 rather than silently dropping it here). */
   transparent: boolean;
+  /** ترميزُ MP4 — H.264 أو H.265. يُتجاهَل في غيرها. */
+  codec?: 'h264' | 'hevc';
+  /** `false` يُصدِّر فيديو صامتًا ولو كان في المستند صوت. */
+  audio?: boolean;
   /** ضبابُ الحركة. غيابُه — أو `samplesPerFrame = 1` — يُبقي المسارَ القديم
    * بسطره، مقيسًا بايتًا ببايت. والثمنُ **دون الخطّيّ** (نحو نصفِ N) ومقيسٌ في
    * `docs/DECISION-motion-blur-parity.md` §٦. */
@@ -25,6 +30,27 @@ export interface VideoExportOptions {
 }
 
 const FRAME_DIGITS = 5;
+
+/** معاملاتُ ترميز الصورة لكلّ صيغة (٣٠ أكتوبر ٢٠٢٦):
+ * - MP4: H.264 (`libx264`، الأوسعُ قبولًا) أو H.265 (`libx265`، نحو نصف الحجم، وسمُ `hvc1` لتشغيله في أجهزة آبل).
+ * - MOV: ProRes 4444 بقناة ألفا متى طُلبت الشفافيّة («التفريغ» للمونتاج فوق مقاطع أخرى)، وإلا ProRes 422 HQ.
+ * - WebM: VP9 بقناة ألفا متى طُلبت — يُشغَّل في المتصفّحات بخلفيّةٍ شفّافة. */
+function videoCodecArgs(opts: VideoExportOptions, crf: string, transparent: boolean): string[] {
+  if (opts.format === 'mov') {
+    return transparent
+      ? ['-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le', '-alpha_bits', '16', '-vendor', 'apl0']
+      : ['-c:v', 'prores_ks', '-profile:v', '3', '-pix_fmt', 'yuv422p10le', '-vendor', 'apl0'];
+  }
+  if (opts.format === 'webm') {
+    const q = opts.quality === 'high' ? '24' : '32';
+    return ['-c:v', 'libvpx-vp9', '-pix_fmt', transparent ? 'yuva420p' : 'yuv420p', '-b:v', '0', '-crf', q, '-row-mt', '1', '-deadline', 'good', '-cpu-used', '4'];
+  }
+  if (opts.codec === 'hevc') {
+    const q = opts.quality === 'high' ? '22' : '27';
+    return ['-pix_fmt', 'yuv420p', '-c:v', 'libx265', '-preset', 'medium', '-crf', q, '-tag:v', 'hvc1'];
+  }
+  return ['-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', crf];
+}
 function frameFileName(index: number): string {
   return `frame-${String(index + 1).padStart(FRAME_DIGITS, '0')}.png`;
 }
@@ -42,13 +68,16 @@ async function runFfmpeg(args: string[], totalFrames: number, onFrame: (frame: n
     if (m) onFrame(Math.min(totalFrames, parseInt(m[1], 10)));
   });
 
+  throwIfCancelled();
   await new Promise<void>((resolve, reject) => {
     command.on('close', (data) => {
-      if (data.code === 0) resolve();
+      setRunningProcess(null);
+      if (isExportCancelled()) reject(new ExportCancelled());
+      else if (data.code === 0) resolve();
       else reject(new Error(`ffmpeg (${args[args.length - 1]}) exited with code ${data.code}\n${stderr.slice(-4000)}`));
     });
     command.on('error', (err) => reject(new Error(String(err))));
-    command.spawn().catch(reject);
+    command.spawn().then((child) => setRunningProcess(child)).catch(reject);
   });
 }
 
@@ -112,7 +141,8 @@ export async function exportVideoTarget(
     // MP4 has no alpha channel — force an opaque background for its frames
     // regardless of the transparent toggle (ExportDialog disables that toggle for
     // mp4 in the UI; this is the belt-and-suspenders guarantee at the render layer).
-    const frameSpec = { ...spec, transparent: opts.format === 'gif' && spec.transparent };
+    // الشفافيّةُ لصيغٍ تحمل قناةَ ألفا: GIF، وMOV (ProRes 4444)، وWebM (VP9). MP4 لا يحملها.
+    const frameSpec = { ...spec, transparent: opts.format !== 'mp4' && spec.transparent };
 
     let rendered = 0;
     // `frameInterval` يُمرَّر صراحةً ولا تَستنتجه `renderArtboardFrames` من فرق
@@ -122,6 +152,7 @@ export async function exportVideoTarget(
     // `qa/motion-blur.spec.mjs`). فالمعرفةُ بمعدّل الإطارات تبقى عند من يَملكها،
     // كما بقيت المدّةُ في `opts` ولم تُقرأ من حالةٍ هنا.
     await renderArtboardFrames(frameSpec, frameTimes, async (blob, i) => {
+      throwIfCancelled();
       const bytes = new Uint8Array(await blob.arrayBuffer());
       await writeFile(await join(tmpDir, frameFileName(i)), bytes);
       rendered += 1;
@@ -131,13 +162,13 @@ export async function exportVideoTarget(
     const destPath = await join(exportsDir, destFileName);
     const inputPattern = await join(tmpDir, `frame-%0${FRAME_DIGITS}d.png`);
 
-    if (opts.format === 'mp4') {
+    if (opts.format === 'mp4' || opts.format === 'mov' || opts.format === 'webm') {
       const crf = opts.quality === 'high' ? '18' : '23';
       // **الصوت** (٢٥ أكتوبر ٢٠٢٦): طبقاتُ الصوت وصوتُ الفيديو، بخطّة `audioMixPlan` نفسِها
       // التي تُشغّل بها المعاينة (`mediaTimeAt`). كلُّ مصدرٍ يُكتب ملفًّا مؤقّتًا ويُمرَّر مدخلًا
       // بعد الإطارات، ومرشّحُ `audioMixFilter` يقصّه ويؤخّره ويخلطه. والمستندُ بلا صوتٍ يُصدَّر
       // بالسطر القديم حرفًا — لا مسارَ صوتٍ فارغًا في ملفّه.
-      const plan = audioMixPlan(frameSpec.elements, opts.durationSeconds);
+      const plan = opts.audio === false ? { inputs: [], segments: [] } as unknown as ReturnType<typeof audioMixPlan> : audioMixPlan(frameSpec.elements, opts.durationSeconds);
       const audioPaths: string[] = [];
       const segments: MixSegment[] = [];
       for (let k = 0; k < plan.inputs.length; k++) {
@@ -156,12 +187,9 @@ export async function exportVideoTarget(
           '-framerate', String(opts.fps),
           '-i', inputPattern,
           ...audioPaths.flatMap((p) => ['-i', p]),
-          ...(mix ? ['-filter_complex', mix.filter, '-map', '0:v', '-map', mix.out, '-c:a', 'aac', '-b:a', '192k'] : []),
+          ...(mix ? ['-filter_complex', mix.filter, '-map', '0:v', '-map', mix.out, ...(opts.format === 'webm' ? ['-c:a', 'libopus', '-b:a', '160k'] : ['-c:a', 'aac', '-b:a', '192k'])] : []),
           '-frames:v', String(frameCount),
-          '-pix_fmt', 'yuv420p',
-          '-c:v', 'libx264',
-          '-preset', 'medium',
-          '-crf', crf,
+          ...videoCodecArgs(opts, crf, frameSpec.transparent),
           // Tag the output stream as standard Rec.709 SDR — metadata only (no `-vf`
           // pixel transform), so players interpret the colors correctly without
           // altering a single pixel value. The competitive analysis (§1.7) documents
@@ -182,7 +210,7 @@ export async function exportVideoTarget(
           '-color_range', '1',
           '-colorspace', '1',
           '-color_primaries', '1',
-          '-movflags', '+faststart',
+          ...(opts.format === 'webm' ? [] : ['-movflags', '+faststart']),
           '-progress', 'pipe:1',
           '-nostats',
           destPath,
@@ -221,6 +249,12 @@ export async function exportVideoTarget(
 
     onProgress(1);
     return destPath;
+  } catch (err) {
+    // ملفٌّ نصفُ مكتوبٍ بعد الإلغاء لا يُترَك في مجلّد التصدير يُوهِم أنه نتيجة.
+    if (err instanceof ExportCancelled) {
+      await remove(await join(exportsDir, destFileName)).catch(() => undefined);
+    }
+    throw err;
   } finally {
     await remove(tmpDir, { recursive: true }).catch(() => undefined);
   }

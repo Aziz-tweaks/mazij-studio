@@ -3,14 +3,14 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { Icon } from './Icon';
 import { PALETTES, SIZES, PLATFORM_GROUPS, MEDIUM_CHIP, ICONS, FPS_OPTIONS, CUSTOM_SIZE_IDX, sizeAt, dimsOf, glyphStyle, nameOf, seg } from '../data/constants';
 import { useStudio } from '../state/StudioContext';
-import type { ExportResult } from '../state/types';
+import { isVideoExportFormat, type ExportResult } from '../state/types';
 import { effectiveExportScale, estimateVideoExport } from '../lib/exportEstimate';
 import { documentDuration } from '../lib/animTimeline';
 import { SHUTTER_SAMPLE_OPTIONS } from '../lib/motionBlur';
 import { renderArtboardPng } from '../lib/exportArtboard';
 
 const IMG_FORMATS = ['png', 'jpg', 'svg'] as const;
-const VID_FORMATS = ['mp4', 'gif'] as const;
+const VID_FORMATS = ['mp4', 'mov', 'webm', 'gif'] as const;
 const LIVE_FORMATS = ['livephoto'] as const;
 
 /** Roadmap #23 — the action that actually turns an exported Live Photo pair into
@@ -91,7 +91,7 @@ export function ExportDialog() {
   // وهي أصلًا «صورةٌ بذيلٍ متحرّك» — فتبويبُها ليس هذا التفرّع، والخطّة لم تُسمِّها
   // في أيٍّ من العمودين (§4.2).
   const showVideoFormats = state.medium === 'timed';
-  const videoFormatSelected = state.exportFormat === 'mp4' || state.exportFormat === 'gif';
+  const videoFormatSelected = isVideoExportFormat(state.exportFormat);
 
   // وجهةٌ محجوبةٌ لا تبقى مختارة. `exportFormat` حالةٌ تدوم بين المستندات، فمستندٌ
   // اختير له MP4 ثم بُدِّل مقاسُه إلى بوسترٍ كان سيفتح هذا الحوارَ على صيغةٍ لا
@@ -135,8 +135,11 @@ export function ExportDialog() {
   // وهي تكلفةٌ تُدفَع لسطحٍ غيرِ معروض. مقيسةً: ٠٫٢٢٤ مللي للاستدعاء عند ٢٠٠
   // عنصرٍ، أي ١٣٫٥ مللي لكلّ ثانيةِ سحبٍ عند ٦٠ إطارًا (و٠٫٧ عند سبعة عناصر).
   // والشرطُ يُنزِلها إلى صفرٍ حيث لا تُرى.
+  // الشفافيّةُ كما ستُكتَب فعلًا: MP4 وJPG والصورة الحيّة تُصدَّر بخلفيّةٍ معتمة
+  // مهما كان المفتاح، فلا تَعِد المعاينةُ بما لن يَصِل.
+  const alphaOut = state.exportTransparent && !['mp4', 'jpg', 'livephoto'].includes(state.exportFormat);
   const previewKey = state.exportOpen
-    ? JSON.stringify([state.elements, state.postPalette, state.sizeIdx, state.customW, state.customH, state.decorAccent, state.exportTransparent, state.lang])
+    ? JSON.stringify([state.elements, state.postPalette, state.sizeIdx, state.customW, state.customH, state.decorAccent, alphaOut, state.lang])
     : '';
   useEffect(() => {
     if (!state.exportOpen) {
@@ -152,7 +155,7 @@ export function ExportDialog() {
       size: previewSize,
       palette: PALETTES[state.postPalette],
       elements: state.elements,
-      transparent: state.exportTransparent,
+      transparent: alphaOut,
       scale,
       lang: state.lang,
       decorAccent: state.decorAccent,
@@ -184,7 +187,8 @@ export function ExportDialog() {
     position: 'relative' as const,
     aspectRatio: `${size.w}/${size.h}`,
     ...(compact ? (tall ? { height: '140px' } : { width: '200px' }) : tall ? { height: '300px' } : { width: '244px' }),
-    background: state.exportTransparent ? 'transparent' : pal.bg,
+    // رقعةُ شطرنجٍ تحت المعاينة الشفّافة: على حوارٍ داكنٍ كانت الشفافيّةُ تبدو خلفيّةً سوداء.
+    background: alphaOut ? 'repeating-conic-gradient(#9a9a9a 0% 25%, #d4d4d4 0% 50%) 0 0 / 16px 16px' : pal.bg,
     overflow: 'hidden',
     borderRadius: 4,
     boxShadow: '0 12px 30px rgba(0,0,0,.25)',
@@ -199,7 +203,7 @@ export function ExportDialog() {
     : Object.values(state.targets).filter(Boolean).length * (multiArtboard ? state.artboards.length : 1);
   const customSize = sizeAt(CUSTOM_SIZE_IDX, state.customW, state.customH);
   const customOn = !!state.targets.custom;
-  const isVideoFormat = state.exportFormat === 'mp4' || state.exportFormat === 'gif';
+  const isVideoFormat = isVideoExportFormat(state.exportFormat);
   // نفس الحاصل الذي يمرّ به `startExport` بالضبط: هدفٌ لكل مقاس مختار، مضروبًا في عدد
   // اللوحات عند تفعيل «كل اللوحات» — فما يُقدّره التذييل هو ما سيُكتب فعلًا، لا ملفًا
   // واحدًا منه. والمقياس هو الفعلي (`effectiveExportScale`) لا المعروض على المُبدِّل.
@@ -214,7 +218,7 @@ export function ExportDialog() {
       return Array.from({ length: copies }, () => one);
     });
   const isLivePhotoFormat = state.exportFormat === 'livephoto';
-  const noAlphaReason = state.exportFormat === 'mp4' ? L.ex_mp4_no_alpha : isLivePhotoFormat ? L.ex_livephoto_no_alpha : undefined;
+  const noAlphaReason = state.exportFormat === 'mp4' || state.exportFormat === 'jpg' ? L.ex_mp4_no_alpha : isLivePhotoFormat ? L.ex_livephoto_no_alpha : undefined;
   const noAlpha = !!noAlphaReason;
 
   return (
@@ -264,8 +268,9 @@ export function ExportDialog() {
                 <div style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
                   {VID_FORMATS.map((fmt) => {
                     const s = seg(state.exportFormat === fmt);
+                    const tip = { mp4: L.ex_tip_mp4, mov: L.ex_tip_mov, webm: L.ex_tip_webm, gif: L.ex_tip_gif }[fmt];
                     return (
-                      <button key={fmt} onClick={() => actions.setExportFormat(fmt)} dir="ltr" style={{ flex: 1, height: 26, border: 0, borderRadius: 'calc(var(--rs) - 2px)', fontSize: 12, fontWeight: 600, background: s.bg, color: s.fg, boxShadow: s.sh }}>
+                      <button key={fmt} data-testid={`export-format-${fmt}`} title={tip} onClick={() => actions.setExportFormat(fmt)} dir="ltr" style={{ flex: 1, height: 26, border: 0, borderRadius: 'calc(var(--rs) - 2px)', fontSize: 12, fontWeight: 600, background: s.bg, color: s.fg, boxShadow: s.sh }}>
                         {fmt.toUpperCase()}
                       </button>
                     );
@@ -442,18 +447,23 @@ export function ExportDialog() {
                   ويُعرَض ١× نشطًا — بنفس نمط تعطيل «خلفية شفافة» على MP4 أدناه. ولو
                   بقي مفتوحًا لأنتج مشروعُ «تيك توك» المكتوبُ 1080 × 1920 ملفًا
                   بأبعاد 2160 × 3840 (المُضاعِف الافتراضي ٢). */}
-              <div dir="ltr" title={isVideoFormat ? L.ex_video_scale_locked : undefined} style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2, opacity: isVideoFormat ? 0.55 : 1 }}>
-                {([1, 2, 3] as const).map((s) => (
-                  <button
-                    key={s}
-                    data-testid={`export-scale-${s}`}
-                    disabled={isVideoFormat}
-                    onClick={() => actions.setExportScale(s)}
-                    style={{ ...qBtnStyle(isVideoFormat ? s === 1 : state.exportScale === s), cursor: isVideoFormat ? 'not-allowed' : 'pointer' }}
-                  >
-                    {s}x
-                  </button>
-                ))}
+              {/* (٣٠ أكتوبر) الفيديو: ١× بدقّة اللوحة، و٢× ضعفُها (4K لريلٍ 1080×1920) — والثلاثةُ للصور وحدها. */}
+              <div dir="ltr" style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
+                {([1, 2, 3] as const).map((s) => {
+                  const off = isVideoFormat && s === 3;
+                  return (
+                    <button
+                      key={s}
+                      data-testid={`export-scale-${s}`}
+                      disabled={off}
+                      title={off ? L.ex_video_scale_locked : undefined}
+                      onClick={() => actions.setExportScale(s)}
+                      style={{ ...qBtnStyle(effectiveExportScale(state.exportFormat, state.exportScale) === s), cursor: off ? 'not-allowed' : 'pointer', opacity: off ? 0.4 : 1 }}
+                    >
+                      {s}x
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -486,11 +496,42 @@ export function ExportDialog() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <span className="mz-label">{L.ex_fps}</span>
               <div dir="ltr" style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
-                {FPS_OPTIONS[state.exportFormat as 'mp4' | 'gif'].map((f) => (
+                {FPS_OPTIONS[state.exportFormat as 'mp4' | 'gif' | 'mov' | 'webm'].map((f) => (
                   <button key={f} onClick={() => actions.setExportFps(f)} style={qBtnStyle(state.exportFps === f)}>{f}</button>
                 ))}
               </div>
             </div>
+          )}
+
+          {/* **الترميز والصوت** (٣٠ أكتوبر): H.264 يعمل في كلّ مكان، وH.265 بنحو نصف الحجم. والصوتُ يُطفأ
+              لمن يريد مقطعًا صامتًا يركّبه في برنامجٍ آخر. وGIF بلا صوتٍ أصلًا. */}
+          {isVideoFormat && state.exportFormat !== 'gif' && (
+            <div style={{ display: 'flex', gap: 12 }}>
+              {state.exportFormat === 'mp4' && (
+                <div style={{ flex: 2, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{L.ex_codec}</span>
+                  <div data-testid="export-codec" dir="ltr" style={{ display: 'flex', padding: 3, background: 'var(--surface2)', borderRadius: 'var(--rs)', gap: 2 }}>
+                    <button data-testid="export-codec-h264" onClick={() => actions.setExportCodec('h264')} style={qBtnStyle(state.exportCodec === 'h264')}>H.264</button>
+                    <button data-testid="export-codec-hevc" onClick={() => actions.setExportCodec('hevc')} style={qBtnStyle(state.exportCodec === 'hevc')}>H.265</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{L.ex_audio}</span>
+                <div style={{ height: 32, display: 'flex', alignItems: 'center' }}>
+                  <button
+                    data-testid="export-audio-toggle"
+                    onClick={() => actions.setExportAudio(!state.exportAudio)}
+                    style={{ width: 36, height: 20, borderRadius: 999, background: state.exportAudio ? 'var(--accent)' : 'var(--line)', position: 'relative', display: 'inline-block', border: 0, padding: 0, cursor: 'pointer' }}
+                  >
+                    <span style={{ position: 'absolute', top: 2, [state.exportAudio ? 'insetInlineEnd' : 'insetInlineStart']: 2, width: 16, height: 16, borderRadius: '50%', background: 'var(--surface)', boxShadow: '0 1px 2px rgba(0,0,0,.2)' }} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {isVideoFormat && state.exportFormat !== 'mp4' && state.exportTransparent && (
+            <div data-testid="export-alpha-note" style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>{L.ex_alpha_note}</div>
           )}
 
           {/* ضبابُ الحركة. الثمنُ مكتوبٌ **تحت المِقبض** لا في وثيقة: الخيارُ يُضاعف
@@ -578,7 +619,7 @@ export function ExportDialog() {
               {isVideoFormat && (
                 <span data-testid="export-estimate" dir="auto" style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                   {(() => {
-                    const est = estimateVideoExport(videoTargetDims, state.exportFormat as 'mp4' | 'gif', state.exportFps, state.exportQuality, docDuration);
+                    const est = estimateVideoExport(videoTargetDims, state.exportFormat as 'mp4' | 'gif' | 'mov' | 'webm', state.exportFps, state.exportQuality, docDuration);
                     return L.ex_estimate(est.seconds, est.files, est.megabytes);
                   })()}
                 </span>
@@ -604,7 +645,10 @@ export function ExportDialog() {
               </>
             )}
             {state.exportState === 'busy' && (
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{L.exporting} <bdi>{Math.round(state.exportProgress)}%</bdi></span>
+              <>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{L.exporting} <bdi>{Math.round(state.exportProgress)}%</bdi></span>
+                <button data-testid="export-cancel" onClick={actions.cancelExport} style={{ height: 34, padding: '0 14px', border: '1px solid var(--line)', borderRadius: 'var(--rs)', background: 'transparent', color: 'var(--text)', fontSize: 13 }}>{L.cancel}</button>
+              </>
             )}
             {state.exportState === 'done' && (
               <>

@@ -181,11 +181,13 @@ export const nameOf = (z: SizePreset, lang: Lang) => (lang === 'ar' ? z.ar : z.e
  * normal delta-encoded codec) has no such penalty. Used by ExportDialog's fps
  * picker and by StudioContext to snap `exportFps` to a valid value on format
  * switch. */
-export const FPS_OPTIONS: Record<'mp4' | 'gif', number[]> = {
-  mp4: [24, 30, 60],
+export const FPS_OPTIONS: Record<'mp4' | 'gif' | 'mov' | 'webm', number[]> = {
+  mp4: [24, 25, 30, 50, 60],
+  mov: [24, 25, 30, 50, 60],
+  webm: [24, 25, 30, 50, 60],
   gif: [10, 15, 24],
 };
-export const DEFAULT_FPS: Record<'mp4' | 'gif', number> = { mp4: 30, gif: 15 };
+export const DEFAULT_FPS: Record<'mp4' | 'gif' | 'mov' | 'webm', number> = { mp4: 30, mov: 30, webm: 30, gif: 15 };
 
 export interface Palette {
   bg: string;

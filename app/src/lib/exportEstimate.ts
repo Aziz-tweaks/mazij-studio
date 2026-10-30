@@ -27,9 +27,12 @@
  * وجودتا GIF متساويتان لأن مسار الترميز لا يقرأ `quality` أصلًا (مرحلتا
  * palettegen/paletteuse فقط)، فلا يصحّ أن يتغيّر التقدير بتغييرٍ لا أثر له.
  */
-const BITS_PER_PIXEL: Record<'mp4' | 'gif', Record<'high' | 'med', number>> = {
+const BITS_PER_PIXEL: Record<'mp4' | 'gif' | 'mov' | 'webm', Record<'high' | 'med', number>> = {
   mp4: { high: 0.00235, med: 0.00178 },
   gif: { high: 0.01394, med: 0.01394 },
+  // ProRes 4444 قريبٌ من غير المضغوط (للمونتاج والتفريغ)؛ وVP9 أصغر من H.264 قليلًا.
+  mov: { high: 1.75, med: 1.75 },  // مقيس: ريل ٥ث 4444 بألفا = ٦٨٫٦ م.ب؛ والجودة لا تغيّر ملف ProRes
+  webm: { high: 0.0085, med: 0.006 },
 };
 
 /** مُضاعِف الدقّة الفعلي عند التصدير.
@@ -41,7 +44,10 @@ const BITS_PER_PIXEL: Record<'mp4' | 'gif', Record<'high' | 'med', number>> = {
  * الدقّة المذكورة أصلًا. فالفيديو يُصدَّر بدقّة اللوحة نفسها (١×)، ومُبدِّل المقياس
  * يُعطَّل بسببٍ مكتوب — نفس نمط تعطيل «خلفية شفافة» على MP4. */
 export function effectiveExportScale(format: string, scale: number): number {
-  return format === 'mp4' || format === 'gif' ? 1 : scale;
+  // (٣٠ أكتوبر ٢٠٢٦) الفيديو يقبل ١× أو ٢× صراحةً — ٢× هي «4K» لريلٍ 1080×1920 — و٣× للصور وحدها.
+  // يبقى الافتراضُ للفيديو ١× (`setExportFormat` يضبطه)، فلا يُضاعَف ملفٌّ لم يُطلب.
+  if (format === 'mp4' || format === 'gif' || format === 'mov' || format === 'webm') return Math.min(scale, 2);
+  return scale;
 }
 
 export interface VideoEstimate {
@@ -57,7 +63,7 @@ export interface VideoEstimate {
  * التذييل يُقدّر ما يُنتجه الزرّ عند ضغطه، لا ملفًا واحدًا منها. */
 /** `seconds` هي مدّةُ المستند المشتقّة، تُمرَّر لا تُفترَض: التذييلُ يَصِف ما
  * سيُنتجه الزرّ عند ضغطه، والمستندُ لم يبقَ خمسَ ثوانٍ بحكم البناء. */
-export function estimateVideoExport(dims: { w: number; h: number }[], format: 'mp4' | 'gif', fps: number, quality: 'high' | 'med', seconds: number): VideoEstimate {
+export function estimateVideoExport(dims: { w: number; h: number }[], format: 'mp4' | 'gif' | 'mov' | 'webm', fps: number, quality: 'high' | 'med', seconds: number): VideoEstimate {
   const bpp = BITS_PER_PIXEL[format][quality];
   const bits = dims.reduce((sum, d) => sum + d.w * d.h * fps * seconds * bpp, 0);
   return {

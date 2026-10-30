@@ -1,3 +1,4 @@
+import { beginExport, cancelExport as cancelExportRun, ExportCancelled, isExportCancelled } from '../lib/exportCancel';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AR, EN, type Dictionary, type Lang } from '../i18n/strings';
 import { CMDS, SIZES, PALETTES, CUSTOM_SIZE_IDX, DEFAULT_FPS, FPS_OPTIONS, TOOL_LIBRARY, sizeAt, nameOf, clamp, defaultTargetsFor, type CommandDef } from '../data/constants';
@@ -12,7 +13,7 @@ import {
   type ShapeRecipe,
 } from '../lib/shapeFactory';
 import type { ArtboardDoc, ArtboardMeta, DocSnapshot, ExportResult, FontEntry, HAlign, PanelId, ShapeDrawKind, StudioState, VAlign, Weight } from './types';
-import { initialStudioState } from './types';
+import { initialStudioState, isVideoExportFormat } from './types';
 // اتحادُ ثلاث رحلات مسّت هذا الملف: `newGroupId` من رحلة الحملة (التجميع)،
 // و`AnimPreset` من رحلة الفيديو (ربط الحركة بالعنصر المحدَّد)، و`withBaseLayerColor`
 // من رحلة البوست (تلوين الشكل عبر كومة المظهر لا عبر الحقل القديم). لا تعارض في
@@ -1181,8 +1182,12 @@ export interface StudioActions {
   setExportQuality: (q: 'high' | 'med') => void;
   setExportTransparent: (on: boolean) => void;
   setExportFps: (fps: number) => void;
+  setExportCodec: (codec: 'h264' | 'hevc') => void;
+  setExportAudio: (on: boolean) => void;
   setExportShutterSamples: (samples: number) => void;
   startExport: () => void;
+  /** يوقف تصديرًا جاريًا: يَقتل ffmpeg ويَحذف الملفّ الناقص. */
+  cancelExport: () => void;
   setHomePrompt: (text: string) => void;
   startFromPrompt: () => void;
   openTemplates: () => void;
@@ -1827,7 +1832,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const ownSize = state.exportAllArtboards && state.exportArtboardOwnSize && state.artboards.length > 1;
     if (!ids.length && !ownSize) return;
 
-    const isVideo = state.exportFormat === 'mp4' || state.exportFormat === 'gif';
+    const isVideo = isVideoExportFormat(state.exportFormat);
     const isLivePhoto = state.exportFormat === 'livephoto';
     // The sidecar that encodes mp4/gif/livephoto only exists inside the built
     // Tauri app — in the plain browser preview there is no process to shell out
@@ -1838,6 +1843,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     }
 
     patch({ exportState: 'busy', exportProgress: 0, exportError: null, exportedPaths: [], exportResults: [] });
+    beginExport();
 
     // Roadmap #16: "export all artboards" reuses this exact per-size batch loop,
     // just wrapped in an outer loop over artboards — each artboard contributes its
@@ -1861,6 +1867,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       let step = 0;
       for (const ab of exportArtboards) {
         for (const id of innerIds) {
+          if (isExportCancelled()) break;
           // 'custom' isn't in the SIZES presets — it reads the artboard's own
           // user-typed custom width/height (same values ArtboardSizeMenu writes).
           const size =
@@ -1921,16 +1928,19 @@ export function StudioProvider({ children }: { children: ReactNode }) {
               // photo library pairs them (see `addLivePhotoToPhotos`).
               pairedMovPath = result.movPath;
             } else if (isVideo) {
-              const fmt = state.exportFormat as 'mp4' | 'gif';
+              const fmt = state.exportFormat as 'mp4' | 'gif' | 'mov' | 'webm';
+              const alpha = fmt !== 'mp4' && state.exportTransparent;
               const { exportVideoTarget } = await import('../lib/videoExport');
               path = await exportVideoTarget(
                 // الفيديو بدقّة اللوحة نفسها — انظر `effectiveExportScale`.
-                { ...common, scale: effectiveExportScale(fmt, state.exportScale), transparent: fmt === 'gif' && state.exportTransparent },
+                { ...common, scale: effectiveExportScale(fmt, state.exportScale), transparent: alpha },
                 {
                   format: fmt,
                   fps: state.exportFps,
                   quality: state.exportQuality,
-                  transparent: fmt === 'gif' && state.exportTransparent,
+                  transparent: alpha,
+                  codec: state.exportCodec,
+                  audio: state.exportAudio,
                   durationSeconds: abDuration,
                   shutter: { samplesPerFrame: state.exportShutterSamples, angle: DEFAULT_SHUTTER_ANGLE },
                 },
@@ -2004,9 +2014,10 @@ export function StudioProvider({ children }: { children: ReactNode }) {
             }
             paths.push(path);
             // SVG متجهيّ فلا أبعاد بكسل له؛ كل ما سواه يُكتب بمضاعِف `exportScale`.
-            const outPx = state.exportFormat === 'svg' ? {} : { outW: size.w * state.exportScale, outH: size.h * state.exportScale };
+            const outPx = state.exportFormat === 'svg' ? {} : { outW: size.w * (isVideo ? effectiveExportScale(state.exportFormat, state.exportScale) : state.exportScale), outH: size.h * (isVideo ? effectiveExportScale(state.exportFormat, state.exportScale) : state.exportScale) };
             results.push({ id: resultId, label, w: size.w, h: size.h, ...outPx, ok: true, path, ...(pairedMovPath ? { pairedMovPath } : {}), ...(multiArtboard ? { artboardId: ab.id, artboardName: ab.name } : {}) });
           } catch (err) {
+            if (err instanceof ExportCancelled || isExportCancelled()) break;
             // One failing size must not abort the rest of the batch — each target is
             // independent, so the result list can show a real per-file mix of successes
             // and failures instead of losing everything to the first error.
@@ -2015,6 +2026,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           step++;
           patch({ exportProgress: (step / totalSteps) * 100, exportResults: [...results] });
         }
+      }
+      if (isExportCancelled()) {
+        // الإلغاءُ يُعيد الحوارَ إلى حاله قبل الضغط، مع ما اكتمل قبله من ملفّات.
+        patch({ exportState: 'idle', exportProgress: 0, exportedPaths: paths, exportResults: results, exportError: null });
+        return;
       }
       const anyOk = results.some((r) => r.ok);
       patch({ exportState: anyOk ? 'done' : 'error', exportProgress: 100, exportedPaths: paths, exportResults: results, exportError: anyOk ? null : (results[0]?.error ?? null) });
@@ -4154,18 +4170,31 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setAiCustomCmd,
       cancelAi,
       detectAiAgents,
-      openExport: () => patch({ exportOpen: true, exportState: 'idle', exportProgress: 0, exportError: null, exportResults: [] }),
+      // **فيديو يُصدَّر فيديو افتراضيًّا** (كما في محرّر فيديو شائع): مستندٌ مُوقَّتٌ صيغتُه المحفوظة PNG الافتراضيّة
+      // يُفتَح حوارُه على MP4 بدقّة اللوحة. ومن اختار صورةً بعد ذلك تبقى له في المرّة التالية.
+      openExport: () =>
+        patch((s) => ({
+          exportOpen: true,
+          exportState: 'idle',
+          exportProgress: 0,
+          exportError: null,
+          exportResults: [],
+          ...(s.medium === 'timed' && s.exportFormat === 'png' && !s.exportFormatChosen ? { exportFormat: 'mp4' as const, exportScale: 1 as const, exportTransparent: false } : {}),
+        })),
       closeExport: () => {
         patch({ exportOpen: false, exportState: 'idle' });
       },
       setExportFormat: (exportFormat) =>
-        patch((s) => {
+        patch((s0) => {
+          const s = { ...s0, exportFormatChosen: true };
           // MP4 has no alpha channel — switching to it forces the transparent
           // toggle off instead of silently ignoring it later at encode time.
-          if (exportFormat === 'mp4' || exportFormat === 'gif') {
+          if (isVideoExportFormat(exportFormat)) {
             const choices = FPS_OPTIONS[exportFormat];
             const fps = choices.includes(s.exportFps) ? s.exportFps : DEFAULT_FPS[exportFormat];
-            return exportSettingChanged(s, { exportFormat, exportFps: fps, exportTransparent: exportFormat === 'mp4' ? false : s.exportTransparent });
+            // الفيديو يبدأ بدقّة اللوحة (١×) متى جاء من صورةٍ بمضاعِفٍ أكبر؛ و٢× تُختار له صراحةً.
+            const fromImage = !isVideoExportFormat(s.exportFormat);
+            return exportSettingChanged(s, { exportFormat, exportFps: fps, exportTransparent: exportFormat === 'mp4' ? false : s.exportTransparent, ...(fromImage ? { exportScale: 1 as const } : {}) });
           }
           // Live Photo's still half is a JPEG — no alpha channel either, same
           // belt-and-suspenders lockout as mp4 above.
@@ -4197,8 +4226,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       setExportQuality: (exportQuality) => patch((s) => exportSettingChanged(s, { exportQuality })),
       setExportTransparent: (exportTransparent) => patch((s) => exportSettingChanged(s, { exportTransparent })),
       setExportFps: (exportFps) => patch((s) => exportSettingChanged(s, { exportFps })),
+      setExportCodec: (exportCodec) => patch((s) => exportSettingChanged(s, { exportCodec })),
+      setExportAudio: (exportAudio) => patch((s) => exportSettingChanged(s, { exportAudio })),
       setExportShutterSamples: (exportShutterSamples) => patch((s) => exportSettingChanged(s, { exportShutterSamples })),
       startExport,
+      cancelExport: cancelExportRun,
       setHomePrompt: (homePrompt) => patch({ homePrompt }),
       startFromPrompt: () => patch({ screen: 'editor', panel: 'ai' }),
       openTemplates: () => patch({ templatesOpen: true }),

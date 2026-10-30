@@ -23,7 +23,13 @@ export type PanelId = 'props' | 'assets' | 'ai' | 'library' | null;
 export type AssetsTab = 'files' | 'fonts' | 'colors' | 'templates';
 export type AnimId = 'none' | 'fade' | 'slide' | 'pop';
 export type Weight = 'regular' | 'medium' | 'bold';
-export type ExportFormat = 'png' | 'jpg' | 'svg' | 'mp4' | 'gif' | 'livephoto';
+export type ExportFormat = 'png' | 'jpg' | 'svg' | 'mp4' | 'gif' | 'mov' | 'webm' | 'livephoto';
+/** صيغُ الفيديو كلُّها — موضعٌ واحدٌ يُسأل: «أهذه فيديو؟». */
+export type VideoExportFormat = 'mp4' | 'gif' | 'mov' | 'webm';
+export const VIDEO_EXPORT_FORMATS: readonly VideoExportFormat[] = ['mp4', 'mov', 'webm', 'gif'];
+export function isVideoExportFormat(f: string): f is VideoExportFormat {
+  return (VIDEO_EXPORT_FORMATS as readonly string[]).includes(f);
+}
 export type ExportState = 'idle' | 'busy' | 'done' | 'error' | 'unavailable';
 export type HAlign = 'start' | 'center' | 'end';
 export type VAlign = 'top' | 'middle' | 'bottom';
@@ -221,6 +227,12 @@ export interface StudioState {
   exportQuality: 'high' | 'med';
   exportTransparent: boolean;
   exportFps: number;
+  /** ترميزُ MP4: H.264 (يعمل في كلّ مكان) أو H.265 (أصغر حجمًا بالجودة نفسها). */
+  exportCodec: 'h264' | 'hevc';
+  /** أيُدخَل الصوتُ في الفيديو المُصدَّر. */
+  exportAudio: boolean;
+  /** اختار المستخدمُ صيغةً بيده — فلا يُبدِّلها فتحُ الحوار تلقائيًّا إلى MP4. */
+  exportFormatChosen?: boolean;
   /** عددُ عيّنات الغالق لكلّ إطارٍ مُصدَّر. `1` يعني «بلا ضباب» وهو الافتراضُ —
    * فلا مستندٌ قائمٌ يُصدَّر اليوم غيرَ ما كان يُصدَّر أمس. */
   exportShutterSamples: number;
@@ -476,6 +488,8 @@ export const initialStudioState: StudioState = {
   exportQuality: 'high',
   exportTransparent: false,
   exportFps: 30,
+  exportCodec: 'h264',
+  exportAudio: true,
   exportShutterSamples: 1,
   exportError: null,
   exportedPaths: [],
