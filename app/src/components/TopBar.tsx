@@ -218,13 +218,17 @@ export function TopBar() {
   );
 }
 
-/** علامة مزيج: ثلاث دوائر تتداخل — السطح والدقّة والزمن، بألوان أعماقها الثلاثة. */
+/** شعار مزيج (اعتُمد ٦ نوفمبر ٢٠٢٦): رأس قلم بلونين يلتقيان في النصّ، وفتحته زرّ تشغيل —
+ *  رسم وفيديو في شكل واحد. نفس رسم public/mazij.svg وأيقونات التطبيق؛ ألوانه ثابتة
+ *  لا تتبع السمة، لأنه شعار لا عنصر واجهة. */
 function MixMark() {
   return (
-    <svg width="20" height="20" viewBox="0 0 28 28" aria-hidden="true" style={{ flex: 'none' }}>
-      <circle cx="10" cy="11" r="7.5" fill="var(--vector)" opacity="0.92" />
-      <circle cx="18" cy="11" r="7.5" fill="var(--accentText)" opacity="0.88" />
-      <circle cx="14" cy="18" r="7.5" fill="var(--motion)" opacity="0.88" />
+    <svg width="22" height="22" viewBox="0 0 300 300" aria-hidden="true" style={{ flex: 'none' }}>
+      <rect width="300" height="300" rx="68" fill="#16132F" />
+      <path d="M150 61 C114 79 94 118 94 151 L150 244 Z" fill="#FF7A59" />
+      <path d="M150 61 C186 79 206 118 206 151 L150 244 Z" fill="#6D3FE8" />
+      <path d="M139 137 L169 153 L139 169 Z" fill="#16132F" stroke="#16132F" strokeWidth="3" strokeLinejoin="round" />
+      <rect x="146.5" y="150" width="7" height="96" fill="#16132F" />
     </svg>
   );
 }
