@@ -148,6 +148,9 @@ fn rpc_error(id: &Value, msg: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32000, "message": msg } })
 }
 
+/// طريقةُ المخرج — المصدرُ نفسُه الذي يقرؤه مِزو داخل التطبيق (`src/lib/mizoDirector.ts`).
+const DIRECTOR_INSTRUCTIONS: &str = include_str!("../../src/data/mizo-director.md");
+
 const NOT_RUNNING: &str = "مزيج غير مفتوح أو الربط موقوف. افتح مزيج وفعّل «الربط مع Claude» من إعدادات مِزو. / Mazij is not running or the link is off — open Mazij and turn on the link in Mizo settings.";
 
 /// نقطةُ دخول `--mcp-stdio`: رسائل JSON-RPC سطرًا بسطر على المدخل والمخرج القياسيَّين.
@@ -171,7 +174,7 @@ pub fn run_stdio_proxy() {
                 "protocolVersion": pv,
                 "capabilities": { "tools": { "listChanged": false } },
                 "serverInfo": { "name": SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                "instructions": "Mazij (مزيج) is the user's design app. Start with document_get, then edit the open design with the tools. Reply to the user in their language."
+                "instructions": format!("Mazij (مزيج) is the user's design app. Start with document_get, then edit the open design with the tools. Reply to the user in their language.\n\n{}", DIRECTOR_INSTRUCTIONS)
             }});
             let _ = writeln!(out, "{reply}");
             let _ = out.flush();

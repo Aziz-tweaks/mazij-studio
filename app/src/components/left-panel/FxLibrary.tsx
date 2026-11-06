@@ -4,6 +4,7 @@ import { useStudio } from '../../state/StudioContext';
 import { FX_CATALOG, fxCss, overlayCss, resolveFx, type FxCategory, type FxSpec } from '../../lib/effects';
 import { particleBurst } from '../../lib/particles';
 import { sizeAt } from '../../data/constants';
+import { MotionStylesSection } from './MotionStylesSection';
 
 /** لوح «تأثيرات» (٢٨ أكتوبر ٢٠٢٦) — كان «قريبًا» منذ بُني شريطُ الإضافة.
  *
@@ -20,6 +21,7 @@ export function FxLibrary() {
   ];
   return (
     <div data-testid="fx-library" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <MotionStylesSection />
       <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: 'var(--muted)' }}>{L.fx_lib_hint}</p>
       {cats.map((c) => (
         <section key={c.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

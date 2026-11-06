@@ -1,4 +1,5 @@
 import { hasDesktopSidecars as inTauri, onMobile } from './tauriEnv';
+import { MIZO_DIRECTOR } from './mizoDirector';
 
 /** مِزو عبر وكيلٍ خارجيّ — الواجهةُ الأماميّة لـ `src-tauri/src/agents.rs`.
  *
@@ -57,6 +58,7 @@ export function agentSystemPrompt(lang: 'ar' | 'en', selected: string[]): string
     'نفّذ مباشرةً ولا تطلب إذنًا. لا تغيّر ما لم يُطلب. وتأكّد أن لا يخرج عنصرٌ عن حدود اللوحة ما لم يُطلب ذلك.',
     `حين تنتهي ردّ ${replyLang} بجملةٍ أو جملتين تذكر ما تغيّر بلغة المصمّم (مثل: «كبّرت العنوان وجعلت الخلفية زرقاء»)، بلا أسماء أدوات ولا معرّفات ولا مصطلحات برمجية.`,
     'إن تعذّر الطلب بالأدوات المتاحة فقل ذلك بوضوح واقترح أقرب ما يمكن فعله.',
+    MIZO_DIRECTOR,
   ].join('\n');
 }
 

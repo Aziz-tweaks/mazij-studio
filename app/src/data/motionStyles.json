@@ -1,0 +1,304 @@
+[
+ {
+  "id": "particles",
+  "nameAr": "جزيئات",
+  "nameEn": "Particles",
+  "dur": 6.0,
+  "text": true,
+  "sub": false,
+  "colors": {
+   "bg": "#07040f",
+   "c1": "#8b5cf6",
+   "c2": "#c4b5fd",
+   "c3": "#f0abfc"
+  },
+  "arabic": true
+ },
+ {
+  "id": "liquid-morph",
+  "nameAr": "سائل لامع",
+  "nameEn": "Liquid Morph",
+  "dur": 6.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#e9e8ef",
+   "c1": "#ffb3d9",
+   "c2": "#9be7ff",
+   "c3": "#d6c2ff"
+  },
+  "arabic": true
+ },
+ {
+  "id": "holographic",
+  "nameAr": "هولوغرام",
+  "nameEn": "Holographic",
+  "dur": 6.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#f3eefa",
+   "c1": "#ff5fd2",
+   "c2": "#4de8ff",
+   "c3": "#fff36b"
+  },
+  "arabic": true
+ },
+ {
+  "id": "neon-glow",
+  "nameAr": "نيون",
+  "nameEn": "Neon Glow",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#0a0610",
+   "c1": "#ff2bd6",
+   "c2": "#2ef2ff",
+   "c3": "#ffffff"
+  },
+  "arabic": true
+ },
+ {
+  "id": "wireframe-3d",
+  "nameAr": "مجسّم سلكي",
+  "nameEn": "Wireframe 3D",
+  "dur": 6.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#f7f7fb",
+   "c1": "#4b3bff",
+   "c2": "#9a8cff",
+   "c3": "#c9c4ff"
+  },
+  "arabic": true
+ },
+ {
+  "id": "glassmorphism",
+  "nameAr": "زجاج",
+  "nameEn": "Glassmorphism",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#1a1035",
+   "c1": "#ff4fa3",
+   "c2": "#7b5cff",
+   "c3": "#2ee6a6"
+  },
+  "arabic": true
+ },
+ {
+  "id": "kinetic-type",
+  "nameAr": "كتابة متحركة",
+  "nameEn": "Kinetic Type",
+  "dur": 6.0,
+  "text": true,
+  "sub": false,
+  "colors": {
+   "bg": "#0b0b0b",
+   "c1": "#ff2a1a",
+   "c2": "#ffffff",
+   "c3": "#111111"
+  },
+  "arabic": true
+ },
+ {
+  "id": "isometric",
+  "nameAr": "مدينة مجسّمة",
+  "nameEn": "Isometric",
+  "dur": 6.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#ffc6e4",
+   "c1": "#3fd6e6",
+   "c2": "#1aa3c4",
+   "c3": "#c9b8ff"
+  },
+  "arabic": true
+ },
+ {
+  "id": "clay-3d",
+  "nameAr": "صلصال",
+  "nameEn": "Clay 3D",
+  "dur": 6.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#f6efe6",
+   "c1": "#ff8fb1",
+   "c2": "#6aa8ff",
+   "c3": "#ffd25a"
+  },
+  "arabic": true
+ },
+ {
+  "id": "ascii-art",
+  "nameAr": "شاشة أوامر",
+  "nameEn": "Ascii Art",
+  "dur": 6.0,
+  "text": true,
+  "sub": false,
+  "colors": {
+   "bg": "#020a04",
+   "c1": "#39ff6a",
+   "c2": "#0f8f35",
+   "c3": "#c8ffd6"
+  },
+  "arabic": true
+ },
+ {
+  "id": "gradient-mesh",
+  "nameAr": "تدرّج منساب",
+  "nameEn": "Gradient Mesh",
+  "dur": 8.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#ff4f9a",
+   "c1": "#ff4f9a",
+   "c2": "#3ad6ff",
+   "c3": "#8a5cff",
+   "c4": "#ffd84d"
+  },
+  "arabic": true
+ },
+ {
+  "id": "comic-book",
+  "nameAr": "كوميك",
+  "nameEn": "Comic Book",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#fff7e0",
+   "c1": "#ffd400",
+   "c2": "#ff3b1f",
+   "c3": "#2fa8ff"
+  },
+  "arabic": true
+ },
+ {
+  "id": "split-flap",
+  "nameAr": "لوحة مطار",
+  "nameEn": "Split Flap",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#0d0d0f",
+   "c1": "#f5f1e6",
+   "c2": "#1d1d21",
+   "c3": "#ffb000"
+  },
+  "arabic": false
+ },
+ {
+  "id": "retro-vhs",
+  "nameAr": "ريترو",
+  "nameEn": "Retro Vhs",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#12021f",
+   "c1": "#ff2bd1",
+   "c2": "#ffb347",
+   "c3": "#33e8ff"
+  },
+  "arabic": true
+ },
+ {
+  "id": "halftone",
+  "nameAr": "نقاط طباعة",
+  "nameEn": "Halftone",
+  "dur": 6.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#f4ecd6",
+   "c1": "#d7192a",
+   "c2": "#1f4fbf",
+   "c3": "#141414"
+  },
+  "arabic": true
+ },
+ {
+  "id": "bauhaus",
+  "nameAr": "باوهاوس",
+  "nameEn": "Bauhaus",
+  "dur": 6.0,
+  "text": false,
+  "sub": false,
+  "colors": {
+   "bg": "#f2ead8",
+   "c1": "#e3241b",
+   "c2": "#f5b700",
+   "c3": "#1d4fb8",
+   "c4": "#141414"
+  },
+  "arabic": true
+ },
+ {
+  "id": "pixel-art",
+  "nameAr": "بكسل",
+  "nameEn": "Pixel Art",
+  "dur": 6.0,
+  "text": true,
+  "sub": false,
+  "colors": {
+   "bg": "#3a1460",
+   "c1": "#ffd23f",
+   "c2": "#ff6b9a",
+   "c3": "#2c7a3a"
+  },
+  "arabic": true
+ },
+ {
+  "id": "blueprint",
+  "nameAr": "مخطط هندسي",
+  "nameEn": "Blueprint",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#1453a8",
+   "c1": "#ffffff",
+   "c2": "#9ec5ff",
+   "c3": "#ffd84a"
+  },
+  "arabic": true
+ },
+ {
+  "id": "art-deco",
+  "nameAr": "آرت ديكو",
+  "nameEn": "Art Deco",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#0b0a08",
+   "c1": "#d9b25f",
+   "c2": "#f6e3a8",
+   "c3": "#8a6a2a"
+  },
+  "arabic": true
+ },
+ {
+  "id": "neo-brutalism",
+  "nameAr": "بروتال",
+  "nameEn": "Neo Brutalism",
+  "dur": 6.0,
+  "text": true,
+  "sub": true,
+  "colors": {
+   "bg": "#ffe14d",
+   "c1": "#ff5fa2",
+   "c2": "#6ad1ff",
+   "c3": "#ff7a2f"
+  },
+  "arabic": true
+ }
+]

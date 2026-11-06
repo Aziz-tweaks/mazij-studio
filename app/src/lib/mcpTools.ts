@@ -5,6 +5,7 @@ import { defaultAnim, defaultTextStagger, newElementId } from '../state/elements
 import { SIZES, CUSTOM_SIZE_IDX, sizeAt, PALETTES } from '../data/constants';
 import { AR } from '../i18n/strings';
 import { MOTION_TOOLS } from './mcpMotionTools';
+import { DIRECTOR_TOOLS } from './mcpDirectorTools';
 
 /** Roadmap #20 (+ #24-ب, which will drive the exact same registry locally): the
  * single typed command surface for "the chat becomes an interface to the app".
@@ -685,6 +686,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   ...MOTION_TOOLS,
+  ...DIRECTOR_TOOLS,
   {
     name: 'batch',
     descriptionAr: 'تنفيذ عدة أدوات بالترتيب في نداء واحد. يمكن الإشارة لمعرّف عنصر أنشأه نداء سابق بـ"$N" (رقم النداء من 0).',

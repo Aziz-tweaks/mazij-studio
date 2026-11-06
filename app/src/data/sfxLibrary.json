@@ -1,0 +1,380 @@
+[
+ {
+  "id": "gear-01",
+  "cat": "gear",
+  "nameAr": "تروس سريعة ١",
+  "nameEn": "Fast Gear 2",
+  "dur": 2.162
+ },
+ {
+  "id": "gear-02",
+  "cat": "gear",
+  "nameAr": "تروس سريعة ٢",
+  "nameEn": "Fast Gear",
+  "dur": 2.821
+ },
+ {
+  "id": "gear-03",
+  "cat": "gear",
+  "nameAr": "تروس ناعمة فاخرة",
+  "nameEn": "Smooth And Premium Gear",
+  "dur": 1.342
+ },
+ {
+  "id": "gear-04",
+  "cat": "gear",
+  "nameAr": "تروس ناعمة ١",
+  "nameEn": "Soft Gear 1",
+  "dur": 0.632
+ },
+ {
+  "id": "gear-05",
+  "cat": "gear",
+  "nameAr": "تروس ناعمة ٢",
+  "nameEn": "Soft Gear 2",
+  "dur": 2.081
+ },
+ {
+  "id": "gear-06",
+  "cat": "gear",
+  "nameAr": "تروس سريعة قصيرة",
+  "nameEn": "long speed gear",
+  "dur": 0.441
+ },
+ {
+  "id": "gear-07",
+  "cat": "gear",
+  "nameAr": "تروس متوسطة",
+  "nameEn": "middle gear",
+  "dur": 0.663
+ },
+ {
+  "id": "shutter-01",
+  "cat": "shutter",
+  "nameAr": "كاميرا",
+  "nameEn": "Camera Shutter",
+  "dur": 0.246
+ },
+ {
+  "id": "shutter-02",
+  "cat": "shutter",
+  "nameAr": "كاميرا قوية",
+  "nameEn": "Little Bit Hard Cammera Shutter",
+  "dur": 0.391
+ },
+ {
+  "id": "shutter-03",
+  "cat": "shutter",
+  "nameAr": "كاميرا ناعمة",
+  "nameEn": "Smooth Cammera Shutter",
+  "dur": 0.527
+ },
+ {
+  "id": "whoosh-01",
+  "cat": "whoosh",
+  "nameAr": "هبّة سينمائية عادية",
+  "nameEn": "Cinematic Fast Normal Whoosh",
+  "dur": 0.829
+ },
+ {
+  "id": "whoosh-02",
+  "cat": "whoosh",
+  "nameAr": "هبّة سينمائية سريعة",
+  "nameEn": "Cinematic Fast Whoosh",
+  "dur": 1.222
+ },
+ {
+  "id": "whoosh-03",
+  "cat": "whoosh",
+  "nameAr": "هبّة سينمائية طويلة",
+  "nameEn": "Cinematic Long Whoosh",
+  "dur": 4.0
+ },
+ {
+  "id": "whoosh-04",
+  "cat": "whoosh",
+  "nameAr": "هبّة سينمائية منخفضة",
+  "nameEn": "Cinematic Low Whoosh",
+  "dur": 2.014
+ },
+ {
+  "id": "whoosh-05",
+  "cat": "whoosh",
+  "nameAr": "هبّة سينمائية متوسطة",
+  "nameEn": "Cinematic Mediam Whoosh",
+  "dur": 1.887
+ },
+ {
+  "id": "whoosh-06",
+  "cat": "whoosh",
+  "nameAr": "هبّة بيانات",
+  "nameEn": "Data_Whoosh",
+  "dur": 2.482
+ },
+ {
+  "id": "whoosh-07",
+  "cat": "whoosh",
+  "nameAr": "هبّة سريعة ١",
+  "nameEn": "Fast Whoosh",
+  "dur": 1.206
+ },
+ {
+  "id": "whoosh-08",
+  "cat": "whoosh",
+  "nameAr": "هبّة سريعة ٢",
+  "nameEn": "Fast Whoosh",
+  "dur": 2.5
+ },
+ {
+  "id": "whoosh-09",
+  "cat": "whoosh",
+  "nameAr": "هبّة حادّة سريعة ١",
+  "nameEn": "High And Fast Whoosh",
+  "dur": 1.524
+ },
+ {
+  "id": "whoosh-10",
+  "cat": "whoosh",
+  "nameAr": "هبّة حادّة سريعة ٢",
+  "nameEn": "High And Fast Woosh",
+  "dur": 2.367
+ },
+ {
+  "id": "whoosh-11",
+  "cat": "whoosh",
+  "nameAr": "هبّة طويلة",
+  "nameEn": "Long Whoosh",
+  "dur": 4.0
+ },
+ {
+  "id": "whoosh-12",
+  "cat": "whoosh",
+  "nameAr": "هبّة بسيطة ١",
+  "nameEn": "Simple Whoosh 2",
+  "dur": 1.999
+ },
+ {
+  "id": "whoosh-13",
+  "cat": "whoosh",
+  "nameAr": "هبّة بسيطة ٢",
+  "nameEn": "Simple Whoosh",
+  "dur": 1.399
+ },
+ {
+  "id": "whoosh-14",
+  "cat": "whoosh",
+  "nameAr": "هبّة بطيئة ناعمة",
+  "nameEn": "Slow And Smooth Whoosh",
+  "dur": 3.7
+ },
+ {
+  "id": "whoosh-15",
+  "cat": "whoosh",
+  "nameAr": "هبّة ناعمة سريعة",
+  "nameEn": "Smooth And Fast Whoosh",
+  "dur": 1.633
+ },
+ {
+  "id": "whoosh-16",
+  "cat": "whoosh",
+  "nameAr": "هبّة ناعمة كالزبدة",
+  "nameEn": "Smooth Like A Butter Whoosh",
+  "dur": 3.7
+ },
+ {
+  "id": "whoosh-17",
+  "cat": "whoosh",
+  "nameAr": "هبّة عميقة خفيفة",
+  "nameEn": "Whoosh Deep Light 2",
+  "dur": 3.697
+ },
+ {
+  "id": "whoosh-18",
+  "cat": "whoosh",
+  "nameAr": "هبّة ملحمية سريعة",
+  "nameEn": "epic-fast-whoosh-345469",
+  "dur": 0.503
+ },
+ {
+  "id": "money-01",
+  "cat": "money",
+  "nameAr": "فلوس سينمائية ١",
+  "nameEn": "Cinematic Money 1",
+  "dur": 2.976
+ },
+ {
+  "id": "money-02",
+  "cat": "money",
+  "nameAr": "فلوس سينمائية ٢",
+  "nameEn": "Cinematic Money 2",
+  "dur": 1.476
+ },
+ {
+  "id": "money-03",
+  "cat": "money",
+  "nameAr": "فلوس عالية",
+  "nameEn": "High Volume Money",
+  "dur": 3.636
+ },
+ {
+  "id": "money-04",
+  "cat": "money",
+  "nameAr": "فلوس متوسطة",
+  "nameEn": "Mediam Volume Mone",
+  "dur": 3.753
+ },
+ {
+  "id": "data-01",
+  "cat": "data",
+  "nameAr": "بيانات سينمائية تجميع",
+  "nameEn": "Cinematic Data Collect 2",
+  "dur": 3.45
+ },
+ {
+  "id": "data-02",
+  "cat": "data",
+  "nameAr": "بيانات سينمائية",
+  "nameEn": "Cinematic data",
+  "dur": 2.207
+ },
+ {
+  "id": "data-03",
+  "cat": "data",
+  "nameAr": "بيانات تجميع ١",
+  "nameEn": "Data Collect",
+  "dur": 1.24
+ },
+ {
+  "id": "data-04",
+  "cat": "data",
+  "nameAr": "بيانات تجميع ٢",
+  "nameEn": "Data Collect",
+  "dur": 0.953
+ },
+ {
+  "id": "data-05",
+  "cat": "data",
+  "nameAr": "ساعة إيقاف",
+  "nameEn": "MA_Tuttkile_Stopwatch_3",
+  "dur": 5.619
+ },
+ {
+  "id": "riser-01",
+  "cat": "riser",
+  "nameAr": "صاعد فاخر",
+  "nameEn": "Premium Riser",
+  "dur": 2.445
+ },
+ {
+  "id": "riser-02",
+  "cat": "riser",
+  "nameAr": "صاعد ١",
+  "nameEn": "RJD Riser",
+  "dur": 0.865
+ },
+ {
+  "id": "riser-03",
+  "cat": "riser",
+  "nameAr": "صاعد ٢",
+  "nameEn": "Riser 2",
+  "dur": 5.953
+ },
+ {
+  "id": "riser-04",
+  "cat": "riser",
+  "nameAr": "صاعد ٣",
+  "nameEn": "Riser",
+  "dur": 1.767
+ },
+ {
+  "id": "riser-05",
+  "cat": "riser",
+  "nameAr": "صاعد ناعم",
+  "nameEn": "Smooth Riser",
+  "dur": 2.483
+ },
+ {
+  "id": "pop-01",
+  "cat": "pop",
+  "nameAr": "بوب متوسط",
+  "nameEn": "Meadia Pop",
+  "dur": 1.149
+ },
+ {
+  "id": "pop-02",
+  "cat": "pop",
+  "nameAr": "بوب عادي",
+  "nameEn": "Normal Pop",
+  "dur": 2.5
+ },
+ {
+  "id": "pop-03",
+  "cat": "pop",
+  "nameAr": "بوب فاخر",
+  "nameEn": "Premium And Smooth Pop",
+  "dur": 2.5
+ },
+ {
+  "id": "pop-04",
+  "cat": "pop",
+  "nameAr": "بوب بطيء",
+  "nameEn": "Slow And Smooth Pop",
+  "dur": 0.696
+ },
+ {
+  "id": "pop-05",
+  "cat": "pop",
+  "nameAr": "بوب ناعم",
+  "nameEn": "Smooth Pop",
+  "dur": 0.5
+ },
+ {
+  "id": "pop-06",
+  "cat": "pop",
+  "nameAr": "بوب فتح واجهة",
+  "nameEn": "Sweet UI Open",
+  "dur": 1.051
+ },
+ {
+  "id": "click-01",
+  "cat": "click",
+  "nameAr": "نقرة سينمائية",
+  "nameEn": "Cinematic Click",
+  "dur": 0.094
+ },
+ {
+  "id": "click-02",
+  "cat": "click",
+  "nameAr": "نقرة ١",
+  "nameEn": "Click  (1)",
+  "dur": 0.84
+ },
+ {
+  "id": "click-03",
+  "cat": "click",
+  "nameAr": "نقرة ٢",
+  "nameEn": "Click 2",
+  "dur": 0.358
+ },
+ {
+  "id": "click-04",
+  "cat": "click",
+  "nameAr": "نقرة ٣",
+  "nameEn": "Click_2",
+  "dur": 0.246
+ },
+ {
+  "id": "click-05",
+  "cat": "click",
+  "nameAr": "نقرة حادّة",
+  "nameEn": "High Click",
+  "dur": 0.077
+ },
+ {
+  "id": "click-06",
+  "cat": "click",
+  "nameAr": "نقرة ماوس",
+  "nameEn": "mouse-click-198485",
+  "dur": 1.5
+ }
+]

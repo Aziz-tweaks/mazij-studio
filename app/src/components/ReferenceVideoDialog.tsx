@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { useStudio } from '../state/StudioContext';
 import { inTauri } from '../lib/tauriEnv';
 import { detectReferenceVideoStructure, type ReferenceVideoStructure } from '../lib/referenceVideo';
+import { readReference, type ReferenceReading } from '../lib/referenceSheet';
 
 type Status = 'idle' | 'analyzing' | 'ready' | 'error';
 
@@ -18,6 +19,7 @@ export function ReferenceVideoDialog() {
   const { state, actions, dict: L } = useStudio();
   const [status, setStatus] = useState<Status>('idle');
   const [structure, setStructure] = useState<ReferenceVideoStructure | null>(null);
+  const [reading, setReading] = useState<ReferenceReading | null>(null);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [dragOver, setDragOver] = useState(false);
@@ -62,6 +64,8 @@ export function ReferenceVideoDialog() {
       const s = await detectReferenceVideoStructure(path);
       setStructure(s);
       setStatus('ready');
+      setReading(null);
+      void readReference(path, s).then(setReading).catch(() => setReading(null));
       if (!name.trim()) setName(path.split(/[/\\]/).pop()?.replace(/\.[^.]+$/, '') || 'قالب من فيديو');
     } catch (err) {
       setError((err as Error).message || L.refvideo_error_generic);
@@ -176,9 +180,24 @@ export function ReferenceVideoDialog() {
                 </div>
               ))}
             </div>
-            <div data-testid="refvideo-beats-note" style={{ fontSize: 11.5, color: 'var(--muted)', opacity: 0.8 }}>
-              {L.refvideo_beats_soon}
-            </div>
+            {reading ? (
+              <div data-testid="refvideo-reading" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {reading.sheetDataUrl && <img src={reading.sheetDataUrl} alt="" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--line)' }} />}
+                <div style={{ fontSize: 12 }}>
+                  {state.lang === 'ar' ? `متوسط طول اللقطة ${reading.avgShot.toFixed(1)} ث` : `Average shot ${reading.avgShot.toFixed(1)} s`}
+                  {reading.peaks.length > 0 && (state.lang === 'ar' ? ` · أقوى حركة عند ${reading.peaks.map((p) => `${p}ث`).join('، ')}` : ` · strongest motion at ${reading.peaks.map((p) => `${p}s`).join(', ')}`)}
+                </div>
+                <div title={state.lang === 'ar' ? 'طاقة الحركة ثانية بثانية' : 'Motion energy per second'} dir="ltr" style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 36 }}>
+                  {reading.energy.map((v, i) => (
+                    <span key={i} style={{ flex: 1, minWidth: 2, height: `${Math.max(4, v)}%`, background: 'var(--accent)', opacity: 0.35 + v / 160, borderRadius: 2 }} />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div data-testid="refvideo-beats-note" style={{ fontSize: 11.5, color: 'var(--muted)', opacity: 0.8 }}>
+                {state.lang === 'ar' ? 'أقرأ اللقطات وإيقاع الحركة…' : 'Reading shots and motion rhythm…'}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
               <input
