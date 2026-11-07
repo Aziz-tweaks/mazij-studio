@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStudio } from '../../state/StudioContext';
-import { MOTION_STYLES, insertMotionStyle, stylePreviewUrl, type MotionStyle } from '../../lib/motionStyles';
+import { MOTION_STYLES, insertMotionStyle, stylePreviewUrl, takePendingStyle, type MotionStyle } from '../../lib/motionStyles';
 import { inTauri } from '../../lib/tauriEnv';
 
 /** قسمُ «أنماط حركة جاهزة» في لوح التأثيرات (٦ نوفمبر ٢٠٢٦) — انظر `lib/motionStyles.ts`.
@@ -19,6 +19,12 @@ export function MotionStylesSection() {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
   const editorRef = useRef<HTMLDivElement | null>(null);
+
+  // نمطٌ اختِير من الشاشة الرئيسية: افتح محرّره فورًا.
+  useEffect(() => {
+    const id = takePendingStyle();
+    if (id) setOpen(MOTION_STYLES.find((m) => m.id === id) ?? null);
+  }, []);
 
   useEffect(() => {
     if (!open) return;

@@ -50,16 +50,6 @@ export function AudioLibrary() {
   return (
     <div data-testid="audio-library" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <button
-        data-testid="audio-add"
-        className="mz-tile"
-        onClick={() => void actions.insertAudioTool()}
-        style={{ height: 52, border: '1px dashed var(--lineStrong)', borderRadius: 12, background: 'var(--surface2)', color: 'var(--text)', fontSize: 13.5, fontWeight: 700 }}
-      >
-        {L.audio_add}
-      </button>
-      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: 'var(--muted)' }}>{L.audio_add_hint}</p>
-      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: 'var(--muted)' }}>{L.audio_drop_hint}</p>
-      <button
         data-testid="audio-auto-sfx"
         className="mz-tile"
         disabled={busy !== null}
@@ -114,6 +104,17 @@ export function AudioLibrary() {
           </div>
         ))}
       </div>
+      <div className="mz-label" style={{ marginTop: 6 }}>{ar ? 'من ملفاتك' : 'From your files'}</div>
+      <button
+        data-testid="audio-add"
+        className="mz-tile"
+        onClick={() => void actions.insertAudioTool()}
+        style={{ height: 52, border: '1px dashed var(--lineStrong)', borderRadius: 12, background: 'var(--surface2)', color: 'var(--text)', fontSize: 13.5, fontWeight: 700 }}
+      >
+        {L.audio_add}
+      </button>
+      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: 'var(--muted)' }}>{L.audio_add_hint}</p>
+      <p style={{ margin: 0, fontSize: 11, lineHeight: 1.7, color: 'var(--muted)' }}>{L.audio_drop_hint}</p>
       {state.audioError && (
         <p data-testid="audio-error" style={{ margin: 0, fontSize: 11, lineHeight: 1.6, color: 'var(--danger)' }}>
           {state.audioError}

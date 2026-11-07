@@ -33,6 +33,18 @@ export const MOTION_STYLES: MotionStyle[] = data as MotionStyle[];
 
 export const stylePreviewUrl = (id: string) => `/motion-styles/${id}/preview.jpg`;
 
+/** نمطٌ اختاره المستخدم من الشاشة الرئيسية قبل أن يُفتح المحرّر؛ قسمُ الأنماط
+ * يأخذه مرّةً واحدة عند ظهوره فيفتح محرّرَه مباشرة. */
+let pendingStyle: string | null = null;
+export function setPendingStyle(id: string | null) {
+  pendingStyle = id;
+}
+export function takePendingStyle(): string | null {
+  const p = pendingStyle;
+  pendingStyle = null;
+  return p;
+}
+
 export interface StyleRenderOpts {
   id: string;
   w: number;

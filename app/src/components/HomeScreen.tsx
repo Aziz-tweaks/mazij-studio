@@ -3,6 +3,8 @@ import { Icon } from './Icon';
 import { ICONS, PALETTES, SIZES, START_FORMATS, dimsOf, glyphStyle, nameOf, sizeAt, sizeIdxOf, type Palette, type SizePreset } from '../data/constants';
 import { STARTER_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategory } from '../lib/starterTemplates';
 import { renderArtboardPng } from '../lib/exportArtboard';
+import { MOTION_STYLES, setPendingStyle, stylePreviewUrl } from '../lib/motionStyles';
+import { SFX_ITEMS } from '../lib/sfxLibrary';
 import { useStudio } from '../state/StudioContext';
 import type { DocElement } from '../state/elements';
 import type { Lang } from '../i18n/strings';
@@ -463,6 +465,52 @@ export function HomeScreen() {
           </button>
 
           <div data-testid="start-content" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 28 }}>
+            {/* ===== أنماط حركة جاهزة + مؤثرات صوتية — أوّل ما يُرى =====
+                النقرُ يفتح فيديو طوليًّا ١٠٨٠×١٩٢٠ ولوحَ التأثيرات ومحرّرَ النمط
+                مفتوحًا، فلا يحتاج المستخدم أن يعرف أين تسكن. */}
+            <div data-testid="home-motion-styles" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <div className="mz-label">{state.lang === 'ar' ? 'أنماط حركة جاهزة' : 'Ready motion styles'}</div>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  {state.lang === 'ar' ? `${MOTION_STYLES.length} نمط فيديو — اختر واحد واكتب نصك` : `${MOTION_STYLES.length} video styles — pick one and type your text`}
+                </span>
+              </div>
+              <div data-testid="home-style-strip" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
+                <button
+                  data-testid="home-sfx"
+                  onClick={() => {
+                    actions.startBlank(sizeIdxOf('ig-reel'));
+                    actions.openToolLibrary('audio');
+                  }}
+                  style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 8, flex: 'none', width: 150, height: 150 + 52, border: '1px solid var(--accent)', borderRadius: 'var(--r)', background: 'var(--surface2)', color: 'var(--text)', padding: 12, textAlign: 'center' }}
+                >
+                  <span style={{ fontSize: 34, lineHeight: 1 }}>♪</span>
+                  <span style={{ fontWeight: 800, fontSize: 14 }}>{state.lang === 'ar' ? 'مؤثرات صوتية' : 'Sound effects'}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.6 }}>
+                    {state.lang === 'ar' ? `${SFX_ITEMS.length} صوت + صوت تلقائي للحركة` : `${SFX_ITEMS.length} sounds + auto motion sound`}
+                  </span>
+                </button>
+                {MOTION_STYLES.map((m) => (
+                  <button
+                    key={m.id}
+                    data-testid={`home-style-${m.id}`}
+                    onClick={() => {
+                      setPendingStyle(m.id);
+                      actions.startBlank(sizeIdxOf('ig-reel'));
+                      actions.openToolLibrary('fx');
+                    }}
+                    style={{ display: 'flex', flexDirection: 'column', flex: 'none', width: 150, border: '1px solid var(--line)', borderRadius: 'var(--r)', overflow: 'hidden', background: 'var(--surface)', textAlign: 'start', color: 'var(--text)', padding: 0 }}
+                  >
+                    <img src={stylePreviewUrl(m.id)} alt="" loading="lazy" style={{ width: 150, height: 150, objectFit: 'cover', display: 'block', background: m.colors.bg ?? '#111' }} />
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '8px 10px' }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{state.lang === 'ar' ? m.nameAr : m.nameEn}</span>
+                      <span style={{ fontSize: 10.5, color: 'var(--muted)' }}>{state.lang === 'ar' ? `فيديو · ${m.dur} ث` : `Video · ${m.dur}s`}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* ===== القوالب: بطاقاتٌ كبيرة في شريطٍ أفقيٍّ يُمرَّر سَحبًا =====
                 مفصولةٌ عن المقاسات أسفلها. مبدِّلُ التصنيف فوقها طلبٌ صريحٌ من
                 المالك اليوم («مبدّل فوق [القوالب] مثلًا عروضات خصم») — انظر
