@@ -12,7 +12,7 @@ import { geoToPx, pxToGeo, resizeBox, rotatePoint, computeSnap, boundsOfBoxes, c
 import { computeImageCropLayout } from '../lib/imageCrop';
 import { commandsToSvgPath, pathElementCommands } from '../lib/pathGeometry';
 import { closestTOnSegment, fitSmoothPath } from '../lib/pathSmoothing';
-import { clipShowsAt, entranceStyleAt, entranceVisualAt } from '../lib/animTimeline';
+import { clipShowsAt, entranceStyleAt, entranceVisualAt, stretchGhostsAt, visualStyle } from '../lib/animTimeline';
 import { fxCss, fxStrengthAt, overlayCss, resolveFx } from '../lib/effects';
 import type { DocElement } from '../state/elements';
 import { defaultAnim, defaultTextStagger } from '../state/elements';
@@ -1125,7 +1125,8 @@ export function Stage() {
   // (`effectiveBlur` في `animTimeline.ts`): العنصرُ يَحمل نصفَ القطر الأساس،
   // والمسارُ يَحمل فرقَه عند هذه اللحظة، ولا يجوز أن يَجمعهما أحدٌ غيرُ ذلك الموضع.
   const entranceByTool: Record<string, { opacity?: number; transform?: string; filter?: string }> = {};
-  for (const el of state.elements) entranceByTool[el.id] = entranceStyleAt(el.anim, t, el.blur ?? 0, el.pivot);
+  const placeOf = (el: DocElement) => ({ geo: el.geo, aspect: size.h / Math.max(1, size.w) });
+  for (const el of state.elements) entranceByTool[el.id] = entranceStyleAt(el.anim, t, el.blur ?? 0, el.pivot, placeOf(el));
 
   const hintKey = compact && !['text', 'shape', 'pen'].includes(state.tool) ? undefined : HINT_KEYS[state.tool];
   const selected = state.selectedIds;
@@ -1302,6 +1303,19 @@ export function Stage() {
               continue;
             }
             if (!clipShowsAt(el.anim, t)) continue;
+            // **نُسَخُ التمطيط الباهتة** خلف العنصر — من `stretchGhostsAt` نفسِها التي يقرؤها التصدير.
+            stretchGhostsAt(el.anim, t, placeOf(el)).forEach((gv, gi) => {
+              const gs = visualStyle(gv, el.blur ?? 0, el.pivot);
+              nodes.push(
+                <div key={`ghost-${el.id}-${gi}`} data-ghost-of={el.id} style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                  <ElementView el={el} pal={pal} lang={lang} selected={false} editing={false} croppingActive={false} size={size} scale={scale}
+                    maskShape={el.maskId ? (state.elements.find((m) => m.id === el.maskId && m.type === 'shape') as (DocElement & { type: 'shape' }) | undefined) ?? null : null}
+                    pathShape={null}
+                    entranceOpacity={gs.opacity} entranceTransform={gs.transform} entranceFilter={gs.filter} time={t}
+                    onPointerDown={() => undefined} onDoubleClick={() => undefined} onTextBlur={() => undefined} onTextKeyDown={() => undefined} />
+                </div>,
+              );
+            });
             nodes.push(
               <ElementView
             key={el.id}

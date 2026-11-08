@@ -629,6 +629,7 @@ export const MOTION_TOOLS: McpTool[] = [
         digits: { type: 'string', enum: ['latin', 'arabic'] },
         grouping: { type: 'boolean' },
         easing: { type: 'string', enum: EASING_IDS },
+        bezier: { type: 'array', items: { type: 'number' }, description: 'cubic-bezier [x1,y1,x2,y2] when easing="custom"' },
         delay: { type: 'number' },
         duration: { type: 'number' },
         remove: { type: 'boolean' },
@@ -653,6 +654,7 @@ export const MOTION_TOOLS: McpTool[] = [
         digits: args.digits === 'arabic' ? 'arabic' : 'latin',
         grouping: args.grouping !== false,
         easing: easingOf(args.easing),
+        ...(Array.isArray(args.bezier) && args.bezier.length === 4 ? { bezier: args.bezier as Bezier } : {}),
         ...(typeof args.delay === 'number' ? { delay: Math.max(0, args.delay) } : {}),
         ...(typeof args.duration === 'number' ? { duration: Math.max(0.05, args.duration) } : {}),
       };

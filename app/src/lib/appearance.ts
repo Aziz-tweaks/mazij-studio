@@ -1,3 +1,4 @@
+import { alphaShadow } from './shadowAlpha';
 import type { Palette } from '../data/constants';
 import type {
   AppearanceBlend,
@@ -29,11 +30,18 @@ export interface ResolvedFillPaint {
 }
 
 /** تدرّج من لونين — خطّي بزاوية CSS أو دائري (`radial`) من المركز إلى أقرب حافة. */
-export interface GradientSpec { angle: number; from: string; to: string; type?: 'linear' | 'radial' }
+export interface GradientSpec { angle: number; from: string; to: string; type?: 'linear' | 'radial'; stops?: { color: string; at: number }[] }
+
+/** محطّاتُ التدرّج الفعليّة: المتعدّدةُ متى وُجدت (اثنتان فأكثر)، وإلّا لونا الطرفين. */
+export function gradientStopsOf(g: GradientSpec): { color: string; at: number }[] {
+  if (g.stops && g.stops.length >= 2) return [...g.stops].map((s) => ({ color: s.color, at: Math.max(0, Math.min(1, s.at)) })).sort((a, b) => a.at - b.at);
+  return [{ color: g.from, at: 0 }, { color: g.to, at: 1 }];
+}
 
 /** قيمة CSS للتدرّج نفسها التي يرسمها الكانفس والـSVG. */
-export function gradientCss(g: GradientSpec, from = g.from, to = g.to): string {
-  return g.type === 'radial' ? `radial-gradient(circle closest-side, ${from}, ${to})` : `linear-gradient(${g.angle}deg, ${from}, ${to})`;
+export function gradientCss(g: GradientSpec, from = g.from, to = g.to, opacity = 1): string {
+  const list = g.stops && g.stops.length >= 2 ? gradientStopsOf(g).map((st) => `${withAlpha(st.color, opacity)} ${(st.at * 100).toFixed(2)}%`).join(', ') : `${from}, ${to}`;
+  return g.type === 'radial' ? `radial-gradient(circle closest-side, ${list})` : `linear-gradient(${g.angle}deg, ${list})`;
 }
 
 export interface ResolvedStrokePaint {
@@ -277,7 +285,7 @@ export function resolveAppearance(el: DocElement, pal: Palette): ResolvedAppeara
         blend: f.blend,
         kind: f.kind,
         color: resolveLayerColor(f.color, f.colorToken, pal),
-        gradient: f.kind === 'gradient' ? { angle: f.gradientAngle, from: f.gradientFrom, to: f.gradientTo, type: f.gradientType ?? 'linear' } : undefined,
+        gradient: f.kind === 'gradient' ? { angle: f.gradientAngle, from: f.gradientFrom, to: f.gradientTo, type: f.gradientType ?? 'linear', ...(f.gradientStops && f.gradientStops.length >= 2 ? { stops: f.gradientStops } : {}) } : undefined,
       })),
     strokes: stack.strokes
       .filter((s) => s.visible)
@@ -424,14 +432,12 @@ function buildLinearGradient(ctx: CanvasRenderingContext2D, grad: GradientSpec, 
   if (grad.type === 'radial') {
     // يطابق `circle closest-side` في CSS و`r = min/2` في الـSVG.
     const g = ctx.createRadialGradient(bw / 2, bh / 2, 0, bw / 2, bh / 2, Math.max(1, Math.min(bw, bh) / 2));
-    g.addColorStop(0, grad.from);
-    g.addColorStop(1, grad.to);
+    for (const st of gradientStopsOf(grad)) g.addColorStop(st.at, st.color);
     return g;
   }
   const l = cssGradientLine(grad.angle, bw, bh);
   const g = ctx.createLinearGradient(l.x0, l.y0, l.x1, l.y1);
-  g.addColorStop(0, grad.from);
-  g.addColorStop(1, grad.to);
+  for (const st of gradientStopsOf(grad)) g.addColorStop(st.at, st.color);
   return g;
 }
 
@@ -491,7 +497,9 @@ export function paintOuterShadowsCanvas(ctx: CanvasRenderingContext2D, shadows: 
     if (sh.kind !== 'outer') continue;
     ctx.save();
     ctx.globalAlpha = baseAlpha * sh.opacity;
-    ctx.shadowColor = sh.color;
+    // WebKit يرسم الظلَّ حتى بشفافيّةٍ صفر — فعنصرٌ مخفيٌّ كان يظهر توهّجُه.
+    if (ctx.globalAlpha <= 0.002) { ctx.restore(); continue; }
+    ctx.shadowColor = alphaShadow(ctx, sh.color);
     ctx.shadowBlur = sh.blur;
     ctx.shadowOffsetX = sh.offsetX;
     ctx.shadowOffsetY = sh.offsetY;
@@ -520,7 +528,9 @@ export function paintInnerShadowsCanvas(ctx: CanvasRenderingContext2D, shadows: 
     tracer(ctx, 0);
     ctx.clip();
     ctx.globalAlpha = baseAlpha * sh.opacity;
-    ctx.shadowColor = sh.color;
+    // WebKit يرسم الظلَّ حتى بشفافيّةٍ صفر — فعنصرٌ مخفيٌّ كان يظهر توهّجُه.
+    if (ctx.globalAlpha <= 0.002) { ctx.restore(); continue; }
+    ctx.shadowColor = alphaShadow(ctx, sh.color);
     ctx.shadowBlur = sh.blur;
     ctx.shadowOffsetX = sh.offsetX;
     ctx.shadowOffsetY = sh.offsetY;
@@ -577,7 +587,7 @@ export function fillsToCss(fills: ResolvedFillPaint[]): FillCss {
   }
   const images = fills.map((f) =>
     f.kind === 'gradient' && f.gradient
-      ? gradientCss(f.gradient, withAlpha(f.gradient.from, f.opacity), withAlpha(f.gradient.to, f.opacity))
+      ? gradientCss(f.gradient, withAlpha(f.gradient.from, f.opacity), withAlpha(f.gradient.to, f.opacity), f.opacity)
       : `linear-gradient(${withAlpha(f.color, f.opacity)}, ${withAlpha(f.color, f.opacity)})`,
   );
   return { backgroundImage: images.join(', '), backgroundBlendMode: fills.map((f) => f.blend).join(', ') };

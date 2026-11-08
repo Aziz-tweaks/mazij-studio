@@ -1241,7 +1241,7 @@ export interface StudioActions {
    * new size) as a single undo step — the "create/clear a document" verb the MCP
    * tool registry and any future command surface need, that no existing action
    * covered (every other doc-level action edits in place). */
-  newDocument: (opts?: { sizeIdx?: number; customW?: number; customH?: number }) => void;
+  newDocument: (opts?: { sizeIdx?: number; customW?: number; customH?: number; newProject?: boolean }) => void;
   openMcp: () => void;
   closeMcp: () => void;
   setMcpServerEnabled: (on: boolean) => void;
@@ -4464,7 +4464,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         commitElements((els) => els.map((e) => (e.id === id && e.type === 'image' ? { ...e, src, naturalW, naturalH } : e))),
       traceImage,
       newDocument: (opts) =>
-        setState((s) => ({
+        setState((s) => opts?.newProject ? (() => {
+          // «مشروعٌ جديد» (١ نوفمبر ٢٠٢٦): ملفٌّ جديدٌ في المكتبة ولوحٌ واحد — المشروعُ المفتوح يبقى كما هو.
+          const d = withDerivedMedium(s, opts?.sizeIdx ?? s.sizeIdx, opts?.customW ?? s.customW, opts?.customH ?? s.customH);
+          return startDoc(s, { elements: [], anim: 'none', sizeIdx: d.sizeIdx, customW: d.customW, customH: d.customH, medium: d.medium, decorAccent: false, fps: s.fps });
+        })() : ({
           ...s,
           elements: [],
           selectedIds: [],

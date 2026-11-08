@@ -26,7 +26,7 @@ export function counterValueAt(el: Extract<DocElement, { type: 'text' }>, time: 
   const local = animTimeAt(el.anim, time) - (c.delay ?? 0);
   const dur = c.duration && c.duration > 0 ? c.duration : Math.max(0.001, el.anim.duration - (c.delay ?? 0));
   const p = Math.max(0, Math.min(1, local / dur));
-  const e = applyEasing(c.easing ?? 'easeOut', DEFAULT_BEZIER, p);
+  const e = applyEasing(c.easing ?? 'easeOut', c.bezier ?? DEFAULT_BEZIER, p);
   return c.from + (c.to - c.from) * e;
 }
 

@@ -5,6 +5,7 @@ import { defaultAnim, defaultTextStagger, newElementId } from '../state/elements
 import { SIZES, CUSTOM_SIZE_IDX, sizeAt, PALETTES } from '../data/constants';
 import { AR } from '../i18n/strings';
 import { MOTION_TOOLS } from './mcpMotionTools';
+import { AD_TOOLS } from './mcpAdTools';
 import { DIRECTOR_TOOLS } from './mcpDirectorTools';
 
 /** Roadmap #20 (+ #24-ب, which will drive the exact same registry locally): the
@@ -186,19 +187,21 @@ export const MCP_TOOLS: McpTool[] = [
         sizeId: { type: 'string', enum: [...SIZES.map((s) => s.id), 'custom'], description: 'Preset size id, or "custom" with width/height.' },
         width: { type: 'number' },
         height: { type: 'number' },
+        newProject: { type: 'boolean', description: 'start a new project file in the library instead of clearing the open one' },
       },
       additionalProperties: false,
     },
     run: async (args, ctx) => {
       const sizeId = args.sizeId as string | undefined;
+      const np = args.newProject === true ? { newProject: true } : {};
       if (sizeId === 'custom') {
-        ctx.actions.newDocument({ sizeIdx: CUSTOM_SIZE_IDX, customW: num(args.width, 1080), customH: num(args.height, 1080) });
+        ctx.actions.newDocument({ sizeIdx: CUSTOM_SIZE_IDX, customW: num(args.width, 1080), customH: num(args.height, 1080), ...np });
       } else if (sizeId) {
         const idx = SIZES.findIndex((s) => s.id === sizeId);
         if (idx === -1) throw new Error(`unknown sizeId "${sizeId}"`);
-        ctx.actions.newDocument({ sizeIdx: idx });
+        ctx.actions.newDocument({ sizeIdx: idx, ...np });
       } else {
-        ctx.actions.newDocument();
+        ctx.actions.newDocument(np);
       }
       await flush();
       return docSummary(ctx.getState());
@@ -686,6 +689,7 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   ...MOTION_TOOLS,
+  ...AD_TOOLS,
   ...DIRECTOR_TOOLS,
   {
     name: 'batch',

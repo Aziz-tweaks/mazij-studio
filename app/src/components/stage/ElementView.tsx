@@ -14,7 +14,7 @@ import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from '../../lib/va
 import { SHOWN_UNIT_VISUAL, TYPE_BREAK, buildStaggerTokens, resolveUnitVisual, typedSplit, typedUnitCount, unitVisualToCssFilter, unitVisualToCssTransform, type StaggerToken, type UnitVisual } from '../../lib/textStagger';
 import { shapeTextOnCurve } from '../../lib/textOnPath';
 import { wrapLines, justifyCanvasLines, drawTextSilhouette } from '../../lib/exportArtboard';
-import { paintGlass } from '../../lib/glass';
+import { glassOverflow, paintGlass } from '../../lib/glass';
 import { LottiePreview } from './LottiePreview';
 import { VideoPreview } from './VideoPreview';
 import { withCounterAt } from '../../lib/textCounter';
@@ -32,7 +32,7 @@ function GlassCanvas({ el, boxPx, artW, time, dir }: { el: DocElement; boxPx: { 
       live = false;
     };
   }, []);
-  const pad = Math.max(boxPx.w, boxPx.h) * 0.15;
+  const pad = Math.max(boxPx.w, boxPx.h) * 0.15 + (el.glass ? glassOverflow(el.glass) : 0);
   useEffect(() => {
     const cv = ref.current;
     const glass = el.glass;
@@ -55,12 +55,12 @@ function GlassCanvas({ el, boxPx, artW, time, dir }: { el: DocElement; boxPx: { 
       paintGlass(c, boxPx.w, boxPx.h, time, glass, fontPx * 0.09, (m) => drawTextSilhouette(m, el, boxPx.w, boxPx.h, fontPx, dir, time));
     } else if (el.type === 'shape') {
       const rr = el.shape === 'rect' ? Math.min(boxPx.w, boxPx.h) * el.radius : 0;
-      paintGlass(c, boxPx.w, boxPx.h, time, glass, Math.min(boxPx.w, boxPx.h) * 0.12, (m) => {
+      const trace = (m: CanvasRenderingContext2D) => {
         m.beginPath();
         if (el.shape === 'ellipse') m.ellipse(boxPx.w / 2, boxPx.h / 2, boxPx.w / 2, boxPx.h / 2, 0, 0, Math.PI * 2);
         else m.roundRect(0, 0, boxPx.w, boxPx.h, Math.min(rr, Math.min(boxPx.w, boxPx.h) / 2));
-        m.fill();
-      });
+      };
+      paintGlass(c, boxPx.w, boxPx.h, time, glass, Math.min(boxPx.w, boxPx.h) * 0.12, (m) => (trace(m), m.fill()), trace);
     }
     // يُعاد الرسمُ حين يتغيّر العنصرُ نفسُه أو الزمنُ أو الصندوق — لا مع كلّ تحديثٍ للوحة.
   }, [el, time, boxPx.w, boxPx.h, artW, dir, pad, fontsTick]);
@@ -495,7 +495,11 @@ export function ElementView({ el: rawEl, pal, selected, editing, croppingActive,
           fontWeight: { regular: 400, medium: 600, bold: 800 }[el.weight],
           ...colorStyle,
           ...strokeStyle,
-          textShadow: textShadow || undefined,
+          // تدرّجٌ داخل الحروف (`background-clip: text`) يرسم المتصفّحُ `text-shadow` **فوقه** فيُطفئه —
+          // فالتوهّجُ مع التدرّج يُرسَم `drop-shadow` على الحروف المرسومة، وهو ظلُّ القُماش نفسُه.
+          ...(textShadow && topFill?.kind === 'gradient' && topFill.gradient
+            ? { filter: [baseStyle.filter, ...resolved.shadows.filter((sh) => sh.kind === 'outer').map((sh) => `drop-shadow(${sh.offsetX}px ${sh.offsetY}px ${sh.blur / 2}px ${withAlpha(sh.color, sh.opacity)})`)].filter(Boolean).join(' ') }
+            : { textShadow: textShadow || undefined }),
           textAlign: HALIGN_CSS[el.halign],
           display: 'flex',
           flexDirection: 'column',
@@ -693,7 +697,7 @@ export function ElementView({ el: rawEl, pal, selected, editing, croppingActive,
       {el.shape === 'path' ? (
         (() => {
           const { cmds, multiRegion, closedForFill } = pathElementCommands(el);
-          const isOutline = !!el.outline?.length;
+          const isOutline = !!el.outline?.length && !el.outlineStroke;
           const topFill = resolved.fills[resolved.fills.length - 1];
           // الحدود متغيّرةُ السُّمك تُفرَز قبل اختيار «أعلى طبقة»: فهي لا تُرسَم
           // حدًّا بل تُعبَّأ مضلَّعًا، فلو بقيت في الكومة لصارت `topStroke` طبقةً

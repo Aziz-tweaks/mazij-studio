@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { AnimProperty, ElementAnim, PropertyKeyframe } from '../state/elements';
+import type { AnimProperty, ElementAnim, Geometry, PropertyKeyframe } from '../state/elements';
 import { ANIM_PROPERTY_DEFAULT } from '../state/elements';
 import { applyEasing } from './easing';
 
@@ -283,7 +283,101 @@ function trackValueAt(track: PropertyKeyframe[] | undefined, animTime: number, f
 /** Resolves every independent property track at an absolute timeline time. This is
  * the one place video/GIF export, the canvas preview, and the DOM preview all read
  * from — see `AnimVisual` above. */
-export function resolveAnimAt(anim: ElementAnim, time: number): AnimVisual {
+/** موضعُ العنصر على اللوح — يلزم «حركةَ المشهد» وحدها (مركزُ التقريب). `aspect` = ارتفاعُ اللوح ÷ عرضه. */
+export interface ElementPlacement {
+  geo: Geometry;
+  aspect: number;
+}
+
+/** **الحلُّ الكامل لحركة العنصر عند لحظة**: مساراتُه وخروجُه، ثم التمطيطُ حسب السرعة، ثم
+ * حركةُ المشهد. الموضعُ الوحيدُ لهذه الصيغة — تقرؤه المعاينةُ والتصديرُ والقناع. */
+export function resolveAnimAt(anim: ElementAnim, time: number, place?: ElementPlacement | null): AnimVisual {
+  let v = resolveBaseAt(anim, time);
+  if (anim.stretch && anim.stretch.amount > 0) v = applyStretch(v, stretchK(anim, time)).main;
+  if (anim.scene && place) v = applyScene(v, anim.scene, time, place);
+  return v;
+}
+
+/** المرجعُ: ٤٢٠٠ بكسل/ثانية على لوحٍ عرضُه ١٠٨٠ = أقصى تمطيط. */
+const STRETCH_REF = 1080;
+const STRETCH_VMAX = 4200;
+function stretchK(anim: ElementAnim, time: number): { k: number; sx: number; sy: number; axisX: boolean } {
+  const a = resolveBaseAt(anim, time);
+  const b = resolveBaseAt(anim, time - 1 / 30);
+  const dx = (a.x - b.x) * 30;
+  const dy = (a.y - b.y) * 30;
+  const speed = Math.hypot(dx, dy) * STRETCH_REF;
+  const k = Math.min(1, speed / STRETCH_VMAX) * (anim.stretch?.amount ?? 0);
+  return { k, sx: Math.sign(dx), sy: Math.sign(dy), axisX: Math.abs(dx) >= Math.abs(dy) };
+}
+function applyStretch(v: AnimVisual, s: { k: number; axisX: boolean }): { main: AnimVisual } {
+  if (s.k <= 1e-4) return { main: v };
+  const main = { ...v };
+  if (s.axisX) { main.scaleX = v.scaleX * (1 + s.k * 0.55); main.scaleY = v.scaleY * (1 - s.k * 0.08); }
+  else { main.scaleY = v.scaleY * (1 + s.k * 0.55); main.scaleX = v.scaleX * (1 - s.k * 0.08); }
+  main.blur = v.blur + (s.k * 18) / STRETCH_REF;
+  return { main };
+}
+
+/** **النسخُ الباهتة خلف عنصرٍ يتمطّط**، من الأبعد إلى الأقرب — تُرسَم قبل العنصر نفسه في
+ * المعاينة والتصدير معًا. فارغةٌ متى لم يكن تمطيطٌ أو كان العنصرُ ساكنًا. */
+export function stretchGhostsAt(anim: ElementAnim, time: number, place?: ElementPlacement | null): AnimVisual[] {
+  const st = anim.stretch;
+  if (!st || st.amount <= 0) return [];
+  const n = Math.max(0, Math.min(3, Math.round(st.trail ?? 3)));
+  if (!n) return [];
+  const s = stretchK(anim, time);
+  if (s.k <= 0.02) return [];
+  const base = resolveBaseAt(anim, time);
+  const out: AnimVisual[] = [];
+  for (let i = n; i >= 1; i--) {
+    const g = { ...base };
+    const off = (i * s.k * 80) / STRETCH_REF;
+    if (s.axisX) { g.x = base.x - s.sx * off; g.scaleX = base.scaleX * (1 + s.k * 0.9); }
+    else { g.y = base.y - s.sy * off; g.scaleY = base.scaleY * (1 + s.k * 0.9); }
+    g.opacity = base.opacity * 0.16 * s.k * ((4 - i) / 3);
+    g.blur = base.blur + (8 + s.k * 24) / STRETCH_REF;
+    out.push(anim.scene && place ? applyScene(g, anim.scene, time, place) : g);
+  }
+  return out;
+}
+
+function absTrack(track: PropertyKeyframe[] | undefined, time: number, fallback: number): number {
+  return trackValueAt(track, time, fallback);
+}
+/** قيمُ حركة المشهد عند لحظةٍ مطلقة — تُصدَّر لأداة مِزو وللفحص. */
+export function sceneValuesAt(scene: { tracks: { scale?: PropertyKeyframe[]; opacity?: PropertyKeyframe[]; blur?: PropertyKeyframe[] } }, time: number): { scale: number; opacity: number; blur: number } {
+  return { scale: absTrack(scene.tracks.scale, time, 1), opacity: absTrack(scene.tracks.opacity, time, 1), blur: absTrack(scene.tracks.blur, time, 0) };
+}
+function applyScene(v: AnimVisual, scene: NonNullable<ElementAnim['scene']>, time: number, place: ElementPlacement): AnimVisual {
+  const { scale: s, opacity: o, blur: b } = sceneValuesAt(scene, time);
+  if (s === 1 && o === 1 && b === 0) return v;
+  const g = place.geo;
+  // كلُّ شيءٍ بوحدة عرض اللوح (كوحدة `x`/`y` في المسارات).
+  const ex = g.x + g.w / 2;
+  const ey = (g.y + g.h / 2) * place.aspect;
+  const rad = ((g.rotation || 0) * Math.PI) / 180;
+  // إزاحةُ المسار تُطبَّق بعد دوران الصندوق الساكن — فتُدار إلى إطار اللوح قبل الحساب ثم تُعاد.
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const px = ex + (v.x * cos - v.y * sin);
+  const py = ey + (v.x * sin + v.y * cos);
+  const C = { x: scene.cx, y: scene.cy * place.aspect };
+  const dx = (px - C.x) * (s - 1);
+  const dy = (py - C.y) * (s - 1);
+  const out = { ...v };
+  out.x = v.x + (dx * cos + dy * sin);
+  out.y = v.y + (-dx * sin + dy * cos);
+  out.scale = v.scale * s;
+  out.opacity = v.opacity * o;
+  if (b) {
+    const tot = Math.abs(out.scale) * Math.sqrt(Math.abs(out.scaleX * out.scaleY)) || 1;
+    out.blur = v.blur + b / Math.max(0.05, tot);
+  }
+  return out;
+}
+
+function resolveBaseAt(anim: ElementAnim, time: number): AnimVisual {
   const v = resolveTracksAt(anim, time);
   const ex = anim.exit;
   if (!ex || ex.seconds <= 0) return v;
@@ -592,8 +686,12 @@ export function formatClock(seconds: number): string {
 /** `AnimVisual` turned into a CSS transform/opacity pair for the DOM preview —
  * `ElementView` composes this with the element's own static `geo` rotation and base
  * `opacity`. */
-export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0, pivot?: { x: number; y: number } | null): { opacity?: number; transform?: string; filter?: string } {
-  const v = resolveAnimAt(anim, time);
+export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0, pivot?: { x: number; y: number } | null, place?: ElementPlacement | null): { opacity?: number; transform?: string; filter?: string } {
+  return visualStyle(resolveAnimAt(anim, time, place), staticBlur, pivot);
+}
+
+/** `AnimVisual` جاهزٌ → نمطُ CSS للمعاينة. يُستعمل للعنصر ولنُسَخ التمطيط الباهتة. */
+export function visualStyle(v: AnimVisual, staticBlur = 0, pivot?: { x: number; y: number } | null): { opacity?: number; transform?: string; filter?: string } {
   const transformParts: string[] = [];
   if (v.x !== 0 || v.y !== 0) transformParts.push(`translate(${(v.x * 100).toFixed(2)}cqw, ${(v.y * 100).toFixed(2)}cqw)`);
   // **نقطةُ الارتكاز** (`ElementBase.pivot`): المقياسُ والدورانُ بين إزاحتين بالنسبة
@@ -635,8 +733,8 @@ export function entranceStyleAt(anim: ElementAnim, time: number, staticBlur = 0,
 /** Same resolution as `entranceStyleAt`, but as raw numbers for the canvas frame
  * renderer — see `AnimVisual` above for why this must stay the one shared formula
  * rather than a parallel reimplementation. */
-export function entranceVisualAt(anim: ElementAnim, time: number): AnimVisual {
-  return resolveAnimAt(anim, time);
+export function entranceVisualAt(anim: ElementAnim, time: number, place?: ElementPlacement | null): AnimVisual {
+  return resolveAnimAt(anim, time, place);
 }
 
 export function entranceStyleToCss(style: { opacity?: number; transform?: string; filter?: string }): CSSProperties {

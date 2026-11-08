@@ -11,7 +11,13 @@
  * والعملُ كلُّه في صندوق العنصر على الجهاز لا في القماش كلّه — الكلفةُ على قدر العنصر. */
 
 export interface GlassStyle {
-  mode: 'tube' | 'reeded';
+  /** `frost`/`wave`/`chart`/`ring`/`sheen` (١ نوفمبر ٢٠٢٦) — انظر `lib/livePaint.ts`. */
+  mode: 'tube' | 'reeded' | 'frost' | 'wave' | 'chart' | 'ring' | 'sheen';
+  frost?: FrostStyle;
+  wave?: WaveStyle;
+  chart?: ChartStyle;
+  ring?: RingStyle;
+  sheen?: SheenStyle;
   /** ألوانُ الجسم من البداية إلى النهاية على عرض العنصر (٢ إلى ٦). */
   colors: string[];
   /** لونُ الحافّة الباردة (tube). */
@@ -34,6 +40,16 @@ export interface GlassStyle {
 }
 
 import { drawBlurred } from './canvasBlur';
+import { paintChart, paintFrost, paintRing, paintSheen, paintWave, type ChartStyle, type FrostStyle, type RingStyle, type SheenStyle, type WaveStyle } from './livePaint';
+
+/** خاماتُ القُماش المباشرة لا تحتاج طبقاتِ الأنبوب: تُرسَم على `ctx` نفسِه. */
+export function isDirectGlass(g: GlassStyle): boolean {
+  return g.mode === 'frost' || g.mode === 'wave' || g.mode === 'chart' || g.mode === 'ring' || g.mode === 'sheen';
+}
+/** كم يتجاوز رسمُ الخامة صندوقَها (ظلٌّ أو توهّج) بالبكسل المحلّيّ — لهامش قماش المعاينة. */
+export function glassOverflow(g: GlassStyle): number {
+  return isDirectGlass(g) ? 150 : 0;
+}
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -81,7 +97,16 @@ function bodyGradient(c: Ctx, g: GlassStyle, bw: number, bh: number, time: numbe
  * @param depth سُمكُ الأنبوب بالبكسل المحلّيّ — للنصّ نحو ٨٪ من مقاس الخطّ.
  * @param silhouette ترسم ظلَّ العنصر بأيّ لونٍ مصمت في إحداثيّاته المحلّيّة (0..bw, 0..bh).
  */
-export function paintGlass(ctx: Ctx, bw: number, bh: number, time: number, g: GlassStyle, depth: number, silhouette: (c: Ctx) => void): void {
+export function paintGlass(ctx: Ctx, bw: number, bh: number, time: number, g: GlassStyle, depth: number, silhouette: (c: Ctx) => void, path?: (c: Ctx) => void, unit = 1): void {
+  if (isDirectGlass(g)) {
+    if (ctx.globalAlpha <= 0.002) return; // WebKit يرسم الظلال حتى بشفافيّةٍ صفر
+    if (g.mode === 'frost') paintFrost(ctx, bw, bh, path ?? ((c) => (c.beginPath(), c.rect(0, 0, bw, bh))), g.frost ?? {}, unit);
+    else if (g.mode === 'wave' && g.wave) paintWave(ctx, bw, bh, time, g.wave, unit);
+    else if (g.mode === 'chart' && g.chart) paintChart(ctx, bw, bh, time, g.chart, unit);
+    else if (g.mode === 'ring' && g.ring) paintRing(ctx, bw, bh, time, g.ring, unit);
+    else if (g.mode === 'sheen' && g.sheen) paintSheen(ctx, bw, bh, time, g.sheen, silhouette);
+    return;
+  }
   const T = ctx.getTransform();
   const fr = Math.max(0, Math.min(0.5, g.feather ?? 0)) * Math.min(bw, bh);
   const pad = Math.max(bw, bh) * 0.08 + depth * 2 + fr * 1.2;

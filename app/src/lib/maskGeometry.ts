@@ -169,8 +169,9 @@ export function maskClipLocal(target: Pick<DocElement, 'geo' | 'anim'>, mask: Sh
   const mbh = mask.geo.h * size.h;
   const local = maskShapeLocalCmds(mask, mbw, mbh);
   if (!local) return null;
-  const maskM = elementMatrix(mask, size, time === null ? null : resolveAnimAt(mask.anim, time));
-  const targetM = elementMatrix(target, size, time === null ? null : resolveAnimAt(target.anim, time));
+  const asp = size.h / Math.max(1, size.w);
+  const maskM = elementMatrix(mask, size, time === null ? null : resolveAnimAt(mask.anim, time, { geo: mask.geo, aspect: asp }));
+  const targetM = elementMatrix(target, size, time === null ? null : resolveAnimAt(target.anim, time, { geo: target.geo, aspect: asp }));
   const inv = matInvert(targetM);
   if (!inv) return { cmds: [], evenOdd: false };
   return { cmds: transformCmds(local.cmds, matMul(inv, maskM)), evenOdd: local.evenOdd };

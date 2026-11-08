@@ -9,8 +9,12 @@ import type { FxKind } from '../lib/effects';
 export type ElementId = string;
 export type ElementKind = 'text' | 'shape' | 'image' | 'lottie';
 export type ShapeKind = 'rect' | 'ellipse' | 'path';
-export type ElementBlend = 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'soft-light' | 'difference';
-export const ELEMENT_BLENDS: ElementBlend[] = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'soft-light', 'difference'];
+export type ElementBlend = 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten' | 'soft-light' | 'difference' | 'plus-lighter';
+export const ELEMENT_BLENDS: ElementBlend[] = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'soft-light', 'difference', 'plus-lighter'];
+/** اسمُ وضع المزج على القُماش — كلُّها أسماءُ CSS نفسُها إلّا «جمع الضوء» (`plus-lighter` في CSS = `lighter` في القُماش). */
+export function canvasBlendOp(b: ElementBlend): GlobalCompositeOperation {
+  return (b === 'plus-lighter' ? 'lighter' : b) as GlobalCompositeOperation;
+}
 export type PaletteToken = 'bg' | 'fg' | 'ac';
 
 /** x/y/w/h are fractions (0..1) of the current artboard size, so elements keep
@@ -234,6 +238,30 @@ export interface ElementAnim {
   bezier: Bezier;
   keyframes: AnimKeyframe[];
   tracks: PropertyTracks;
+  /** **التمطيطُ حسب السرعة** (١ نوفمبر ٢٠٢٦): متى تحرّك العنصرُ بمساراتِ `x`/`y` بسرعة،
+   * يتمطّط على محور حركته ويتضبّب بقدر سرعته، وتُرسَم خلفه نُسَخٌ باهتة — بلا مفتاحٍ يدويّ
+   * واحد. يُحسَب في `resolveAnimAt` (المعاينة والتصدير والقناع معًا). غيابُه = لا شيء. */
+  stretch?: StretchStyle;
+  /** **حركةُ المشهد** (١ نوفمبر ٢٠٢٦): مقياسٌ وعتامةٌ وضبابيّةٌ مشتركةٌ لمجموعةٍ من العناصر
+   * حول مركزٍ واحد — كأنّ المشهدَ كلَّه طبقةٌ واحدة تُقرَّب أو «يُدخَل فيها». فوق مسارات
+   * العنصر لا بدلًا منها، فتبقى حركةُ كلّ عنصرٍ قابلةً للتعديل. */
+  scene?: SceneMotion;
+}
+
+export interface StretchStyle {
+  /** شدّةُ التمطيط (١ = الافتراضيّ، ١٫٤ للكلمات البطلة). */
+  amount: number;
+  /** عددُ النسخ الباهتة خلفه (٠..٣، الافتراضيّ ٣). */
+  trail?: number;
+}
+
+export interface SceneMotion {
+  id: string;
+  /** مركزُ المشهد، كسرًا من عرض اللوح وارتفاعه. */
+  cx: number;
+  cy: number;
+  /** مفاتيحُ بالثواني المطلقة على الخطّ الزمنيّ: `scale` معامل، `opacity` ٠..١، `blur` كسرٌ من عرض اللوح (على الشاشة). */
+  tracks: { scale?: PropertyKeyframe[]; opacity?: PropertyKeyframe[]; blur?: PropertyKeyframe[] };
 }
 
 /** Maps an entrance preset onto the independent per-property tracks that render
@@ -441,6 +469,14 @@ export interface AppearanceFillLayer {
   gradientTo: string;
   /** شكل التدرّج: خطّي (الافتراضي) أو دائري من المركز إلى الحافة. غيابه = خطّي. */
   gradientType?: 'linear' | 'radial';
+  /** **محطّاتُ تدرّجٍ متعدّدة** (١ نوفمبر ٢٠٢٦): متى وُجدت (اثنتان فأكثر) حلّت محلّ `gradientFrom`/`gradientTo`.
+   * `at` موضعُ المحطّة ٠..١ على خطّ التدرّج (أو نصف القطر في الدائريّ). */
+  gradientStops?: GradientStop[];
+}
+
+export interface GradientStop {
+  color: string;
+  at: number;
 }
 
 /** One stroke (border) layer. `position` decides where the painted band sits relative
@@ -632,6 +668,8 @@ export interface TextCounter {
   /** فاصلُ الآلاف — مُفعَّلٌ ما لم يُطفأ صراحةً. */
   grouping?: boolean;
   easing?: EasingId;
+  /** منحنى «custom» للعدّاد (١ نوفمبر ٢٠٢٦). */
+  bezier?: Bezier;
   delay?: number;
   /** غيابُه = بقيّةُ المقطع بعد `delay`. */
   duration?: number;
@@ -742,6 +780,8 @@ export interface ShapeElement extends ElementBase {
    * further point-editable (see docs/CONTROLS.md), and not boolean-op eligible
    * (`isBooleanEligible` requires `points`). */
   outline?: PathCmd[];
+  /** مسارٌ من أوامرَ صريحة يُرسَم حدُّه أيضًا (أيقونات `element_add_path`) — ملامحُ الحروف المحوّلة تبقى تعبئةً فقط. */
+  outlineStroke?: boolean;
   /** Optional caption baked onto the shape (used for the badge % and the logo wordmark) —
    * not an independently selectable sub-element in this pass; see docs/CONTROLS.md. */
   label?: string | null;

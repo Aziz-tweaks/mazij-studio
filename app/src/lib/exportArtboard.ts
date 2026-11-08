@@ -1,6 +1,8 @@
+import { castShadow } from './shadowAlpha';
 import type { Palette, SizePreset } from '../data/constants';
 import { applyFxToCanvas, fxStrengthAt, resolveFx } from './effects';
 import type { DocElement, ShapeElement, TextElement } from '../state/elements';
+import { canvasBlendOp } from '../state/elements';
 import { firstBaselineShift, lineHeightOf, pivotOffsetFrac, resolveShapeLabelColor, resolveTextColor } from '../state/elements';
 import type { Lang } from '../i18n/strings';
 import type { Weight } from '../state/types';
@@ -9,7 +11,7 @@ import { maskClipLocal } from './maskGeometry';
 import { commandsToSvgPath, drawPathCommandsToCtx, ellipsePathCmds, pathElementCommands, roundRectPathCmds, type PathCmd } from './pathGeometry';
 import { isTrimmed, trimPathCmds } from './pathTrim';
 import { splitStrokesByWidthKind, variableStrokeOutlineCmds } from './variableStroke';
-import { animTimeAt, canvasBlurRadiusPx, clipShowsAt, documentDuration, effectiveScale, entranceVisualAt } from './animTimeline';
+import { animTimeAt, canvasBlurRadiusPx, clipShowsAt, documentDuration, effectiveScale, entranceVisualAt, stretchGhostsAt, type AnimVisual } from './animTimeline';
 import { HIDDEN_UNIT_VISUAL, SHOWN_UNIT_VISUAL, buildStaggerTokens, resolveUnitVisual, typedSplit, typedUnitCount, type StaggerToken, type UnitVisual } from './textStagger';
 import { getLottieExportFrame, resetLottieExportEngine } from './lottieExportEngine';
 import { getVideoExportFrame, resetVideoExportEngine } from './videoExportEngine';
@@ -32,6 +34,7 @@ import {
   resolveFillStyleCanvas,
   type ResolvedShadowPaint,
   type GradientSpec,
+  gradientStopsOf,
 } from './appearance';
 
 export interface ArtboardRenderSpec {
@@ -206,13 +209,8 @@ function wrapStaggerTokensIntoLines(ctx: CanvasRenderingContext2D, tokens: Stagg
 function paintTextRun(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, paint: StaggerPaint, alpha: number) {
   for (const sh of paint.shadows) {
     ctx.save();
-    ctx.globalAlpha = alpha * sh.opacity;
-    ctx.shadowColor = sh.color;
-    ctx.shadowBlur = sh.blur;
-    ctx.shadowOffsetX = sh.offsetX;
-    ctx.shadowOffsetY = sh.offsetY;
-    ctx.fillStyle = sh.color;
-    ctx.fillText(text, x, y);
+    ctx.globalAlpha = alpha;
+    castShadow(ctx, sh.color, sh.opacity, sh.blur, sh.offsetX, sh.offsetY, () => ctx.fillText(text, x, y));
     ctx.restore();
   }
   ctx.globalAlpha = alpha;
@@ -494,7 +492,14 @@ function settledTimeOf(spec: Omit<ArtboardRenderSpec, 'scale'>): number {
 
 async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRenderSpec, 'scale'>, w: number, h: number) {
   const time = spec.time ?? settledTimeOf(spec);
-  for (const rawEl of spec.elements) {
+  const placeOf = (e: { geo: DocElement['geo'] }) => ({ geo: e.geo, aspect: h / Math.max(1, w) });
+  // **نُسَخُ التمطيط الباهتة** تسبق عنصرَها — `stretchGhostsAt` نفسُها في المعاينة.
+  const items: Array<{ rawEl: DocElement; ghost: AnimVisual | null }> = [];
+  for (const e of spec.elements) {
+    if (e.visible && e.type !== 'fx' && e.type !== 'audio' && clipShowsAt(e.anim, time)) for (const g of stretchGhostsAt(e.anim, time, placeOf(e))) items.push({ rawEl: e, ghost: g });
+    items.push({ rawEl: e, ghost: null });
+  }
+  for (const { rawEl, ghost } of items) {
     const el = withCounterAt(rawEl, time);
     if (!el.visible) continue;
     // الصوتُ يُسمَع ولا يُرى — مكانُه خلطُ الصوت في `videoExport.ts` لا الإطار.
@@ -519,11 +524,11 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
     // Same keyframe/easing resolution the live Stage preview uses (entranceVisualAt
     // in animTimeline.ts) — a video frame rendered for time t must show exactly what
     // the timeline scrubber shows at t, not a re-derived approximation.
-    const visual = entranceVisualAt(el.anim, time);
+    const visual = ghost ?? entranceVisualAt(el.anim, time, placeOf(el));
     ctx.save();
     ctx.globalAlpha = ((el.opacity ?? 100) / 100) * visual.opacity;
     // وضعُ المزج — نفسُ `mix-blend-mode` في المعاينة. كلُّ عمليّةِ رسمٍ للعنصر تُمزَج بما تحته.
-    const blendOp = el.blend && el.blend !== 'normal' ? (el.blend as GlobalCompositeOperation) : null;
+    const blendOp = el.blend && el.blend !== 'normal' ? canvasBlendOp(el.blend) : null;
     if (blendOp) ctx.globalCompositeOperation = blendOp;
     // **ضبابيّةُ العنصر، من `canvasBlurRadiusPx` الواحدة.** تُضبَط هنا — بعد
     // `save()` وقبل أيّ رسم — فتَسري على كلّ عمليّات الرسم في هذا العنصر، ويُعيدها
@@ -603,7 +608,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         const safeRadius = Number.isFinite(el.radius) ? el.radius : 0;
         const radiusPx = Math.min(bw, bh) * safeRadius;
         const tracer = rectTracer(bw, bh, radiusPx);
-        const resolved = resolveAppearance(el, spec.palette);
+        const resolved = scaledAppearance(el, spec.palette, w / Math.max(1, spec.size.w));
         try {
           const img = await loadImage(el.src);
           paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
@@ -640,7 +645,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       // (`getLottieExportFrame` → `lottieFrameAt`) the live Stage preview uses, so a
       // video frame's Lottie content matches what the scrubber showed at `time`.
       try {
-        const resolved = resolveAppearance(el, spec.palette);
+        const resolved = scaledAppearance(el, spec.palette, w / Math.max(1, spec.size.w));
         const tracer = rectTracer(bw, bh, 0);
         paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
         const canvas = getLottieExportFrame(el.id, el.data, bw, bh, time, el.loop);
@@ -660,7 +665,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       // live scrubber must show the same real content at the same instant.
       if (el.src) {
         try {
-          const resolved = resolveAppearance(el, spec.palette);
+          const resolved = scaledAppearance(el, spec.palette, w / Math.max(1, spec.size.w));
           const tracer = rectTracer(bw, bh, 0);
           paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
           // **من بداية مقطعه** (`animTimeAt`) لا بزمن المستند — انظر `src/lib/audioMix.ts`.
@@ -684,7 +689,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         paintPlaceholderBlock(ctx, spec, w, bw, bh);
       }
     } else if (el.type === 'shape') {
-      const resolved = resolveAppearance(el, spec.palette);
+      const resolved = scaledAppearance(el, spec.palette, w / Math.max(1, spec.size.w));
       // «بداية الخط» و«نهاية الخط»: الحدُّ يُرسَم على **المسار المقصوص** (`trimPathCmds`)،
       // والتعبئةُ والظلُّ على الشكل كاملًا. والحالةُ المحايدة (٠..١) لا تلمس سطرًا هنا.
       const trimmed = isTrimmed(visual.trimStart, visual.trimEnd);
@@ -692,7 +697,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         const radiusPx = Math.min(bw, bh) * el.radius;
         const tracer = rectTracer(bw, bh, radiusPx);
         paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
-        if (el.glass) paintGlass(ctx, bw, bh, time, el.glass, Math.min(bw, bh) * 0.12, (c) => (c.beginPath(), tracer(c, 0), c.fill()));
+        if (el.glass) paintGlass(ctx, bw, bh, time, el.glass, Math.min(bw, bh) * 0.12, (c) => (c.beginPath(), tracer(c, 0), c.fill()), (c) => (c.beginPath(), tracer(c, 0)), w / Math.max(1, spec.size.w));
         else paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
         paintStrokesCanvas(
           ctx,
@@ -709,7 +714,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       } else if (el.shape === 'ellipse') {
         const tracer = ellipseTracer(bw, bh);
         paintOuterShadowsCanvas(ctx, resolved.shadows, tracer);
-        if (el.glass) paintGlass(ctx, bw, bh, time, el.glass, Math.min(bw, bh) * 0.12, (c) => (c.beginPath(), tracer(c, 0), c.fill()));
+        if (el.glass) paintGlass(ctx, bw, bh, time, el.glass, Math.min(bw, bh) * 0.12, (c) => (c.beginPath(), tracer(c, 0), c.fill()), (c) => (c.beginPath(), tracer(c, 0)), w / Math.max(1, spec.size.w));
         else paintFillsCanvas(ctx, resolved.fills, tracer, bw, bh);
         paintStrokesCanvas(
           ctx,
@@ -731,7 +736,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         // Glyph outlines (roadmap #12) are fill-only, like the text they came from —
         // never the mandatory stroke every hand-drawn pen path gets (migrated into a
         // real stroke layer by `migrateAppearance` for every other path shape).
-        if (!el.outline?.length) {
+        if (!el.outline?.length || el.outlineStroke) {
           paintStrokesCanvas(ctx, uniformStrokes, trimmed ? pathCmdsTracer(trimPathCmds(cmds, visual.trimStart, visual.trimEnd, bw, bh), bw, bh) : tracer);
           // الحدّ متغيّر السُّمك: `fill` دائمًا بـ`nonzero` — لا `fillRule`
           // المحسوبة أعلاه. والمضلَّع حلقةٌ واحدة قد تلتفّ على نفسها، فـ`evenodd`
@@ -770,7 +775,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       // appearance stack yet resolves to a single legacy-color layer via
       // `resolveAppearance`, so `color` is byte-identical to the pre-#17 value for
       // every document this roadmap item didn't touch.
-      const resolved = resolveAppearance(el, spec.palette);
+      const resolved = scaledAppearance(el, spec.palette, w / Math.max(1, spec.size.w));
       const topFill = resolved.fills[resolved.fills.length - 1];
       const color = topFill ? resolveFillStyleCanvas(ctx, topFill, bw, bh) : resolveTextColor(el, spec.palette);
       const fontPx = (el.fontSize / 1080) * w;
@@ -857,13 +862,7 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
         for (const sh of resolved.shadows) {
           if (sh.kind !== 'outer') continue;
           ctx.save();
-          ctx.globalAlpha = baseAlpha * sh.opacity;
-          ctx.shadowColor = sh.color;
-          ctx.shadowBlur = sh.blur;
-          ctx.shadowOffsetX = sh.offsetX;
-          ctx.shadowOffsetY = sh.offsetY;
-          ctx.fillStyle = sh.color;
-          lines.forEach((line, i) => ctx.fillText(line, alignX, startY + i * lineHeight));
+          castShadow(ctx, sh.color, sh.opacity, sh.blur, sh.offsetX, sh.offsetY, () => lines.forEach((line, i) => ctx.fillText(line, alignX, startY + i * lineHeight)));
           ctx.restore();
         }
         withGradientTextLayer(ctx, color, bw, bh, topFill?.gradient, (c, solid) => {
@@ -914,6 +913,18 @@ async function drawElements(ctx: CanvasRenderingContext2D, spec: Omit<ArtboardRe
       }
     }
   }
+}
+
+/** طبقاتُ المظهر بأطوالٍ على قدر القماش: الظلُّ والحدُّ بكسلُ لوحٍ، والقماشُ قد يكون أصغر (معاينةٌ
+ * بنصف المقاس) — فبلا هذا يتضاعف التوهّجُ والحدُّ نسبيًّا في كلّ إطار مراجعة. عند المقاس الكامل لا تغيير. */
+function scaledAppearance(el: DocElement, pal: ArtboardRenderSpec['palette'], k: number) {
+  const r = resolveAppearance(el, pal);
+  if (Math.abs(k - 1) < 1e-6) return r;
+  return {
+    ...r,
+    strokes: r.strokes.map((st) => ({ ...st, width: st.width * k })),
+    shadows: r.shadows.map((sh) => ({ ...sh, blur: sh.blur * k, offsetX: sh.offsetX * k, offsetY: sh.offsetY * k, spread: sh.spread * k })),
+  };
 }
 
 let softCanvas: HTMLCanvasElement | null = null;
@@ -1221,12 +1232,13 @@ function esc(s: string) {
  * مجموعته) وبخطّ CSS نفسه (`cssGradientLine`): كان `objectBoundingBox` مع
  * `rotate(angle)` — زاويةُ رياضيّات (٠ نحو اليمين) لا زاوية CSS التي تعرضها اللوحة،
  * وتدويرٌ في فضاءٍ مُطبَّع ينحرف على أيّ صندوقٍ غير مربّع. */
-function svgGradientDef(grad: { angle: number; from: string; to: string; type?: 'linear' | 'radial' }, id: string, bw: number, bh: number): string {
+function svgGradientDef(grad: GradientSpec, id: string, bw: number, bh: number): string {
+  const stops = gradientStopsOf(grad).map((st) => `<stop offset="${st.at}" stop-color="${st.color}" />`).join('');
   if (grad.type === 'radial') {
-    return `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${bw / 2}" cy="${bh / 2}" r="${Math.max(1, Math.min(bw, bh) / 2)}"><stop offset="0" stop-color="${grad.from}" /><stop offset="1" stop-color="${grad.to}" /></radialGradient>`;
+    return `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${bw / 2}" cy="${bh / 2}" r="${Math.max(1, Math.min(bw, bh) / 2)}">${stops}</radialGradient>`;
   }
   const l = cssGradientLine(grad.angle, bw, bh);
-  return `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${l.x0}" y1="${l.y0}" x2="${l.x1}" y2="${l.y1}"><stop offset="0" stop-color="${grad.from}" /><stop offset="1" stop-color="${grad.to}" /></linearGradient>`;
+  return `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${l.x0}" y1="${l.y0}" x2="${l.x1}" y2="${l.y1}">${stops}</linearGradient>`;
 }
 
 /** Roadmap #17 — every *outer* shadow layer (there can be several) as one SVG
