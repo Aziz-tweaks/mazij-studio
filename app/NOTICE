@@ -62,7 +62,8 @@ Used for: variable-width stroke profiles. `src/lib/variableStroke.ts` adapts the
 `WidthProfile::PRESETS` table and the `WidthProfile::at_points` sampling from
 `crates/doc/src/appearance.rs`. Each adapted site carries its own attribution
 comment naming the file, the license and this copyright notice, as MIT requires.
-Read docs/re-vectorcraft-source.md §1.6 for the port/adapt/idea classification.
+Sites that merely take an idea carry a "the idea is from" comment and need no
+notice; adapted code carries the full one.
 
 محرّر خطٍّ زمنيٍّ مفتوح
 ---------

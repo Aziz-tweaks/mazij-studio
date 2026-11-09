@@ -11,14 +11,14 @@
 // through real pointer and keyboard events against the running app:
 //   - every shape in the inventory places and lands in document state;
 //   - the click-placement size is 30% of page width at two different artboard sizes
-//     (the أداة تصميم شائعة rule is a *proportion*, so one artboard proves nothing);
+//     (the a common design tool rule is a *proportion*, so one artboard proves nothing);
 //   - each modifier key changes the resulting geometry in the specific way claimed —
 //     including Option being a deliberate NO-OP on polygon/star;
 //   - one placement = exactly one undo step;
 //   - each shape's geometry reaches BOTH the PNG rasterizer and the SVG serializer.
 //
-// Measured references cited inline: docs/re-canva-flows.md §2.1/§2.2/§2.4/§3.2,
-// docs/re-illustrator-flows.md §2.4, docs/re-capcut-flows.md §2.1/§2.4/§2.6.
+// Measured references cited inline: قياسٌ خارجيٌّ موثَّق,
+// قياسٌ خارجيٌّ موثَّق, قياسٌ خارجيٌّ موثَّق
 //
 // Run: node qa/shapes-library.spec.mjs   (dev server must be running on :1420)
 import { chromium } from 'playwright';
@@ -90,7 +90,7 @@ async function drawDrag(page, g, from, to, { shift = false, alt = false, spaceBy
   }
   if (spaceBy) {
     // Space held *during* the drag must reposition the in-progress shape without
-    // releasing the button (أداة متّجهات's universal modifier, §2.4).
+    // releasing the button (a vector editor's universal modifier, §2.4).
     await page.keyboard.down('Space');
     for (let i = 1; i <= 6; i++) {
       await page.mouse.move(ex + (spaceBy.x * g.scale * i) / 6, ey + (spaceBy.y * g.scale * i) / 6);
@@ -107,9 +107,9 @@ async function drawDrag(page, g, from, to, { shift = false, alt = false, spaceBy
 /** Arms the shape tool for a canvas drag.
  *
  * 24 October 2026: the button that arms it now lives in the floating tool pill and
- * **only arms** — the approved layout split drawing tools (أداة متّجهات letters, the
- * pill) from what gets added (the أداة تصميم شائعة add rail). A library that opened with M
- * shoved the canvas 300px sideways at the moment the drag began. The محرّر فيديو شائع rule
+ * **only arms** — the approved layout split drawing tools (a vector editor letters, the
+ * pill) from what gets added (the a common design tool add rail). A library that opened with M
+ * shoved the canvas 300px sideways at the moment the drag began. The a common video editor rule
  * («every rail button swaps a panel») still holds, for the add rail — asserted below
  * through `openLibraryPanel`. */
 const armShapeTool = async (page) => {
@@ -168,7 +168,7 @@ async function main() {
   // ───────────────────────────────────────────────────────────────────────────
   // 1. الزرّ يبدّل لوحًا — ولا أداة صامتة
   //
-  // محرّر فيديو شائع's #1 ranked finding is structural, not cosmetic: a toolbar button must
+  // a common video editor's #1 ranked finding is structural, not cosmetic: a toolbar button must
   // swap a CONTENT PANEL, never a silent canvas mode. It has 11 tabs and every one
   // repaints the library panel, so "I pressed it and nothing happened" is
   // structurally impossible there (§2.1, §5.1). Mazij's rail called `setTool()` and
@@ -177,7 +177,7 @@ async function main() {
   // ───────────────────────────────────────────────────────────────────────────
   console.log('\n1. kull zirr yubaddil lawhan — every rail button swaps a panel');
 
-  assert((await page.locator('[data-panel-tab="library"]').count()) === 1, 'the panel shell has a real "العناصر" (Elements) tab — أداة تصميم شائعة\'s own name for the panel that holds Shapes (§2.1)');
+  assert((await page.locator('[data-panel-tab="library"]').count()) === 1, 'the panel shell has a real "العناصر" (Elements) tab — a common design tool\'s own name for the panel that holds Shapes (§2.1)');
 
   await openLibraryPanel(page);
   const tileCount = await page.locator('[data-shape-tile]').count();
@@ -275,7 +275,7 @@ async function main() {
   // (كان هنا ضغطٌ على «بسيط» للرجوع — لا وضعين بعد ٢٤ أكتوبر ٢٠٢٦.)
   // 'select' is deliberately NOT a library: it has no content to browse, so it
   // returns the panel to Design (the selection's properties). That is a behaviour,
-  // not an absence of one — and محرّر فيديو شائع's #4 finding is exactly an inspector bound
+  // not an absence of one — and a common video editor's #4 finding is exactly an inspector bound
   // to the selection (§5.4).
   await page.locator('[data-tool="select"]').click();
   await page.waitForTimeout(120);
@@ -362,26 +362,26 @@ async function main() {
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(110);
 
-  // A closed library shape carries NO stroke — أداة تصميم شائعة measures "Stroke: none" on a
+  // A closed library shape carries NO stroke — a common design tool measures "Stroke: none" on a
   // freshly placed shape (§2.4). Before this change `migrateAppearance` handed every
   // `shape:'path'` a mandatory 2px stroke inherited from hand-drawn pen paths.
   const starForStroke = await placeTile(page, 'star6');
   const starStroke = await page.locator(`[data-el-id="${starForStroke.id}"] svg path`).evaluate((n) => ({ stroke: n.getAttribute('stroke'), width: Number(n.getAttribute('stroke-width')) }));
-  assert(starStroke.stroke === 'none' || starStroke.width === 0, `a placed star has NO stroke, matching أداة تصميم شائعة's measured default (stroke=${starStroke.stroke}, width=${starStroke.width})`);
+  assert(starStroke.stroke === 'none' || starStroke.width === 0, `a placed star has NO stroke, matching a common design tool's measured default (stroke=${starStroke.stroke}, width=${starStroke.width})`);
   await page.keyboard.press('Control+z');
   await page.waitForTimeout(110);
 
   // ───────────────────────────────────────────────────────────────────────────
   // 3. الحجم الافتراضي نسبةٌ من عرض الصفحة، لا عددَ بكسلات
   //
-  // أداة تصميم شائعة measured: a click places 324×324 at (378, 513) on a 1080×1350 page.
+  // a common design tool measured: a click places 324×324 at (378, 513) on a 1080×1350 page.
   //   324 = 1080 × 0.30 exactly · (1080−324)/2 = 378 ✓ · (1350−324)/2 = 513 ✓
   // So the rule is a PROPORTION of page width, which is why it looks right on a
   // 1080×1350 post and a 1080×1920 reel alike (§2.4). One artboard cannot prove a
   // proportion, so this runs at two — and the shape must stay SQUARE in px at both,
   // which is the part a fractional w/h model gets wrong if it stores 0.30 for both.
   //
-  // Independently corroborated: محرّر فيديو شائع's added element defaults to 320×320 on a
+  // Independently corroborated: a common video editor's added element defaults to 320×320 on a
   // 1080-wide canvas (§2.6) = 0.296. Two unrelated products, both ≈30%.
   // ───────────────────────────────────────────────────────────────────────────
   console.log('\n3. al-hajm nisba la pixels — the default size is a proportion of page width');
@@ -405,10 +405,10 @@ async function main() {
     near(b.x, (sz.w - expectSide) / 2, 1.5, `${sz.label}: horizontally centred exactly`);
     near(b.y, (sz.h - expectSide) / 2, 1.5, `${sz.label}: vertically centred exactly`);
 
-    // The measured أداة تصميم شائعة placeholder grey. Not black, not the brand colour, not
+    // The measured a common design tool placeholder grey. Not black, not the brand colour, not
     // transparent: a placed shape must read as "a placeholder awaiting a decision".
     const bg = await page.locator(`[data-el-id="${placed.id}"] > div`).first().evaluate((n) => getComputedStyle(n).backgroundColor);
-    assert(bg === 'rgb(145, 145, 145)', `${sz.label}: fill is أداة تصميم شائعة's measured placeholder grey #919191 (got ${bg})`);
+    assert(bg === 'rgb(145, 145, 145)', `${sz.label}: fill is a common design tool's measured placeholder grey #919191 (got ${bg})`);
 
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(130);
@@ -483,7 +483,7 @@ async function main() {
   //
   // `Stage.tsx` previously read NO modifiers at all during shape creation — a plain
   // min/abs box. These are the densest piece of a trained designer's muscle memory
-  // and their absence is a large part of why the app felt wrong (§2.4 أداة متّجهات).
+  // and their absence is a large part of why the app felt wrong (§2.4 a vector editor).
   //
   // The subtlety that matters: `Shift` does NOT mean one thing. Equal w/h for a
   // box-like shape, but 45° ANGLE quantisation for a line. A single naive
@@ -568,14 +568,14 @@ async function main() {
 
   // --- Option is a deliberate NO-OP on polygon/star ---
   //
-  // مزوّد كبير explicitly EXCLUDES polygons and stars from the draw-from-centre modifier
+  // a major vendor explicitly EXCLUDES polygons and stars from the draw-from-centre modifier
   // because those shapes are already centre-origin, so the modifier would be
   // meaningless (§2.4). So the implementation honours the *reason*: they are always
   // centre-origin, which makes Option naturally inert. Asserting the no-op proves
   // the exclusion is real and not an accident of a shared code path.
   const polyPlain = await measureDraw(page, 'hexagon', {});
   const polyAlt = await measureDraw(page, null, { alt: true });
-  near(polyAlt.box.w, polyPlain.box.w, 1.5, 'Option + polygon: width UNCHANGED — polygons are already centre-origin, so مزوّد كبير excludes them from this modifier');
+  near(polyAlt.box.w, polyPlain.box.w, 1.5, 'Option + polygon: width UNCHANGED — polygons are already centre-origin, so a major vendor excludes them from this modifier');
   near(polyAlt.box.h, polyPlain.box.h, 1.5, 'Option + polygon: height unchanged as well');
   near(polyPlain.box.w, DX * 2, 4, 'polygon without Option is ALREADY drawn from the centre (width is twice the drag) — which is exactly why Option has nothing left to do');
 
@@ -589,7 +589,7 @@ async function main() {
 
   // --- ↑/↓ during the drag changes the shape's defining parameter ---
   //
-  // أداة متّجهات's one universal rule: an arrow key during a drag changes the shape's
+  // a vector editor's one universal rule: an arrow key during a drag changes the shape's
   // defining parameter — polygon sides, star points, arc angle, spiral winds (§2.4).
   // One binding, several meanings, resolved by the active shape. This is what makes
   // "polygon (n-sided)" true at the moment of drawing rather than a fixed hexagon.
@@ -724,7 +724,7 @@ async function main() {
   // ───────────────────────────────────────────────────────────────────────────
   // 7. مقابض أكبر — منطقة الإصابة والمرسوم شيئان
   //
-  // أداة تصميم شائعة measures 32px hit areas with FULL-LENGTH edge handles, while drawing the
+  // a common design tool measures 32px hit areas with FULL-LENGTH edge handles, while drawing the
   // handle itself far smaller (§3.2). Mazij's were 10px for both, because they were
   // one element. drag-quality.spec.mjs owns the per-zoom sizing; this asserts the
   // separation itself and the full-length edge rule.
@@ -750,10 +750,10 @@ async function main() {
   near(paintBox.width, 10, 1, 'the DRAWN corner handle is still 10px — the visible chrome did not grow');
   assert(hitBox.width > paintBox.width * 1.9, `the corner HIT area is far larger than the drawn handle (${hitBox.width.toFixed(1)}px hit vs ${paintBox.width.toFixed(1)}px drawn)`);
   near(hitBox.width, wantHit, 1.5, `the corner hit area is max(10, min(32, (shortSide−10)/2)) for this ${Math.min(selBox.width, selBox.height).toFixed(1)}px selection`);
-  assert(wantHit === 32, `this selection is large enough to host أداة تصميم شائعة's full measured 32px, and does (got ${hitBox.width.toFixed(1)})`);
+  assert(wantHit === 32, `this selection is large enough to host a common design tool's full measured 32px, and does (got ${hitBox.width.toFixed(1)})`);
 
   const nHit = await page.locator('[data-handle="n"]').boundingBox();
-  near(nHit.width, selBox.width, 2, 'the top edge handle spans the ENTIRE edge — أداة تصميم شائعة\'s rule, so there is no dead zone along an edge where a drag does nothing');
+  near(nHit.width, selBox.width, 2, 'the top edge handle spans the ENTIRE edge — a common design tool\'s rule, so there is no dead zone along an edge where a drag does nothing');
   near(nHit.height, 32, 1.5, 'and is 32px thick');
   const wHit = await page.locator('[data-handle="w"]').boundingBox();
   near(wHit.height, selBox.height, 2, 'the side edge handle spans the entire edge vertically');

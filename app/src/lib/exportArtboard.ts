@@ -1494,7 +1494,7 @@ export function renderArtboardSvg(spec: Omit<ArtboardRenderSpec, 'scale'>): Blob
         const fillAttr = closedForFill && topFill ? (topFill.kind === 'gradient' && topFill.gradient ? topFill.gradient.from : topFill.color) : 'none';
         // الحدود متغيّرةُ السُّمك: مسارٌ معبَّأ لكلّ طبقة، **بلا `stroke`
         // إطلاقًا** — فـSVG لا يملك سُمكًا متغيّرًا، والهندسةُ هي الجواب. وهو
-        // بعينه ما يُنفثه محرّك متّجهات مفتوح (`crates/svg/tests/stroke_export.rs:77-83`
+        // بعينه ما يُنفثه an open-source vector engine (`crates/svg/tests/stroke_export.rs:77-83`
         // يُثبت أن `stroke=` لا تظهر في الملفّ أصلًا).
         const variableStrokeSvg = variableStrokes
           .map((s) => {

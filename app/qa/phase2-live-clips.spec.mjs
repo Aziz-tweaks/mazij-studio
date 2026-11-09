@@ -8,7 +8,7 @@
 // production module (`/src/lib/timelineHit.ts`, `/src/lib/animTimeline.ts`,
 // `/src/lib/exportArtboard.ts`) on a document the UI built.
 //
-// The criteria, in the plan's own numbering (`docs/PLAN-video-branch.md` §المرحلة ٢):
+// The criteria, in the plan's own numbering (قياسٌ خارجيٌّ موثَّق §المرحلة ٢):
 //
 //   B1  the hit-test table at 100 px/s — the tie-break logic, not the number 7
 //   B2  trim the in-edge 0 → 0.4 s; `resolveAnimAt` at 40 surviving instants is
@@ -177,7 +177,7 @@ async function main() {
   // B1. جدولُ الإصابة / The hit-test table
   // ═════════════════════════════════════════════════════════════════════════
   // بوحدات الورقة نفسها وعند تكبيرها نفسه (١٠٠ بكسل/ثانية)، فالمقيسُ **منطقُ فصل
-  // التعادل** لا الرقم ٧ (§10.1): أرقامُ محرّر خطٍّ زمنيٍّ مفتوح بنقاط egui ولم تُبنَ ولم
+  // التعادل** لا الرقم ٧ (§10.1): أرقامُ an open-source timeline editor بنقاط egui ولم تُبنَ ولم
   // تُشغَّل، والمنقولُ هو النسبةُ والقاعدة.
   console.log('\nB1. جدولُ الإصابة عند ١٠٠ بكسل/ثانية');
   await openFormat(page, 'ig-reel');
@@ -253,7 +253,7 @@ async function main() {
   assert(b1.lockedBody.kind === 'clipBody' && b1.lockedBody.cursor === 'not-allowed', `and so does its body (${b1.lockedBody.cursor})`);
 
   // ═════════════════════════════════════════════════════════════════════════
-  // B2. الثابتُ الذي تُسمّيه محرّر خطٍّ زمنيٍّ مفتوح «ما تَكسره التطبيقات»
+  // B2. الثابتُ الذي تُسمّيه an open-source timeline editor «ما تَكسره التطبيقات»
   // ═════════════════════════════════════════════════════════════════════════
   // `moving_an_edge_keeps_the_media_under_the_timeline` (`crates/edit/src/tests.rs:876`)،
   // مُعادًا صوغُه لمزيج: تقليمُ حافّةِ الدخول من ٠ إلى ٠٫٤ث لا يُغيّر ما يَحلّه
@@ -389,7 +389,7 @@ async function main() {
   const b4Label = await page.locator('[data-testid="undo-btn"]').evaluate((e) => ({ label: e.dataset.undoLabel, title: e.getAttribute('title') }));
   assert(
     b4Label.label === 'تقليم نهاية المقطع' && /تقليم نهاية المقطع/.test(b4Label.title),
-    `and the step carries its **name**, which is the half محرّر خطٍّ زمنيٍّ مفتوح §2.1 says is missing: «${b4Label.title}»`,
+    `and the step carries its **name**, which is the half an open-source timeline editor §2.1 says is missing: «${b4Label.title}»`,
   );
   await page.keyboard.press('Meta+z');
   await page.waitForTimeout(120);
@@ -427,7 +427,7 @@ async function main() {
   // الحجزُ منفصلٌ عن التطبيق، و`trim` تُعيد الفرقَ المُطبَّق
   // ═════════════════════════════════════════════════════════════════════════
   // وهذه القسمةُ هي ما يُتيح للمعاينة أن **تتوقّف عند الحدّ** بدل أن ترتدّ إليه عند
-  // الإفلات — محرّر خطٍّ زمنيٍّ مفتوح تُسمّيها القرارَ الذي *«makes trimming feel solid»*.
+  // الإفلات — an open-source timeline editor تُسمّيها القرارَ الذي *«makes trimming feel solid»*.
   // فتُقاس مرّتين: على الدالّة الصافية، ثم على السحبة الحقيقية.
   console.log('\nclampTrim منفصلةً عن trim، والفرقُ المُطبَّق لا المطلوب');
   const cl = await page.evaluate(async () => {
@@ -546,7 +546,7 @@ async function main() {
   const leftSelected = await page.locator(`[data-layer-id="${left.id}"]`).evaluate((e) => e.dataset.selected);
   assert(
     rightSelected === 'true' && leftSelected === 'false',
-    `the **right** piece is the selected one (right=${rightSelected}, left=${leftSelected}) — محرّر فيديو شائع's rule, which محرّر خطٍّ زمنيٍّ مفتوح concedes against its own implementation: the usual next action is "lose the tail", so ⌘B then Delete must work with no re-selection`,
+    `the **right** piece is the selected one (right=${rightSelected}, left=${leftSelected}) — a common video editor's rule, which an open-source timeline editor concedes against its own implementation: the usual next action is "lose the tail", so ⌘B then Delete must work with no re-selection`,
   );
   assert(b6HistAfter === b6Hist + 1, `and the split is exactly one undo step (${b6Hist} → ${b6HistAfter})`);
   const b6SplitLabel = await page.locator('[data-testid="undo-btn"]').evaluate((e) => e.dataset.undoLabel);

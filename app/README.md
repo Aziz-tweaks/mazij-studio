@@ -52,7 +52,7 @@ PATH="$HOME/.cargo/bin:$PATH" npm run tauri build
 
 - `docs/CONTROLS.md` — جرد كل عنصر تحكم بالتطبيق وحالته
 - `docs/ROADMAP-PROGRESS.md` — تتبّع تنفيذ خارطة الطريق (٢٤ بندًا)
-- `docs/COMPETITIVE-ANALYSIS.md` — تحليل تقني لآليات أداة تصميم شائعة/محرّر فيديو شائع/أداة متّجهات ومكتبات مفتوحة المصدر مُقيَّمة
+- قياسٌ خارجيٌّ موثَّق — تحليل تقني لآليات a common design tool/a common video editor/a vector editor ومكتبات مفتوحة المصدر مُقيَّمة
 
 ## Recommended IDE Setup
 

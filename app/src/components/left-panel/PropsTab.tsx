@@ -89,7 +89,7 @@ export function PropsTab() {
 
   // Clipping mask applies to a *pair* of any element kinds, as long as at least one of
   // them is a shape (the mask). If both are shapes, the topmost (drawn last, matching
-  // أداة متّجهات's "top object = mask" convention) acts as the mask and the other is the
+  // a vector editor's "top object = mask" convention) acts as the mask and the other is the
   // clipped target — see docs/CONTROLS.md "قص بالشكل".
   const pairSel = state.selectedIds.length === 2 ? selectedElements(state) : [];
   let maskCandidate: { target: DocElement; mask: DocElement & { type: 'shape' } } | null = null;
@@ -856,7 +856,7 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
             );
           })}
         </div>
-        {/* **مدّةُ الدخول بجانب النمط** (كما في محرّر فيديو شائع: منزلق «المدة» تحت شبكة الأنماط). */}
+        {/* **مدّةُ الدخول بجانب النمط** (كما في a common video editor: منزلق «المدة» تحت شبكة الأنماط). */}
         {el.anim.preset !== 'none' && !presetBlocked && (() => {
           const keys = Object.values(el.anim.tracks).flatMap((t) => t ?? []);
           const cur = keys.length ? Math.max(...keys.map((k) => k.time)) - (el.anim.sourceIn ?? 0) : 0.6;
@@ -887,7 +887,7 @@ function TextProps({ el }: { el: DocElement & { type: 'text' } }) {
 }
 
 /** Roadmap #12 — real Arabic shaping pipeline (HarfBuzz + bidi-js), scoped per
- * `docs/COMPETITIVE-ANALYSIS.md` §3.4 to the text paths that need per-glyph control.
+ * قياسٌ خارجيٌّ موثَّق to the text paths that need per-glyph control.
  * This is the highest-priority deliverable of that pipeline: converts the selected
  * text element into real vector glyph outlines (see `src/lib/arabicShaping.ts`),
  * which also makes it exportable as true SVG `<path>` data with no font dependency.
@@ -1924,7 +1924,7 @@ function AutoCaptionsSection({ el }: { el: DocElement & { type: 'video' } }) {
  * يُرسَم فوقها».
  *
  * والاختصار مكتوبٌ في تلميح كل زرّ ليُتعلَّم من مكان استعماله — نفس دور «شريط
- * المساعدة» في أداة المتّجهات (`re-illustrator-flows.md` §7.4). */
+ * المساعدة» في أداة المتّجهات (قياسٌ خارجيٌّ موثَّق). */
 function OrganiseSection() {
   const { state, actions, dict: L } = useStudio();
   // الزرّان يُعطَّلان بدل أن يُخفَيا، فيبقى وجودُ القدرة مرئيًّا حتى حين لا ينطبق
@@ -2224,9 +2224,9 @@ function LayerRowChrome({ visible, onToggleVisible, onUp, onDown, onDuplicate, o
  * يحتاج خطًّا مركزيًّا يُزاح لا محيطًا مغلقًا.
  *
  * والسطحُ قائمةٌ جاهزة + حقلَي نسبة، لا محرّرَ منحنى. وهذا اختيارٌ مقروءٌ من
- * محرّك متّجهات مفتوح لا تقصيرًا: هو يشحن سبعةَ ملامح جاهزةٍ وقائمةً منسدلة، ولم يبنِ
+ * an open-source vector engine لا تقصيرًا: هو يشحن سبعةَ ملامح جاهزةٍ وقائمةً منسدلة، ولم يبنِ
  * محرّر منحنى قطّ — أدواتُ العرض على اللوحة تكفي ما تعجز عنه القائمة
- * (`docs/re-vectorcraft-source.md` §3.1). والقائمة تُفهَم من أول نظرة، والمنحنى
+ * (قياسٌ خارجيٌّ موثَّق). والقائمة تُفهَم من أول نظرة، والمنحنى
  * لا يُفهَم.
  *
  * والحقلان **نسبةٌ مئويّة** من `width` لا بكسلات: فتبقى قيمةٌ واحدة (`width`)
@@ -2254,7 +2254,7 @@ function StrokeTaperRow({ elId, s }: { elId: string; s: AppearanceStrokeLayer })
           actions.updateStrokeLayer(elId, s.id, {
             // «منتظم» يُزيل المَلمح لا يضبطه إلى ١/١: الغيابُ هو ما يُعيد مسارَ
             // الحدِّ المرسوم بالحرف — وهو أسرعُ وأدقُّ تطابقًا مع ما يفهمه SVG
-            // أصلًا، ونفسُ تمييز محرّك متّجهات مفتوح بين `None` ومَلمحٍ منتظم.
+            // أصلًا، ونفسُ تمييز an open-source vector engine بين `None` ومَلمحٍ منتظم.
             widthProfile: e.target.value === 'none' ? null : (WIDTH_PROFILE_PRESETS[e.target.value] ?? null),
           })
         }
@@ -2678,7 +2678,7 @@ function Toggle({ on }: { on: boolean }) {
 }
 
 
-/** **لا تحديد ← خصائصُ المشروع** (٢٩ أكتوبر ٢٠٢٦، مقابل محرّر فيديو شائع: «Details» حين لا شيء محدَّد). كان اللوحُ
+/** **لا تحديد ← خصائصُ المشروع** (٢٩ أكتوبر ٢٠٢٦، مقابل a common video editor: «Details» حين لا شيء محدَّد). كان اللوحُ
  * فارغًا إلا من تلميح، فيبدو كأنّ شيئًا تعطّل. الآن: المقاسُ والنوعُ والطولُ وعددُ الطبقات، والتلميحُ تحتها. */
 function ProjectDetails() {
   const { state, dict: L } = useStudio();

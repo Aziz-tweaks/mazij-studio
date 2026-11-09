@@ -106,7 +106,7 @@ async function hasAudioStream(path: string): Promise<boolean> {
  *
  * MP4 tags its output as Rec.709 SDR (`-color_range/-colorspace/-color_primaries`)
  * so players interpret the colors correctly. The competitive analysis
- * (docs/COMPETITIVE-ANALYSIS.md §1.7) documents a colorspace *filter* أداة تصميم شائعة's
+ * (قياسٌ خارجيٌّ موثَّق) documents a colorspace *filter* a common design tool's
  * engineering team needed in 2023 to fix a desaturation bug on their ffmpeg build —
  * verified by hand against the ffmpeg version this app actually bundles and found
  * to do the opposite here (see the comment at the mp4 branch below for the
@@ -193,7 +193,7 @@ export async function exportVideoTarget(
           // Tag the output stream as standard Rec.709 SDR — metadata only (no `-vf`
           // pixel transform), so players interpret the colors correctly without
           // altering a single pixel value. The competitive analysis (§1.7) documents
-          // أداة تصميم شائعة's 2023 fix for a *different* bug: their ffmpeg build implicitly
+          // a common design tool's 2023 fix for a *different* bug: their ffmpeg build implicitly
           // reinterpreted sRGB input through the wrong transfer curve, desaturating
           // output, and their fix was an explicit `colorspace=…itrc=srgb:ispace=bt709`
           // filter that forces a real sRGB→Rec.709 gamma remap. Verified by hand

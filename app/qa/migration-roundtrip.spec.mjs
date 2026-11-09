@@ -233,7 +233,7 @@ async function main() {
   );
   assert(
     version.tooNewRejected === true && version.currentAccepted === false,
-    'a document from a **newer** build is refused outright rather than opened half-understood — because opening it drops the fields this build does not know, and the next autosave writes that loss back over the user\'s real work. محرّر خطٍّ زمنيٍّ مفتوح calls it `FormatError::TooNew`',
+    'a document from a **newer** build is refused outright rather than opened half-understood — because opening it drops the fields this build does not know, and the next autosave writes that loss back over the user\'s real work. an open-source timeline editor calls it `FormatError::TooNew`',
   );
 
   // والمستندُ المحفوظُ الآن يحمل النسخة. يُستخرَج بتعديلٍ حقيقيٍّ يُشغِّل الحفظ.
@@ -301,7 +301,7 @@ async function main() {
   // 6. التحقّقُ على طبقتين / Two-tier validation
   // ═════════════════════════════════════════════════════════════════════════
   // ما يجب أن يُنتجه **تعديلٌ** أصرمُ ممّا يجب أن يَستوفيه **ملفٌّ** ليُفتَح. الفكرة
-  // من محرّر خطٍّ زمنيٍّ مفتوح، ومُثبَّتةٌ هناك باختبارٍ مُسمًّى باسم السياسة
+  // من an open-source timeline editor، ومُثبَّتةٌ هناك باختبارٍ مُسمًّى باسم السياسة
   // (`structural_rule_breaks_still_open`). والسياسةُ مكتوبةٌ في `src/lib/persist.ts`.
   //
   // والمستندُ أدناه يَخرِق الطبقةَ الصارمة خرقًا مزدوجًا: مقطعٌ بطولٍ صفريّ،
@@ -363,7 +363,7 @@ async function main() {
   });
   assert(
     strict.length === 1 && strict.id === 'a' && strict.value === 0.9 && strict.easing === 'linear' && JSON.stringify(strict.bezier) === '[0,0,1,1]',
-    `and an **edit** cannot produce that state: writing at an occupied time replaces the value (0.2 → ${strict.value}) while keeping the existing key's \`id\`, \`easing\` and \`bezier\` (${strict.id}, ${strict.easing}, ${JSON.stringify(strict.bezier)}) — محرّك حركةٍ مفتوح's twelve-field copy reduced to Mazij's three. One key out, not two`,
+    `and an **edit** cannot produce that state: writing at an occupied time replaces the value (0.2 → ${strict.value}) while keeping the existing key's \`id\`, \`easing\` and \`bezier\` (${strict.id}, ${strict.easing}, ${JSON.stringify(strict.bezier)}) — an open-source motion engine's twelve-field copy reduced to Mazij's three. One key out, not two`,
   );
 
   console.log('');

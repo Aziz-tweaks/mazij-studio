@@ -8,8 +8,8 @@ import type { PathCmd } from './pathGeometry';
  * يُعاد تشكيل الخطّ المركزيّ بطول القوس، وتُزاح كلُّ عيّنةٍ ±w(t)/2 على العموديّ،
  * ثم يُغلَق الجانبان في حلقةٍ واحدةٍ تُعبَّأ بقاعدة `nonzero`.
  *
- * وهذا بعينه ما انتهى إليه محرّك متّجهات مفتوح — وهو محرّرٌ مفتوح المصدر يواجه الحائط
- * نفسه — وقراءةُ مصدره هي ما وثّقته `docs/re-vectorcraft-source.md`. والمعمار
+ * وهذا بعينه ما انتهى إليه an open-source vector engine — وهو محرّرٌ مفتوح المصدر يواجه الحائط
+ * نفسه — وقراءةُ مصدره هي ما وثّقته قياسٌ خارجيٌّ موثَّق. والمعمار
  * المأخوذ منه **فكرةً** (لا نقلًا): سَطِّح الخطّ المركزيّ إلى خطٍّ مكسَّر، أزِح
  * الخطَّ المكسَّر، ودعْ قاعدةَ التعبئة تحلّ التقاطع الذاتي. النقطة الأخيرة هي
  * أكبر وفرٍ في هذا الملفّ كلّه: حلقةٌ تتقاطع مع نفسها **لا تحتاج**
@@ -46,14 +46,14 @@ export interface StrokeWidthProfile {
   end: number;
 }
 
-/** القائمة الجاهزة. وهي مقتبسةٌ من `WidthProfile::PRESETS` في محرّك متّجهات مفتوح
+/** القائمة الجاهزة. وهي مقتبسةٌ من `WidthProfile::PRESETS` في an open-source vector engine
  * (`crates/doc/src/appearance.rs:247-258`) — نفس الأسماء ونفس المعاملات لِما
  * يقابلها من أشكال، لأنها أشكالٌ صحيحةٌ مُختبَرة لا أرقامٌ تُخترَع من جديد.
  *
- * محرّك متّجهات مفتوح — Copyright (c) 2026 مشروعه الأمّ Team and the محرّك متّجهات مفتوح
- * contributors — مرخّصٌ بـ MIT OR Apache-2.0. انظر `docs/re-vectorcraft-source.md` §1.6.
+ * an open-source vector engine — Copyright (c) 2026 its upstream project Team and the an open-source vector engine
+ * contributors — مرخّصٌ بـ MIT OR Apache-2.0. انظر قياسٌ خارجيٌّ موثَّق
  *
- * ومَلمحا `taperStart`/`lens` عند محرّك متّجهات مفتوح ينتهيان بمعامل صفر تامّ؛ وهنا
+ * ومَلمحا `taperStart`/`lens` عند an open-source vector engine ينتهيان بمعامل صفر تامّ؛ وهنا
  * ٠٫٠٢ لا صفر، لأن الصفر التامّ يجعل الطرف نقطةً رياضيّةً تختفي عند التنقيط،
  * و٢٪ من عشرين بكسلًا = أربعة أعشار البكسل: شعرةٌ تُرى. */
 export const WIDTH_PROFILE_PRESETS: Record<string, StrokeWidthProfile> = {
@@ -66,11 +66,11 @@ export const WIDTH_PROFILE_PRESETS: Record<string, StrokeWidthProfile> = {
 /** يُقَوِّم المَلمح عند `t` بخطٍّ مستقيمٍ بين نقاطه، ويُثبِّت القيمة خارج
  * طرفيه (لا يمدّها).
  *
- * مُقتبَسٌ من `WidthProfile::at_points` في محرّك متّجهات مفتوح
+ * مُقتبَسٌ من `WidthProfile::at_points` في an open-source vector engine
  * (`crates/doc/src/appearance.rs:231-245`): الاستقراء المُثبَّت خارج الطرفين،
  * وحَرَسُ المقام `max(1e-9)` حتى لا تقسم نقطتان متلاصقتان على صفر، وردُّ ١
  * (لا صفر) لِمَلمحٍ خالٍ — فغيابُ المَلمح حدٌّ منتظم لا حدٌّ معدوم.
- * محرّك متّجهات مفتوح — Copyright (c) 2026 مشروعه الأمّ Team and the محرّك متّجهات مفتوح
+ * an open-source vector engine — Copyright (c) 2026 its upstream project Team and the an open-source vector engine
  * contributors — MIT OR Apache-2.0. */
 export function widthFactorAt(p: StrokeWidthProfile, t: number): number {
   const pts: Array<[number, number]> = p.mid == null ? [[0, p.start], [1, p.end]] : [[0, p.start], [0.5, p.mid], [1, p.end]];
@@ -125,7 +125,7 @@ const SAMPLES_PER_CUBIC = 24;
 /** نقطتان أقربُ من هذا في فضاء بكسل الصندوق تُعدّان واحدة. وحذفُها ليس تنظيفًا
  * تجميليًّا: قطعةٌ طولها صفر عموديُّها غير معرَّف (قسمةٌ على صفر)، فتُنتج
  * `NaN` يسري في المضلَّع كلّه فيختفي الحدُّ رأسًا. الفكرة من حَرَس `push` في
- * محرّك متّجهات مفتوح (`crates/effects/src/stroke/width.rs:53-58`). */
+ * an open-source vector engine (`crates/effects/src/stroke/width.rs:53-58`). */
 const DEDUP_EPS = 1e-6;
 
 interface Pt {
@@ -206,14 +206,14 @@ function flattenToPixelSubpaths(cmds: PathCmd[], bw: number, bh: number): FlatSu
 }
 
 /** العموديُّ الأيسر في فضاءٍ محوره y إلى الأسفل — «يسارَ اتّجاه السير».
- * نفس اصطلاح `left()` في محرّك متّجهات مفتوح (`crates/effects/src/stroke/width.rs:40-42`). */
+ * نفس اصطلاح `left()` في an open-source vector engine (`crates/effects/src/stroke/width.rs:40-42`). */
 function leftNormal(dx: number, dy: number): Pt {
   return { x: dy, y: -dx };
 }
 
 function unit(dx: number, dy: number): Pt {
   const h = Math.hypot(dx, dy);
-  // صِفرٌ يردّ +x لا NaN: نفس حَرَس `unit` في محرّك متّجهات مفتوح
+  // صِفرٌ يردّ +x لا NaN: نفس حَرَس `unit` في an open-source vector engine
   // (`crates/geom/src/bez.rs:66-69`). و`NaN` واحدةٌ تُفقد المضلَّع كلَّه.
   return h > 1e-12 ? { x: dx / h, y: dy / h } : { x: 1, y: 0 };
 }
@@ -236,7 +236,7 @@ function openRing(pts: Pt[], halfAt: (i: number) => number): Pt[] {
     // نصفُ عرضٍ صفريّ يُطبِق الجانبين على الخطّ المركزيّ نفسه، فينتهي الذيل
     // نقطةً نظيفة لا شظيّةً متقاطعة. مقتبسٌ من `w <= 0.0 => pts.push(v.p)` في
     // `Ctx::join` بـمحرّك متّجهات مفتوح (`crates/effects/src/stroke/width.rs:230-231`).
-    // محرّك متّجهات مفتوح — Copyright (c) 2026 مشروعه الأمّ Team and the محرّك متّجهات مفتوح
+    // an open-source vector engine — Copyright (c) 2026 its upstream project Team and the an open-source vector engine
     // contributors — MIT OR Apache-2.0.
     if (w <= 0) {
       leftSide.push(pts[i]);
@@ -262,7 +262,7 @@ function openRing(pts: Pt[], halfAt: (i: number) => number): Pt[] {
     const my = na.y + nb.y;
     // |na+nb| = 2·cos(θ/2)، فنقطةُ الميتر تبعد w/cos(θ/2) على المُنصِّف. وهي
     // مكتوبةٌ هكذا (لا بتسوية المتّجه) تجنُّبًا لقسمةٍ ثانية — نفس صياغة
-    // `Ctx::join` في محرّك متّجهات مفتوح (`crates/effects/src/stroke/width.rs:222-224`).
+    // `Ctx::join` في an open-source vector engine (`crates/effects/src/stroke/width.rs:222-224`).
     const c = Math.hypot(mx, my) / 2;
     if (c > 1e-9 && 1 / c <= MITER_LIMIT) {
       const k = w / (2 * c * c);
@@ -295,7 +295,7 @@ function ringToCmds(ring: Pt[], bw: number, bh: number): PathCmd[] {
  * مغلقًا** بكسورٍ من الصندوق نفسِه، جاهزًا لِـ`commandsToSvgPath` أو
  * `drawPathCommandsToCtx` بلا سطرٍ خاصٍّ بأيٍّ منها.
  *
- * ووحدةُ هذه الدالّة هي الشرط: `is_plain` في محرّك متّجهات مفتوح
+ * ووحدةُ هذه الدالّة هي الشرط: `is_plain` في an open-source vector engine
  * (`crates/effects/src/stroke/outline.rs:45-53`) محكَمٌ واحد تناديه كلُّ
  * كاتبات الملفّات، فلا يستطيع SVG أن يخالف الـcanvas في «متى يُحوَّل الحدُّ
  * إلى تعبئة». وهذا المستودع حارب تباعدَ المعاينة عن التصدير ثلاث مرّات،
@@ -330,8 +330,8 @@ export function variableStrokeOutlineCmds(
 
     // طولُ القوس التراكميّ: هو **مفتاح** المَلمح. و`t` كسرٌ من الطول لا من
     // عدد النقاط — فالعُقَد غير المتساوية التباعد (وكلُّ مسار قلمٍ كذلك) لا
-    // تُشوِّه التدرّج. الفكرة من محرّك متّجهات مفتوح: المَلمح مفتاحه طولُ القوس لا
-    // المرتسى (`docs/re-vectorcraft-source.md` §1.1).
+    // تُشوِّه التدرّج. الفكرة من an open-source vector engine: المَلمح مفتاحه طولُ القوس لا
+    // المرتسى (قياسٌ خارجيٌّ موثَّق).
     const cum = new Float64Array(n);
     for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     const total = cum[n - 1];

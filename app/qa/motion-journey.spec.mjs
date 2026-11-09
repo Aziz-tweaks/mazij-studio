@@ -382,7 +382,7 @@ async function main() {
   // clips, so this journey — whose last clip ends at 1.6s — is a 1.6s project and
   // exports 1.6s. The old assertion read `/^المدّة 5 ث/` and was measuring a constant.
   // This one reads the duration the timeline itself reports and requires the dialog to
-  // agree with it, which is the stronger statement and محرّر خطٍّ زمنيٍّ مفتوح §5.2's actual rule:
+  // agree with it, which is the stronger statement and an open-source timeline editor §5.2's actual rule:
   // the dialog cannot contradict the timeline.
   const docSeconds = await page.evaluate(() => Number(document.querySelector('[data-testid="timeline-medium"]').dataset.duration));
   const shownSeconds = Number((est4.match(/المدّة ([\d.]+) ث/) || [])[1]);

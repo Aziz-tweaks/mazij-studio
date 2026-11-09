@@ -15,9 +15,9 @@ import { loadUiPrefs } from '../lib/uiPrefs';
 
 export type Screen = 'editor' | 'home';
 /** `'library'` هو لوح محتوى الأداة المختارة — انظر `TOOL_LIBRARY` في
- * `src/data/constants.ts`. أُضيف لأن أهمّ نتيجة في تحليل محرّر فيديو شائع بنيويّة لا شكليّة:
+ * `src/data/constants.ts`. أُضيف لأن أهمّ نتيجة في تحليل a common video editor بنيويّة لا شكليّة:
  * «زرّ في شريط الأدوات يجب أن يبدّل **لوح محتوى**، لا وضع أداة صامتًا»
- * (`re-capcut-flows.md` §5.1). لـمحرّر فيديو شائع أحد عشر تبويبًا وكلٌّ منها يعيد رسم لوح
+ * (قياسٌ خارجيٌّ موثَّق). لـمحرّر فيديو شائع أحد عشر تبويبًا وكلٌّ منها يعيد رسم لوح
  * المكتبة بالكامل، فجملة «ضغطت ولم يحدث شيء» **مستحيلة بنيويًّا** هناك. */
 export type PanelId = 'props' | 'assets' | 'ai' | 'library' | null;
 export type AssetsTab = 'files' | 'images' | 'videos' | 'fonts' | 'colors' | 'templates';
@@ -191,7 +191,7 @@ export interface StudioState {
   shapeDrawKind: ShapeDrawKind;
   /** عدد أضلاع المضلّع أو رؤوس النجمة المسلَّحة للرسم. يُضبَط من بطاقة المكتبة،
    * ويتغيّر حيًّا بمفتاحي ↑/↓ أثناء السحب — قاعدة أداة المتّجهات الواحدة: «السهم أثناء
-   * السحب يغيّر المُعامل المُعرِّف للشكل» (`re-illustrator-flows.md` §2.4). */
+   * السحب يغيّر المُعامل المُعرِّف للشكل» (قياسٌ خارجيٌّ موثَّق). */
   shapeDrawN: number;
   /** لوح الإضافة بجانب شريط الإضافة. `'props'` و`null` كلاهما «مغلق» — خصائص
    * المحدَّد تعيش في المفتش (`Inspector.tsx`) دائمًا، لا في هذا اللوح. وبقيت
@@ -309,7 +309,7 @@ export interface StudioState {
    * لعنصر واحد في المرة. ليس جزءًا من المستند، فلا يُحفَظ ولا يدخل التراجع. */
   nodeEditId: ElementId | null;
   /** نقطة الربط/المقبض المحدَّد داخل وضع تحرير العقد — يحدِّد ما يحذفه زر Delete،
-   * وأيّ مقابض تُرسَم (مقابض النقطة المحدَّدة فقط، كما في أداة متّجهات، لا كل مقابض
+   * وأيّ مقابض تُرسَم (مقابض النقطة المحدَّدة فقط، كما في a vector editor، لا كل مقابض
    * المسار دفعةً واحدة). */
   nodeEditSel: { index: number; part: 'anchor' | 'in' | 'out' } | null;
   fonts: FontEntry[];
@@ -332,7 +332,7 @@ export interface StudioState {
   homePrompt: string;
   historyPast: DocSnapshot[];
   historyFuture: DocSnapshot[];
-  /** **قاعدةُ التراجع، في سطرٍ واحد** (فكرةٌ من محرّر خطٍّ زمنيٍّ مفتوح،
+  /** **قاعدةُ التراجع، في سطرٍ واحد** (فكرةٌ من an open-source timeline editor،
    * `crates/engine/src/keyboard.rs:33-34`): *التنقّلُ والتحديدُ والمؤشّرُ الزمنيُّ
    * لا تُسجَّل، وكلُّ ما يُغيّر المستند خطوةٌ واحدةٌ مُسمّاة.*
    *
@@ -426,7 +426,7 @@ export interface StudioState {
    * أي صورٌ لم يصمّمها أحد. ولم تكن هناك طريقة لقول «الثلاثة كما هي».
    *
    * هذا هو سلوك `Use Artboards → All` في أداة المتّجهات حرفيًّا: «كل لوح رسم يُصدَّر
-   * منفردًا» (`re-illustrator-flows.md` §4.2). إعدادُ تصديرٍ فقط، خارج
+   * منفردًا» (قياسٌ خارجيٌّ موثَّق). إعدادُ تصديرٍ فقط، خارج
    * `DocSnapshot`/التراجع، مثل `exportMagicResize` و`exportAllArtboards`. */
   exportArtboardOwnSize: boolean;
   /** هل هناك مشروعٌ مفتوح يمكن الرجوع إليه من شاشة البداية؟

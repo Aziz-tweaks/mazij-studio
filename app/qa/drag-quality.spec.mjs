@@ -14,7 +14,7 @@ import { bootDemo } from './helpers/boot.mjs';
 
 const BASE_URL = process.env.QA_BASE_URL || 'http://localhost:1420';
 const HANDLE_PX = 10; // the authored on-screen size of the DRAWN resize handle (see Handles.tsx)
-const HIT_PX = 32; // its hit area — أداة تصميم شائعة's measured value (docs/re-canva-flows.md §3.2)
+const HIT_PX = 32; // its hit area — a common design tool's measured value (قياسٌ خارجيٌّ موثَّق)
 let pass = 0;
 let fail = 0;
 
@@ -254,8 +254,8 @@ async function main() {
     // `[data-handle-paint]` is the visible chrome — still HANDLE_PX at every zoom,
     // which is what this block always meant to pin.
     //
-    // `[data-handle]` is the real grab target, raised toward أداة تصميم شائعة's measured 32px
-    // (docs/re-canva-flows.md §3.2: 32px-thick hit areas with full-length edge
+    // `[data-handle]` is the real grab target, raised toward a common design tool's measured 32px
+    // (قياسٌ خارجيٌّ موثَّق: 32px-thick hit areas with full-length edge
     // handles, while "the visible corner dot and edge pill are far smaller than
     // 32px — the hit area is deliberately oversized and the affordance is drawn
     // small"). But 32 cannot be applied unconditionally: two opposing 32px handles

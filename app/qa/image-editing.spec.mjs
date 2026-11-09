@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Covers the new أداة متّجهات-style image editing added on top of the Phase 2 engine:
+// Covers the new a vector editor-style image editing added on top of the Phase 2 engine:
 // replace image (frame kept), crop/reposition+zoom within frame + reset, fit modes,
 // flip H/V, numeric transform + lock aspect ratio, corner radius, border/stroke,
 // clipping mask apply/release, single-undo-step per gesture, and that it all survives

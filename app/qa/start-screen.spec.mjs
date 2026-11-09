@@ -8,7 +8,7 @@
 // read off the real DOM or decoded out of a real exported file, never asserted
 // from an impression:
 //  (1) a cold load shows the start screen and NOT an editor, and the search
-//      field is the autofocused element (أداة تصميم شائعة's measured behaviour);
+//      field is the autofocused element (a common design tool's measured behaviour);
 //  (2) choosing a STILL format opens an editor at exactly that format's pixel
 //      dimensions with an EMPTY element list — proven twice over, from the live
 //      document and from a real 1x PNG export's decoded IHDR;
@@ -22,11 +22,11 @@
 //      element count;
 //  (7) the format catalogue is more than four, carries both media, and keeps
 //      video INTERLEAVED in one ranked list rather than segregated into a video
-//      section (the structural decision taken from أداة تصميم شائعة, §1.5);
+//      section (the structural decision taken from a common design tool, §1.5);
 //  (8) every row makes its own medium legible — no row relies on the filter;
-//  (9) custom size is pinned between the search and the list (أداة تصميم شائعة §1.4);
+//  (9) custom size is pinned between the search and the list (a common design tool §1.4);
 // (10) the blank path is first AND visually dominant (Express's dashed border +
-//      محرّر فيديو شائع's one-dominant-action) — measured by real geometry, re-measured
+//      a common video editor's one-dominant-action) — measured by real geometry, re-measured
 //      22 October 2026 after the owner's hand-drawn redesign: dominance is now
 //      height + distinction (a tall rail spanning the grid beside it), not
 //      raw area, and the sizes/templates sections became big real-proportioned
@@ -36,7 +36,7 @@
 // (11) the demo poster was MOVED, not deleted: it is reachable from the
 //      templates section and still produces its exact original 7 elements;
 // (12) the chooser is not a gate — the format choice is reversible inside the
-//      editor, which is why no video-vs-image branch was built (محرّر فيديو شائع §1.2);
+//      editor, which is why no video-vs-image branch was built (a common video editor §1.2);
 // (13) the one thing not built is visibly disabled with a «قريبًا» state.
 //
 // Run: node qa/start-screen.spec.mjs   (dev server must be running on :1420)
@@ -202,7 +202,7 @@ async function main() {
   assert((await page.locator('[data-testid="artboard"]').count()) === 0, 'cold load: there is no artboard at all before the user has chosen anything');
   assert(
     (await page.evaluate(() => document.activeElement?.getAttribute('data-testid'))) === 'format-search',
-    'cold load: the format search field is document.activeElement — autofocused, so a user who knows what he wants types it immediately (أداة تصميم شائعة §1.4)',
+    'cold load: the format search field is document.activeElement — autofocused, so a user who knows what he wants types it immediately (a common design tool §1.4)',
   );
   assert((await page.locator('[data-testid="resume-project"]').count()) === 0, 'cold load: a first-time user is shown no resume card, because there is genuinely nothing saved');
 
@@ -238,12 +238,12 @@ async function main() {
   const mediumRuns = rows.reduce((runs, r) => (runs[runs.length - 1] === r.medium ? runs : [...runs, r.medium]), []);
   assert(
     mediumRuns.length >= 4,
-    `interleaving: the ranked list alternates between still and timed ${mediumRuns.length} times (${mediumRuns.join('>')}) — video formats are ordinary rows in one list, not a separate video section (أداة تصميم شائعة §1.5)`,
+    `interleaving: the ranked list alternates between still and timed ${mediumRuns.length} times (${mediumRuns.join('>')}) — video formats are ordinary rows in one list, not a separate video section (a common design tool §1.5)`,
   );
   assert(rows[0].medium === 'still' && rows[1].medium === 'timed', 'interleaving: a timed format appears as early as row 2, mixed in by rank rather than pushed below the stills');
 
   // ============ 3. The sizes grid: a big real-proportioned example each =====
-  // REPLACES the 18 October "40px row pitch" measurement (أداة تصميم شائعة's create
+  // REPLACES the 18 October "40px row pitch" measurement (a common design tool's create
   // picker). That assertion measured the vertical gap between consecutive
   // rows in a single column — a number with no meaning once formats sit in a
   // WRAPPING GRID of big cards (several share the same `top`, so "pitch"
@@ -324,7 +324,7 @@ async function main() {
   const customBox = await page.locator('[data-testid="custom-size-row"]').boundingBox();
   const listBox = await page.locator('[data-testid="format-list"]').boundingBox();
   assert(customBox.y > searchBox.y, 'layout: the custom-size row sits below the search field');
-  assert(customBox.y < listBox.y, 'layout: the custom-size row sits ABOVE the ranked list — pinned directly beneath the search, not buried at the bottom of a long list (أداة تصميم شائعة §1.4)');
+  assert(customBox.y < listBox.y, 'layout: the custom-size row sits ABOVE the ranked list — pinned directly beneath the search, not buried at the bottom of a long list (a common design tool §1.4)');
   assert(customBox.y - (searchBox.y + searchBox.height) < 24, `layout: custom size is directly beneath the search, not merely somewhere above the list (${Math.round(customBox.y - (searchBox.y + searchBox.height))}px gap)`);
 
   // ============ 4. Blank is first and dominant =============================
@@ -332,7 +332,7 @@ async function main() {
   assert(blankBox.y < listBox.y, 'blank-first: the "start from scratch" action is positioned above the format list');
   assert(
     (await page.locator('[data-testid="start-blank"]').evaluate((el) => getComputedStyle(el).borderStyle)) === 'dashed',
-    'blank-first: the blank action carries a dashed border, marking it as categorically different from the content-bearing template rows (مزوّد كبير Express convention)',
+    'blank-first: the blank action carries a dashed border, marking it as categorically different from the content-bearing template rows (a browser design tool convention)',
   );
   // REPLACES the 18 October "blank area > six template rows combined" measure.
   // That comparison is structurally meaningless now: templates are no longer
@@ -347,7 +347,7 @@ async function main() {
   const contentBox = await page.locator('[data-testid="start-content"]').boundingBox();
   assert(
     Math.abs(blankBox.height - contentBox.height) < 2,
-    `dominance: the blank rail's height (${blankBox.height.toFixed(1)}px) matches the full height of the templates+sizes column beside it (${contentBox.height.toFixed(1)}px) — alignItems:'stretch' makes it span the whole grid, the way محرّر فيديو شائع's one dominant action owns its own visual weight`,
+    `dominance: the blank rail's height (${blankBox.height.toFixed(1)}px) matches the full height of the templates+sizes column beside it (${contentBox.height.toFixed(1)}px) — alignItems:'stretch' makes it span the whole grid, the way a common video editor's one dominant action owns its own visual weight`,
   );
   assert(
     blankBox.width < contentBox.width / 2,
@@ -397,7 +397,7 @@ async function main() {
   assert((await page.locator('[data-testid="format-row-ig-portrait"]').count()) === 1, 'search: searching by a pixel dimension ("1350") finds the format with that dimension');
   await page.locator('[data-testid="format-search"]').fill('zzzqqq');
   await page.waitForTimeout(80);
-  assert(await page.locator('[data-testid="format-no-results"]').isVisible(), 'search: a non-matching query shows an inline "no results" line rather than an empty panel (أداة تصميم شائعة §1.4)');
+  assert(await page.locator('[data-testid="format-no-results"]').isVisible(), 'search: a non-matching query shows an inline "no results" line rather than an empty panel (a common design tool §1.4)');
   assert((await page.locator('[data-testid="custom-size-row"]').isVisible()) === true, 'search: the pinned custom-size row never scrolls or filters away — it is the escape hatch, not a list row');
   await page.locator('[data-testid="format-search"]').fill('');
   await page.waitForTimeout(80);

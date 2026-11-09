@@ -8,7 +8,7 @@ import { applyEasing } from './easing';
  * هذا ما بقي من `TIMELINE_DURATION = 5`. والفرقُ ليس في الرقم بل في نوعه: كانت
  * الخمسةُ سقفًا للخطّ الزمنيّ كلِّه — لا يُمكن لمستندٍ أن يطول عنها بحال — وصارت
  * **قيمةً افتراضيةً** لطول مقطعٍ واحد، يُغيّرها المصمّم بسحب الحافّة، ويُشتَقّ طولُ
- * المستند من أطول مقطعٍ فيه (`documentDuration`). محرّر خطٍّ زمنيٍّ مفتوح في سطر واحد:
+ * المستند من أطول مقطعٍ فيه (`documentDuration`). an open-source timeline editor في سطر واحد:
  * *«Mazij's 5 seconds is a correct default wearing the costume of a ceiling.»* */
 export const DEFAULT_CLIP_DURATION = 5;
 
@@ -23,16 +23,16 @@ export const DEFAULT_DOC_FPS = 30;
 // شبكةُ الإطارات / The frame grid
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// محرّك حركةٍ مفتوح's rule, verbatim: *"An epsilon is only necessary when the grid is
+// an open-source motion engine's rule, verbatim: *"An epsilon is only necessary when the grid is
 // missing."* Both epsilons this module used to carry (`eps = 0.02` in `keyframeAt`
 // and `CLIP_EDGE_EPS = 1/60`) existed because a keyframe's time was a continuous
 // fraction with nothing to land on. With a grid there is something to land on, so
 // identity is an integer comparison and the epsilons are deleted rather than tuned.
 //
 // وكلُّ خيارات `FPS_OPTIONS` أعدادٌ صحيحة، فمزيج يحتاج **شبكة** لا قاعدةَ زمنٍ
-// صحيحةً بمئتين وأربعٍ وخمسين مليار نبضة (`re-effectcraft-source.md:554-559`).
+// صحيحةً بمئتين وأربعٍ وخمسين مليار نبضة (قياسٌ خارجيٌّ موثَّق`).
 
-/** The two directions, kept apart on purpose — idea from محرّر خطٍّ زمنيٍّ مفتوح's
+/** The two directions, kept apart on purpose — idea from an open-source timeline editor's
  * `crates/time/src/lib.rs:218-220`, which splits them for the same reason.
  *
  * **`frameAtTime` floors**: it answers *"which frame is on screen at this instant"*,
@@ -73,8 +73,8 @@ export function frameDuration(fps: number): number {
  * exact comparison instead of an epsilon.
  *
  * Rounds to the *nearest* frame rather than down, so a key placed by dragging does
- * not drift systematically early. محرّك حركةٍ مفتوح's measured consequence of leaving the
- * grid out (`re-effectcraft-source.md:549-552`): at a 24 fps export, a key placed by
+ * not drift systematically early. an open-source motion engine's measured consequence of leaving the
+ * grid out (قياسٌ خارجيٌّ موثَّق`): at a 24 fps export, a key placed by
  * arrow-key scrubbing lands between output frames and the first rendered frame shows
  * an interpolated value instead of the key's own. */
 export function snapToFrame(seconds: number, fps: number): number {
@@ -86,7 +86,7 @@ export function snapToFrame(seconds: number, fps: number): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Timeline time → animation time. One line, and its inverse is one line, and they
- * live here as a tested pair (محرّر خطٍّ زمنيٍّ مفتوح §4.6,
+ * live here as a tested pair (an open-source timeline editor §4.6,
  * `crates/ui-egui/src/panels/effect_controls.rs:37-41`).
  *
  * **Unclamped on purpose.** `localClipTime`, which this replaces, had to clamp to
@@ -253,7 +253,7 @@ function sortedTrack(track: PropertyKeyframe[]): PropertyKeyframe[] {
  * segment using *that keyframe's own* easing/bezier — each property track, and each
  * segment within it, interpolates fully independently of every other.
  *
- * **Clamps at the end keyframes and never extrapolates** (محرّر خطٍّ زمنيٍّ مفتوح §4.4,
+ * **Clamps at the end keyframes and never extrapolates** (an open-source timeline editor §4.4,
  * `crates/project/src/keyframe.rs:256-262`): before the first key the track holds the
  * first value, after the last key it holds the last. That is what makes an unclamped
  * animation time safe — the clamp moved from the *time* (where it destroyed
@@ -519,7 +519,7 @@ export function formatKfDisplay(display: number): string {
  * إلى الأبد — ماسةٌ على الشاشة تحت ماسةٍ أخرى.
  *
  * On an **exact** hit (same time, after both are on the grid) the value is replaced
- * while `id`, `easing` and `bezier` are copied off the old key — محرّك حركةٍ مفتوح's
+ * while `id`, `easing` and `bezier` are copied off the old key — an open-source motion engine's
  * twelve-field copy reduced to Mazij's three fields
  * (`crates/keyframe/src/lib.rs:596-623`, pinned there by a test named
  * `replacing_key_preserves_spatial_metadata`). Keeping the `id` matters beyond
@@ -613,9 +613,9 @@ export function timelineSpan(docDuration: number): number {
 // سُلَّمُ العلامات / The tick ladder
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Adapted from محرّر خطٍّ زمنيٍّ مفتوح's `crates/ui-egui/src/panels/timeline.rs:1411-1425`
- * (MIT OR Apache-2.0; `Copyright (c) 2026 مشروعه الأمّ Team and the محرّر خطٍّ زمنيٍّ مفتوح
- * contributors.`). The **rule** is what transfers, not the pixel numbers: محرّر خطٍّ زمنيٍّ مفتوح's
+/** Adapted from an open-source timeline editor's `crates/ui-egui/src/panels/timeline.rs:1411-1425`
+ * (MIT OR Apache-2.0; `Copyright (c) 2026 its upstream project Team and the an open-source timeline editor
+ * contributors.`). The **rule** is what transfers, not the pixel numbers: an open-source timeline editor's
  * own §9.1 says it was never built or run, so 110 and 12 are values in egui *points*
  * and are taken here as starting points re-measured in Mazij's DOM, not as constants.
  *

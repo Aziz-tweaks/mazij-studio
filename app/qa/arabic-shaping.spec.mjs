@@ -2,7 +2,7 @@
 // Covers roadmap item #12: a real Arabic shaping pipeline (HarfBuzz + bidi-js, glyph
 // outlines via HarfBuzz's own `Font.glyphToPath`) for the text paths that need
 // per-glyph control — never for plain text, which the platform text engine already
-// shapes correctly (see docs/COMPETITIVE-ANALYSIS.md §3.4 and the header comment on
+// shapes correctly (see قياسٌ خارجيٌّ موثَّق and the header comment on
 // src/lib/arabicShaping.ts). Shipped this batch: "convert text to outlines" (SVG
 // export with real `<path>` glyph data, no font dependency). "Text on a curved path"
 // and "glyph-cluster-aware char stagger" are documented as deferred (قريبًا) —

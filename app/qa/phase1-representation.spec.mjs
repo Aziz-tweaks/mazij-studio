@@ -380,7 +380,7 @@ async function main() {
   // ═════════════════════════════════════════════════════════════════════════
   // A6. الشبكةُ شبكةُ المستند، والإطارُ صفر يُظهر قيمةَ مفتاحه
   // ═════════════════════════════════════════════════════════════════════════
-  // الأثرُ الذي قاسته الورقة لتثبيت `FRAME = 1/30` (`re-effectcraft-source.md:549-552`):
+  // الأثرُ الذي قاسته الورقة لتثبيت `FRAME = 1/30` (قياسٌ خارجيٌّ موثَّق`):
   // عند معدّلٍ غيرِ الثلاثين يهبط مفتاحٌ وُضِع بالسهم **بين** إطارَي مخرَج، فيُظهر
   // الإطارُ قيمةً مُستَقرَأة لا قيمةَ المفتاح. فشطران يُقاسان هنا:
   //
@@ -567,7 +567,7 @@ async function main() {
   const est = await page.locator('[data-testid="export-estimate"]').innerText();
   assert(
     new RegExp(`المدّة ${(Math.round(reportedDuration * 100) / 100).toString().replace('.', '\\.')} ث`).test(est),
-    `and the export dialog states the same derived duration before you commit: «${est}» — محرّر خطٍّ زمنيٍّ مفتوح §5.2's rule, so the dialog cannot contradict the timeline`,
+    `and the export dialog states the same derived duration before you commit: «${est}» — an open-source timeline editor §5.2's rule, so the dialog cannot contradict the timeline`,
   );
   await page.keyboard.press('Escape');
   await page.waitForTimeout(200);

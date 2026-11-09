@@ -1,7 +1,7 @@
 // Roadmap #12 — a real Arabic shaping pipeline for the text paths that need
 // per-glyph control (vector outlines, text-on-path, glyph-aware stagger) — never for
 // plain text, which the platform (Chromium's own text engine, itself backed by
-// HarfBuzz) already shapes correctly. See docs/COMPETITIVE-ANALYSIS.md §3.4 for the
+// HarfBuzz) already shapes correctly. See قياسٌ خارجيٌّ موثَّق for the
 // full justification and the exact algorithm this follows.
 //
 // The three libraries split cleanly along the three sub-problems:

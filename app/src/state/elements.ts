@@ -70,9 +70,9 @@ export interface AnimKeyframe {
  *    (`ElementView.tsx:135`). فعرضٌ متحرّكٌ يُعيد **لفَّ النصّ وتشكيلَه كلَّ
  *    إطار** — فعلٌ آخرُ غيرُ «اضغط الصندوقَ عرضًا»، وأثقلُ منه، ولم يُطلَب.
  *
- * وهو كذلك الفصلُ الذي يُجريه محرّك حركةٍ مفتوح نفسُه: `transform/scale` مجموعةٌ ثابتةٌ
+ * وهو كذلك الفصلُ الذي يُجريه an open-source motion engine نفسُه: `transform/scale` مجموعةٌ ثابتةٌ
  * (`GroupKind::Plain`) تُطبَّق **بعد كومة التأثيرات** كلِّها، ومنفصلةٌ في صيغة
- * المسار عن `contents/rect#2/size` (`docs/re-effectcraft-source.md:196`
+ * المسار عن `contents/rect#2/size` (قياسٌ خارجيٌّ موثَّق`
  * و`:2212-2231`، MIT OR Apache-2.0). المقياسُ تحويلٌ، والمقاسُ محتوًى، وهما
  * مجموعتان لا واحدة. **الفكرةُ مأخوذةٌ والكودُ لنا: لا سطرَ منقول.**
  *
@@ -130,7 +130,7 @@ export const ANIM_PROPERTY_DEFAULT: Record<AnimProperty, number> = { opacity: 1,
  *
  * **`time` is an absolute duration in seconds**, measured in *animation time* — i.e.
  * from `ElementAnim.sourceIn`, not as a fraction of the clip's length. Idea from
- * محرّر خطٍّ زمنيٍّ مفتوح, `crates/edit/src/lib.rs:16`: *"Keyframes are stored in media time, so
+ * an open-source timeline editor, `crates/edit/src/lib.rs:16`: *"Keyframes are stored in media time, so
  * trims and splits never need to move them."* (MIT OR Apache-2.0.)
  *
  * ولماذا تغيّر: كان الحقل كسرًا (٠..١) من مدّة المقطع، فكان كلُّ تغييرٍ في المدّة
@@ -191,7 +191,7 @@ export interface ElementAnim {
    * حقلان لا حقلٌ واحد، وهذا هو بيتُ القصيد. الفائدةُ ليست في كون الزمن مطلقًا
    * وحده، بل في أنّ `start` و`sourceIn` **يتحرّكان معًا عند تقليم الحافّة الأولى
    * ومنفردين عند النقل** — وهو ما يجعل الفعلين كلاهما بلا أثرٍ على المفاتيح
-   * (محرّر خطٍّ زمنيٍّ مفتوح، `crates/project/src/lib.rs:651-659`):
+   * (an open-source timeline editor، `crates/project/src/lib.rs:651-659`):
    *
    * | الفعل | `start` | `sourceIn` | أثره على المفاتيح |
    * |---|---|---|---|
@@ -229,7 +229,7 @@ export interface ElementAnim {
    * لحظةُ دخولٍ ولحظةُ خروج. والطريقُ الوحيدُ إليهما قبله تقسيمٌ ثم حذفٌ مرّتين لكلّ
    * عنصر، يتركان على مسار الشفافيّة مفتاحَي عتبةٍ يُعطّلان حركاتِ الدخول الجاهزة
    * (`hasCustomAnimation`). وهذا ما يفعله كلُّ محرّرِ فيديو يعرفه المصمّم: الطبقةُ
-   * موجودةٌ بين نقطتَي دخولها وخروجها (محرّر فيديو شائع، وAfter Effects بنقطتَي In/Out).
+   * موجودةٌ بين نقطتَي دخولها وخروجها (a common video editor، وAfter Effects بنقطتَي In/Out).
    *
    * والصيغةُ الواحدةُ في `clipShowsAt` (`src/lib/animTimeline.ts`)، تقرؤها المعاينةُ
    * والقُماشُ وSVG فلا يختلف ما يُرى عمّا يُصدَّر. */
@@ -499,8 +499,8 @@ export interface AppearanceStrokeLayer {
   /** مَلمحُ سُمكٍ متغيّر: معاملاتٌ تُضرَب في `width` على امتداد طول قوس المسار،
    * فيدخل الخطّ بعشرين بكسلًا ويخرج شعرة. غيابُه (أو `null`) = حدٌّ منتظم
    * بالضبط كما كان قبل هذا البند — نفس عقد «ترحيل بلا فقد» الذي يحمله
-   * `appearance` نفسه، ونفس اختيار محرّك متّجهات مفتوح حيث `profile: None` **ليس**
-   * مَلمحًا منتظمًا بل مسارَ الحدِّ العادي (`docs/re-vectorcraft-source.md` §1.1).
+   * `appearance` نفسه، ونفس اختيار an open-source vector engine حيث `profile: None` **ليس**
+   * مَلمحًا منتظمًا بل مسارَ الحدِّ العادي (قياسٌ خارجيٌّ موثَّق).
    *
    * و`width` رقمٌ واحد لكلّ مسار في SVG وفي Canvas2D معًا، فلا سبيل إلى رسم
    * هذا حدًّا أصلًا: متى وُجد المَلمح صار الحدُّ **مضلَّعًا معبَّأً** تبنيه

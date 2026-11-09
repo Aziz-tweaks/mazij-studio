@@ -468,7 +468,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
 
   /** ضغطُ المسطرة يمرّ بفاحص الإصابة نفسِه الذي تمرّ به صفوفُ المقاطع، فتكون
    * «أهذه مسطرةٌ أم صفٌّ أم حافّة؟» جوابًا من جدولٍ واحد لا من شجرةِ DOM. وهو
-   * عقدُ محرّر خطٍّ زمنيٍّ مفتوح المعماريّ: المؤشّرةُ والتحويمُ والضغطةُ **والمواصفة** تقرأ
+   * عقدُ an open-source timeline editor المعماريّ: المؤشّرةُ والتحويمُ والضغطةُ **والمواصفة** تقرأ
    * `hitTest` وحدها (`timeline_hit.rs:3-4`). */
   const onRulerPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -500,7 +500,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
       pauseIfPlaying();
       const dir = e.key === 'ArrowRight' ? 1 : -1;
       // إطارٌ واحدٌ **بمعدّل المستند**، لا `1/30` مثبَّتًا. وأثرُ تثبيته مقيس
-      // (`re-effectcraft-source.md:549-552`): عند تصديرٍ بـ٢٤ إطارًا يهبط مفتاحٌ
+      // (قياسٌ خارجيٌّ موثَّق`): عند تصديرٍ بـ٢٤ إطارًا يهبط مفتاحٌ
       // وُضِع بالسهم بين إطارَي مخرَج، فيُظهر الإطارُ الأوّل قيمةً مُستَقرَأة لا
       // قيمةَ المفتاح نفسه.
       // و`⇧` خمسةُ إطارات: خطوةٌ أكبر لا وحدةٌ أخرى، فيبقى كلُّ موضعٍ على الشبكة.
@@ -584,7 +584,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
    * `text-1792312169118` **طابعٌ زمنيّ من ١٣ رقمًا**: أربع طبقات نصّ تعني أربعة
    * أسماء لا يفرّق بينها إلا رقمٌ بلا معنى. البند ٨ في
    * `docs/UX-AUDIT-2026-10-18.md`، ومحرّر فيديو شائع تَعرض محتوى النص على المقطع نفسه
-   * (`re-capcut-flows.md` §2.8).
+   * (قياسٌ خارجيٌّ موثَّق).
    *
    * اصطدمت رحلتا الحملة والفيديو على هذا السطر لأنهما اكتشفتا العطل نفسه
    * مستقلّتين. المُبقى هو `elementDisplayName` المشترك لا النسخة المضمّنة: فهو
@@ -681,7 +681,7 @@ export function Timeline({ timed, docked = false }: { timed: boolean; /** رفُ
           </button>
           <span data-testid="timeline-time" data-t={state.t.toFixed(3)} style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums', color: 'var(--muted)', minWidth: 60 }}>{tLabel}</span>
           {/* **التقسيم له سطحٌ يُرى، لا اختصارٌ وحده.** و`⌘B` ليس بديلًا عنه:
-              قاعدةُ محرّر فيديو شائع `B` موجودةٌ على زرٍّ هناك أيضًا، ومَن لا يعرف الاختصارَ
+              قاعدةُ a common video editor `B` موجودةٌ على زرٍّ هناك أيضًا، ومَن لا يعرف الاختصارَ
               لا يجد القدرةَ أصلًا.
 
               **وتلميحُه يقول ما يُنتجه قبل أن يُضغَط** — «يُنتج عنصرين منفصلين

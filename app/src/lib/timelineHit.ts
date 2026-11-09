@@ -3,27 +3,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // **هندسةٌ وقواعدُ محضة، بلا React وبلا حالة.** تقرأها المؤشّرةُ (`cursor`)
-// ومعاينةُ التحويم وعاملُ الضغط **والمواصفة** — وهي قاعدةُ محرّر خطٍّ زمنيٍّ مفتوح المعماريّة
+// ومعاينةُ التحويم وعاملُ الضغط **والمواصفة** — وهي قاعدةُ an open-source timeline editor المعماريّة
 // حرفًا بحرف (`crates/ui-egui/src/panels/timeline_hit.rs:3-4`):
 //
 //   "Pure geometry and rules, shared by the cursor, the hover bracket, the press
 //    handler and the control channel's `ui.timeline.hit`, so what the pointer
 //    shows is what a press does."
 //
-// Adapted from محرّر خطٍّ زمنيٍّ مفتوح's `crates/ui-egui/src/panels/timeline_hit.rs`
-// (`MIT OR Apache-2.0`; `Copyright (c) 2026 مشروعه الأمّ Team and the محرّر خطٍّ زمنيٍّ مفتوح
+// Adapted from an open-source timeline editor's `crates/ui-egui/src/panels/timeline_hit.rs`
+// (`MIT OR Apache-2.0`; `Copyright (c) 2026 its upstream project Team and the an open-source timeline editor
 // contributors.`). **المأخوذ قاعدتان ومقاسٌ**: منطقةُ القبض `min(7px, w/3)` لكلّ
 // جانبٍ وبلوغُها خارج المقطع (`:160-178`)، وترتيبُ فصلِ التعادل الثلاثيّ
 // (`:148-157`). ولم يُنسَخ سطرُ كود: النوعُ والتوقيعُ والتطبيق كلُّها لنموذج مزيج
 // (صفٌّ واحدٌ لعنصرٍ واحد، ولا `TrackItem`، ولا مساراتٌ تُعبَر).
 //
 // وأرقامُ البكسل تُؤخَذ **نقاطَ انطلاقٍ تُعاد قياسها في DOM مزيج** لا ثوابتَ
-// تُثبَّت: §9.1 من ورقة محرّر خطٍّ زمنيٍّ مفتوح تقول صراحةً إنها لم تُبنَ ولم تُشغَّل، فالسبعةُ
+// تُثبَّت: §9.1 من ورقة an open-source timeline editor تقول صراحةً إنها لم تُبنَ ولم تُشغَّل، فالسبعةُ
 // قيمةٌ بنقاط egui. والمنقولُ هو **النسبةُ والقاعدة** — ولذلك يَقيس المعيار B1
 // فصلَ التعادل عند ١٠٠ بكسل/ثانية بوحدات الورقة نفسها، لا الرقمَ ٧ (§10.1).
 //
 // **(تاريخيّ — عُكس في ٢٩ أكتوبر ٢٠٢٦: الحوافّ الآن تسبق المفاتيح، انظر (٤) أدناه.)**
-// **والمخالفةُ الواحدة المقصودة عن محرّر خطٍّ زمنيٍّ مفتوح كانت: المفاتيحُ تَسبق الحوافّ.** لا ماسات
+// **والمخالفةُ الواحدة المقصودة عن an open-source timeline editor كانت: المفاتيحُ تَسبق الحوافّ.** لا ماسات
 // مفاتيحَ على المقطع هناك فلا تصادم؛ ومزيجٌ فيها، والتصادمُ **مكتوبٌ أصلًا**
 // معالجةً جانبيّةً في `src/components/timeline/Clip.tsx` («it has no hit-area of
 // its own once the resize handle takes priority over it»). فصلُ التعادل هذا

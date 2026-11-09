@@ -81,7 +81,7 @@ function FxCard({ spec, label, onPick }: { spec: FxSpec; label: string; onPick: 
         if (consumeSuppressedClick()) return;
         onPick();
       }}
-      // سحبُ البطاقة إلى المسارات يضع المؤثّرَ عند زمن الإفلات (كما في محرّر فيديو شائع)؛ والإفلاتُ على اللوحة = عند المؤشّر.
+      // سحبُ البطاقة إلى المسارات يضع المؤثّرَ عند زمن الإفلات (كما في a common video editor)؛ والإفلاتُ على اللوحة = عند المؤشّر.
       onPointerDown={(e) => startTileDrag(e, '<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(180deg,#2f7fd6,#f7c88b)"></div>', (drop) => onPick(drop.start !== undefined ? { start: drop.start } : undefined))}
       title={label}
       style={{ display: 'flex', flexDirection: 'column', gap: 5, padding: 0, border: 0, background: 'transparent', color: 'var(--text)', cursor: 'pointer' }}

@@ -613,7 +613,7 @@ export function ExportDialog() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto' }}>
             <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'start' }}>
               {/* تقديرٌ حيّ «المدّة · عدد الملفات · الحجم» قبل الضغط على التصدير
-                  (`re-capcut-flows.md` §4.2 و§5 «الوصيف»). على الفيديو هذا ليس
+                  (قياسٌ خارجيٌّ موثَّق و§5 «الوصيف»). على الفيديو هذا ليس
                   تحسينًا تجميليًا: المصمّم لم يكن يعرف — قبل أن ينتظر — أن الأهداف
                   الافتراضية الأربعة تعني أربعة ترميزات كاملة، ولا كم ستطول. */}
               {isVideoFormat && (

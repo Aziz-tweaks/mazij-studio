@@ -331,7 +331,7 @@ export interface ElementViewProps {
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>, id: string) => void;
   onDoubleClick: (e: ReactPointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>, id: string) => void;
   onTextBlur: (id: string, text: string) => void;
-  /** يُنادى مع كلّ حرفٍ أثناء التحرير — ليتّسع صندوقُ السطر الواحد حيًّا (كما في محرّر فيديو شائع). */
+  /** يُنادى مع كلّ حرفٍ أثناء التحرير — ليتّسع صندوقُ السطر الواحد حيًّا (كما في a common video editor). */
   onTextInput?: (id: string, text: string) => void;
   onTextKeyDown: (e: React.KeyboardEvent<HTMLDivElement>, id: string) => void;
   editRef?: (el: HTMLDivElement | null) => void;

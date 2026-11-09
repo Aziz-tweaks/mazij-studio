@@ -235,8 +235,8 @@ function MixMark() {
 
 /** The overflow menu for tools a designer does not reach for every session.
  *
- * Why this exists (18 October 2026): the owner — a designer who uses أداة تصميم شائعة,
- * أداة متّجهات and محرّر فيديو شائع daily — rated Mazij 2/10 and said it was "full of
+ * Why this exists (18 October 2026): the owner — a designer who uses a common design tool,
+ * a vector editor and a common video editor daily — rated Mazij 2/10 and said it was "full of
  * strange things". The clearest single cause was this bar: nine buttons in a
  * row, among them «خادم MCP», «مفسّر الأوامر» and «النماذج المحلية» — developer
  * and infrastructure surfaces — sitting at the same height, weight and prominence

@@ -15,7 +15,7 @@
 # FFmpeg itself is LGPL/GPL depending on enabled components (this build enables GPL
 # components like libx264) — redistributing this binary in a shipped app build means
 # complying with GPL §3 (offer corresponding source / build script), same obligation
-# أداة تصميم شائعة/محرّر فيديو شائع-style apps that bundle FFmpeg carry. Not resolved by this script —
+# a common design tool/a common video editor-style apps that bundle FFmpeg carry. Not resolved by this script —
 # flagged here for whoever cuts a public release.
 set -euo pipefail
 

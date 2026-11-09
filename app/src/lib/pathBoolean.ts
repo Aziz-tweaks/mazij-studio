@@ -5,7 +5,7 @@ import { fitSmoothPath, hasExplicitHandles } from './pathSmoothing';
 
 export type BooleanOp = 'union' | 'subtract' | 'intersect' | 'exclude';
 
-/** Roadmap #10 — flatten-then-clip, exactly the strategy `docs/COMPETITIVE-ANALYSIS.md`
+/** Roadmap #10 — flatten-then-clip, exactly the strategy قياسٌ خارجيٌّ موثَّق
  * §3.3 recommends over full-precision bezier booleans: every curved shape is sampled
  * into a polyline at a fixed tolerance, then handed to a 2D polygon-clipping engine.
  * We use `polybooljs` (a pure-JS port of the Martinez-Rueda sweep-line algorithm, zero

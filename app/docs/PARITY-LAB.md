@@ -52,11 +52,11 @@ Every agent writes about behaviors, not about modules.
 
 | Source | Where | Kind | Allowed |
 |---|---|---|---|
-| محرّك متّجهات مفتوح | `مسارٍ محلّيّ` (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
-| محرّر خطٍّ زمنيٍّ مفتوح | `مسارٍ محلّيّ` (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
-| محرّك حركةٍ مفتوح | `مسارٍ محلّيّ` if present | open, same family | read source, run it, measure |
-| أداة تصميم شائعة | web, owner's own login | closed | observe through the UI only |
-| محرّر فيديو شائع | `/Applications/محرّر فيديو شائع.app` | closed | observe through the UI only |
+| an open-source vector engine | `مسارٍ محلّيّ` (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
+| an open-source timeline editor | `مسارٍ محلّيّ` (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
+| an open-source motion engine | `مسارٍ محلّيّ` if present | open, same family | read source, run it, measure |
+| a common design tool | web, owner's own login | closed | observe through the UI only |
+| a common video editor | `/Applications/a common video editor.app` | closed | observe through the UI only |
 | Mazij | `<repo>` branch `main` | ours | read, run, measure; edits only in Phase 4 |
 
 ### Clean-room rules (all agents)
@@ -78,7 +78,7 @@ Every agent writes about behaviors, not about modules.
 ### Phase 0: Setup (the planner alone)
 
 1. Read `THE-NERDS.md`, `HANDOFF.md`, `BUGS.md`, `UX-AUDIT-*.md`, `CONTROLS.md`, then the headings
-   of every `re-*.md` and `COMPETITIVE-ANALYSIS.md`.
+   of every `re-*.md` and قياسٌ خارجيٌّ موثَّق.
 2. Pick one surface: canvas direct manipulation (default), Arabic text editing, timeline and
    motion, export, or first run to first finished design. Ask the owner if unclear.
 3. Write `coverage.md`: every behavior of that surface already described, with doc and section,
@@ -103,18 +103,18 @@ Every agent writes about behaviors, not about modules.
 Each agent gets: the surface, its `partial`/`missing` list, the clean-room rules verbatim, the
 checklist below, the card template, and its own output path. None writes to Mazij.
 
-- **A, `recon` محرّك متّجهات مفتوح.** Find each behavior's entry point and trace everything that runs after
+- **A, `recon` an open-source vector engine.** Find each behavior's entry point and trace everything that runs after
   the "main" line: state resets, tool switches, selection, panels, cursor, history, redraw. Run
-  محرّك متّجهات مفتوح and confirm in the UI; where code and UI disagree, the UI wins. Record every number,
+  an open-source vector engine and confirm in the UI; where code and UI disagree, the UI wins. Record every number,
   its unit, screen or document space, and whether it scales with zoom. → `discovery-vectorcraft.md`
-- **B, `recon` محرّر خطٍّ زمنيٍّ مفتوح.** Same, for timeline, playback, trimming, keyframes, export: what is
+- **B, `recon` an open-source timeline editor.** Same, for timeline, playback, trimming, keyframes, export: what is
   frame-accurate, what snaps to what and in which priority, what happens to playhead and selection
   after each edit, how preview stays smooth. → `discovery-filmcraft.md`
-- **C, observer أداة تصميم شائعة.** In the owner's signed-in session, ideally Arabic. Blank designs only.
+- **C, observer a common design tool.** In the owner's signed-in session, ideally Arabic. Blank designs only.
   Measure in small increments (drag 1, 2, 3 px for a threshold; approach a guide slowly for snap
   distance; hover around a corner for the rotation zone). Screenshot each step, GIF for motion.
   Mark anything not seen `unobserved` with the reason. → `discovery-canva.md`, `evidence/canva/`
-- **D, observer محرّر فيديو شائع.** Same, on the desktop app via screenshots and the accessibility tree.
+- **D, observer a common video editor.** Same, on the desktop app via screenshots and the accessibility tree.
   Earlier recon: synthetic edge drags moved the whole clip instead of trimming; try slow real drags
   with a hover pause, else `unobserved`. → `discovery-capcut.md`, `evidence/capcut/`
 - **E, Mazij baseline.** The same behaviors in Mazij `main` at 1440 x 900 and once at 900 px wide,
@@ -194,7 +194,7 @@ Mazij's UI; flags numbers without a measurement method and claims without proven
 → `audit.md`. the planner applies the fixes before Phase 3.
 
 **the planner.**
-1. `parity-matrix.md`: one row per behavior; columns محرّك متّجهات مفتوح, محرّر خطٍّ زمنيٍّ مفتوح, أداة تصميم شائعة, محرّر فيديو شائع, Mazij
+1. `parity-matrix.md`: one row per behavior; columns an open-source vector engine, an open-source timeline editor, a common design tool, a common video editor, Mazij
    today, gap, severity, effort. P0 = misleads or breaks (content disappears, wrong preview, dead
    button, data loss). P1 = works but feels worse. P2 = polish. Order by severity, frequency, then
    lower effort. Keep the top 10.
