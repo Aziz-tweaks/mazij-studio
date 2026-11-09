@@ -69,8 +69,8 @@ fn search_dirs() -> Vec<PathBuf> {
         h.join(".volta/bin"),
         h.join(".cargo/bin"),
     ];
-    // مسارات Node الشائعة، ومنها ما تحمله أدواتٌ أخرى معها.
-    for root in [h.join(".nvm/versions/node"), h.join(".nvm/versions/node")] {
+    // تثبيتاتُ Node الموزّعةُ في مجلّداتٍ مُصدَّرةٍ تحت المنزل.
+    for root in [h.join(".nvm/versions/node")] {
         if let Ok(rd) = std::fs::read_dir(&root) {
             let mut found: Vec<PathBuf> = rd.flatten().map(|e| e.path().join("bin")).filter(|p| p.is_dir()).collect();
             found.sort();

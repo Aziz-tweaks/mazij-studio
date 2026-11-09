@@ -1,6 +1,6 @@
 # مختبر التكافؤ — Mazij Parity Lab
 
-أُضيف في ١٩ أكتوبر ٢٠٢٦ بطلب المالك. **يُقرأ بعد `THE-NERDS.md` ويعمل تحته:** لا يُلغي
+**يُقرأ بعد `THE-NERDS.md` ويعمل تحته:** لا يُلغي
 شيئًا من الميثاق، بل يضيف ما ثبت أنه ناقص.
 
 ## لماذا
@@ -52,9 +52,9 @@ Every agent writes about behaviors, not about modules.
 
 | Source | Where | Kind | Allowed |
 |---|---|---|---|
-| an open-source vector engine | `مسارٍ محلّيّ` (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
-| an open-source timeline editor | `مسارٍ محلّيّ` (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
-| an open-source motion engine | `مسارٍ محلّيّ` if present | open, same family | read source, run it, measure |
+| an open-source vector engine | a local checkout (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
+| an open-source timeline editor | a local checkout (Rust, egui) | open, MIT OR Apache-2.0 | read source, run it, measure |
+| an open-source motion engine | a local checkout if present | open, same family | read source, run it, measure |
 | a common design tool | web, owner's own login | closed | observe through the UI only |
 | a common video editor | `/Applications/a common video editor.app` | closed | observe through the UI only |
 | Mazij | `<repo>` branch `main` | ours | read, run, measure; edits only in Phase 4 |
@@ -110,7 +110,7 @@ checklist below, the card template, and its own output path. None writes to Mazi
 - **B, `recon` an open-source timeline editor.** Same, for timeline, playback, trimming, keyframes, export: what is
   frame-accurate, what snaps to what and in which priority, what happens to playhead and selection
   after each edit, how preview stays smooth. → `discovery-filmcraft.md`
-- **C, observer a common design tool.** In the owner's signed-in session, ideally Arabic. Blank designs only.
+- **C, observer a common design tool.** In a dedicated Arabic test session, ideally Arabic. Blank designs only.
   Measure in small increments (drag 1, 2, 3 px for a threshold; approach a guide slowly for snap
   distance; hover around a corner for the rotation zone). Screenshot each step, GIF for motion.
   Mark anything not seen `unobserved` with the reason. → `discovery-canva.md`, `evidence/canva/`
@@ -191,9 +191,9 @@ states; what is pre-selected; how templates and sizes are chosen.
 spec or ticket; flags code blocks other than shell or Mazij-side test steps; flags paragraphs that
 walk a source function in the same order; flags closed-app names or identity that would reach
 Mazij's UI; flags numbers without a measurement method and claims without provenance.
-→ `audit.md`. the planner applies the fixes before Phase 3.
+→ `audit.md`. The planner applies the fixes before Phase 3.
 
-**the planner.**
+**The planner.**
 1. `parity-matrix.md`: one row per behavior; columns an open-source vector engine, an open-source timeline editor, a common design tool, a common video editor, Mazij
    today, gap, severity, effort. P0 = misleads or breaks (content disappears, wrong preview, dead
    button, data loss). P1 = works but feels worse. P2 = polish. Order by severity, frequency, then
