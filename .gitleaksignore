@@ -15,4 +15,4 @@
 # The fingerprint below embeds a commit hash. Any history rewrite changes it;
 # re-read it from `gitleaks git . -v` and update this line, or the scan reports
 # a finding that was already cleared.
-3e06661dedf97bdc44b9492bf482998a9bb36e0d:app/src/lib/aiKeyStore.ts:generic-api-key:3
+0d56efd288a02c38f205b97eff307aaa1c730f88:app/src/lib/aiKeyStore.ts:generic-api-key:3
