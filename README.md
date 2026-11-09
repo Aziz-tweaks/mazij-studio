@@ -78,7 +78,7 @@ node scripts/run-qa.mjs
 
 [MIT](LICENSE).
 
-وما جاء من غيرِ هذا المستودع فله إشعارُه: [`app/NOTICE`](app/NOTICE) يسرد كلَّ تبعيّةٍ أو اقتباسٍ يشترط ترخيصُه الإسناد، بحقوقِ نشره وموضعِ استعماله. والخطوطُ المضمَّنةُ تحت SIL OFL 1.1، وأسطرُ حقوقها في [`app/src/assets/fonts/OFL-NOTICE.md`](app/src/assets/fonts/OFL-NOTICE.md). ونصوصُ التراخيص كاملةً في [`LICENSES/`](LICENSES). وأصولُ `public/` (خطوطٌ وأصواتٌ وقوالبُ حركة) مشروحةُ المصدر في [`app/public/ASSETS.md`](app/public/ASSETS.md).
+وما جاء من غيرِ هذا المستودع فله إشعارُه: [`app/NOTICE`](app/NOTICE) يسرد كلَّ تبعيّةٍ أو اقتباسٍ يشترط ترخيصُه الإسناد، بحقوقِ نشره وموضعِ استعماله. والخطوطُ المضمَّنةُ تحت SIL OFL 1.1، وأسطرُ حقوقها في [`app/src/assets/fonts/OFL-NOTICE.md`](app/src/assets/fonts/OFL-NOTICE.md). وخلاصةُ ما جاء من غيره في [`THIRD-PARTY.md`](THIRD-PARTY.md)، ونصوصُ التراخيص كاملةً في [`LICENSES/`](LICENSES). وأصولُ `public/` (خطوطٌ وأصواتٌ وقوالبُ حركة) مشروحةُ المصدر في [`app/public/ASSETS.md`](app/public/ASSETS.md).
 
 ---
 
@@ -116,7 +116,7 @@ See [`app/README.md`](app/README.md) for the full setup, test commands, and know
 [`app/NOTICE`](app/NOTICE) lists every dependency and borrowing whose license requires
 attribution, with its copyright line and where it is used. Bundled fonts are under
 SIL OFL 1.1 ([`OFL-NOTICE.md`](app/src/assets/fonts/OFL-NOTICE.md)), and full license
-texts ship in [`LICENSES/`](LICENSES). Non-code assets under `public/` (fonts, sound
+texts ship in [`LICENSES/`](LICENSES), summarised in [`THIRD-PARTY.md`](THIRD-PARTY.md). Non-code assets under `public/` (fonts, sound
 effects, motion templates) are documented in [`app/public/ASSETS.md`](app/public/ASSETS.md).
 
 </div>

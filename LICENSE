@@ -19,19 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Third-party assets bundled in this repository:
-
-* Fonts under `app/src/assets/fonts/files/` — Alexandria, Readex Pro, and
-  Vazirmatn, each distributed under the SIL Open Font License 1.1
-  (https://openfontlicense.org/), sourced unmodified from Google Fonts.
-  See `app/src/assets/fonts/OFL-NOTICE.md`.
-
-* Runtime dependencies are listed in `app/package.json` and
-  `app/src-tauri/Cargo.toml`, each under its own license.
-
-Reference material owned by third parties is deliberately excluded from this
-repository. See `app/.gitignore` and the README of each target under
-`app/qa/replication/targets/`.
