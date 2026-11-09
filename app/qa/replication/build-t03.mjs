@@ -251,13 +251,13 @@ async function main() {
   log(`العنوان ${head}`);
 
   // ٧) الشارتان: **صورتان منفصلتان** بينهما فجوةٌ حقيقيّة، لا لقطةٌ واحدة تضمّهما.
-  const ba = await addImage(page, path.join(ASSETS, 'badge-appstore.png'), T.badgeA);
+  const ba = await addImage(page, path.join(ASSETS, 'badge-store-a.png'), T.badgeA);
   await setBox(page, T.badgeA);
-  log(`شارة App Store ${ba}`);
+  log(`شارة المتجر الأوّل ${ba}`);
 
-  const bgp = await addImage(page, path.join(ASSETS, 'badge-googleplay.png'), T.badgeG);
+  const bgp = await addImage(page, path.join(ASSETS, 'badge-store-b.png'), T.badgeG);
   await setBox(page, T.badgeG);
-  log(`شارة Google Play ${bgp}`);
+  log(`شارة المتجر الثاني ${bgp}`);
 
   // ٨) التصدير من نافذة التطبيق نفسها.
   const tmp = await exportPng(page, downloadDir);

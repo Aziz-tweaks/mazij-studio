@@ -57,8 +57,8 @@ const img = decodePng(SRC);
 /** صناديق الحبر المقيسة من الهدف — انظر `measure.mjs`. */
 const CROPS = [
   { name: 'icon.png', x: 486, y: 474, w: 108, h: 109 },
-  { name: 'badge-appstore.png', x: 255, y: 953, w: 231, h: 78 },
-  { name: 'badge-googleplay.png', x: 614, y: 952, w: 285, h: 85 },
+  { name: 'badge-store-a.png', x: 255, y: 953, w: 231, h: 78 },
+  { name: 'badge-store-b.png', x: 614, y: 952, w: 285, h: 85 },
 ];
 
 fs.mkdirSync(OUT, { recursive: true });

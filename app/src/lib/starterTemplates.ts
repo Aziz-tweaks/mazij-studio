@@ -335,7 +335,7 @@ export function createEventTicketElements(): DocElement[] {
     mkText('title', 'ليلة الجاز تحت النجوم', { x: 0.08, y: 0.16, w: 0.84, h: 0.28, rotation: 0 }, { fontSize: 78, weight: 'bold', fontFamily: 'Vazirmatn', anim: defaultAnim('slide', 0.2, 0.6, 'easeOut') }),
     mkShape('date-badge', 'rect', { x: 0.08, y: 0.48, w: 0.26, h: 0.14, rotation: 0 }, { fillToken: 'ac', radius: 0.12, anim: defaultAnim('pop', 0.35, 0.5, 'back') }),
     mkText('date-label', '٢٤ نوفمبر', { x: 0.08, y: 0.48, w: 0.26, h: 0.14, rotation: 0 }, { fontSize: 28, weight: 'bold', color: '#0F3D3E', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.35, 0.5, 'back') }),
-    mkText('location', 'فندق الريتز · قاعة الفينيق، الرياض', { x: 0.4, y: 0.5, w: 0.52, h: 0.1, rotation: 0 }, { fontSize: 24, fontFamily: 'Vazirmatn', valign: 'middle', anim: defaultAnim('fade', 0.4, 0.5, 'easeOut') }),
+    mkText('location', 'قاعة الفينيق · فندق المدينة', { x: 0.4, y: 0.5, w: 0.52, h: 0.1, rotation: 0 }, { fontSize: 24, fontFamily: 'Vazirmatn', valign: 'middle', anim: defaultAnim('fade', 0.4, 0.5, 'easeOut') }),
     mkShape('stub-panel', 'rect', { x: 0, y: 0.8, w: 1, h: 0.2, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('slide', 0.3, 0.5, 'easeOut') }),
     mkShape('notch-left', 'ellipse', { x: -0.04, y: 0.76, w: 0.08, h: 0.08, rotation: 0 }, { fillToken: 'bg', anim: defaultAnim('fade', 0.3, 0.4, 'linear') }),
     mkShape('notch-right', 'ellipse', { x: 0.96, y: 0.76, w: 0.08, h: 0.08, rotation: 0 }, { fillToken: 'bg', anim: defaultAnim('fade', 0.3, 0.4, 'linear') }),

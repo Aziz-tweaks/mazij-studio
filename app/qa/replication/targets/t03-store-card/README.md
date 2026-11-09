@@ -9,8 +9,8 @@
 |---|---|---|
 | `target.png` | المرجع المصيَّر ١٠٨٠×١٣٥٠ | ملفّ التصميم الأصلي، محليًّا |
 | `../../assets/t03-store-card/icon.png` | الأيقونة، مقصوصةٌ من المرجع | `node qa/replication/crop-t03-assets.mjs` |
-| `../../assets/t03-store-card/badge-appstore.png` | شارة App Store، مقصوصةٌ من المرجع | المصدر نفسه |
-| `../../assets/t03-store-card/badge-googleplay.png` | شارة Google Play، مقصوصةٌ من المرجع | المصدر نفسه |
+| `../../assets/t03-store-card/badge-store-a.png` | شارة المتجر الأوّل، مقصوصةٌ من المرجع | المصدر نفسه |
+| `../../assets/t03-store-card/badge-store-b.png` | شارة المتجر الثاني، مقصوصةٌ من المرجع | المصدر نفسه |
 | `../../attempt-t03.png` | محاولة مزيج | `node qa/replication/build-t03.mjs` |
 
 وكلُّها في `.gitignore` **عن قصد**: المرجع عملٌ منشورٌ تملكه جهةٌ خارجيّة، والأصول
