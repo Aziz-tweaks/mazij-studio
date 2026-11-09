@@ -32,8 +32,8 @@
 يحتاج [Node.js](https://nodejs.org) و[Rust](https://rustup.rs).
 
 ```bash
-git clone https://github.com/<OWNER>/mazij.git
-cd mazij/app
+git clone https://github.com/Aziz-tweaks/mazij-studio.git
+cd mazij-studio/app
 npm install
 ./scripts/setup-ffmpeg-sidecar.sh      # لازمٌ للتصدير إلى MP4 وGIF
 npm run tauri dev
@@ -101,8 +101,8 @@ Most design tools treat Arabic as an afterthought: glyph shaping breaks, text di
 **Quick start**
 
 ```bash
-git clone https://github.com/<OWNER>/mazij.git
-cd mazij/app
+git clone https://github.com/Aziz-tweaks/mazij-studio.git
+cd mazij-studio/app
 npm install
 ./scripts/setup-ffmpeg-sidecar.sh
 npm run tauri dev
