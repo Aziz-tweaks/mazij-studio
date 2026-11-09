@@ -53,3 +53,21 @@ in length with a tail fade, and encoded to AAC at 48 kHz.
 `tauri icon`.
 
 **Terms:** MIT, with the project.
+
+---
+
+## `../../design-source/` — the Phase 1 interface prototype
+
+Not under `public/`, listed here because it is the one other non-code artifact
+in the repository. A standalone interactive mock of the editor's interface
+(`Mazij Studio.html`), kept because `src/theme/theme.ts` still cites
+`reference-render.png` as the origin of the "island" light theme. The app does
+not load anything from this directory.
+
+`source/support.js` is a **generated** runtime bundle emitted by the prototyping
+tool that produced the mock, not written here; its header says
+`GENERATED from dc-runtime/src/*.ts`. Its own license is not recorded in this
+repository. It is included because the prototype does not open without it.
+
+**Terms:** the prototype itself ships under the project's MIT license. Anyone
+redistributing `source/support.js` separately should establish its terms first.
