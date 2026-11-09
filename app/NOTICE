@@ -54,10 +54,10 @@ commonly cited package for this, was tried first but never completes its WASM
 runtime init under Vite/browser ESM — see the comment in `arabicShaping.ts`.)
 https://github.com/itskyedo/woff2-encoder
 
-محرّك متّجهات مفتوح
+VectorCraft
 -----------
 License: MIT OR Apache-2.0
-Copyright (c) 2026 مشروعه الأمّ Team and the محرّك متّجهات مفتوح contributors
+Copyright (c) 2026 ArtCraft Team and the VectorCraft contributors
 Used for: variable-width stroke profiles. `src/lib/variableStroke.ts` adapts the
 `WidthProfile::PRESETS` table and the `WidthProfile::at_points` sampling from
 `crates/doc/src/appearance.rs`. Each adapted site carries its own attribution
@@ -65,19 +65,19 @@ comment naming the file, the license and this copyright notice, as MIT requires.
 Sites that merely take an idea carry a "the idea is from" comment and need no
 notice; adapted code carries the full one.
 
-محرّر خطٍّ زمنيٍّ مفتوح
+FilmCraft
 ---------
 License: MIT OR Apache-2.0
-Copyright (c) 2026 مشروعه الأمّ Team and the محرّر خطٍّ زمنيٍّ مفتوح contributors
+Copyright (c) 2026 ArtCraft Team and the FilmCraft contributors
 Used for: timeline behaviour. `src/lib/timelineHit.ts` adapts
 `crates/ui-egui/src/panels/timeline_hit.rs`; `src/lib/animTimeline.ts` adapts
 `crates/ui-egui/src/panels/timeline.rs:1411-1425`; `src/lib/timelineEdit.ts`
 takes documented ideas (ripple/roll semantics) with attribution at each site.
 
-محرّك حركةٍ مفتوح
+EffectCraft
 -----------
 License: MIT OR Apache-2.0
-Copyright (c) 2026 مشروعه الأمّ Team and the محرّك حركةٍ مفتوح contributors
+Copyright (c) 2026 ArtCraft Team and the EffectCraft contributors
 Used for: adapted designs behind the property-track time grid and the text
 selector model, from `crates/expr/src/noise.rs` and
 `crates/text/src/selectors.rs`. Sites that merely take an idea carry an
