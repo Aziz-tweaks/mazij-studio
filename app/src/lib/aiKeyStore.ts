@@ -1,6 +1,9 @@
 import { inTauri } from './tauriEnv';
 
-const LOCAL_KEY = 'mazij.aikeys.v1';
+// `LOCAL_KEY` is the localStorage *slot name*, not a credential. Secret scanners
+// read the identifier and flag the line, so the judgement is recorded here rather
+// than re-made on every scan.
+const LOCAL_KEY = 'mazij.aikeys.v1'; // gitleaks:allow
 const FILE_NAME = 'ai-keys.json';
 
 /** Roadmap #22 — per-provider API keys the user types in themselves. Stored only on
