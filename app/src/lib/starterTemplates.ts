@@ -490,26 +490,26 @@ export const CERTIFICATE_SLOTS: TemplateSlot[] = [
   { id: 'slot-signature', label: 'توقيع', elementId: 'signature-label', kind: 'text' },
 ];
 
-/** ١٠. إعلانُ دورةٍ أو ورشة — طبقاتٌ متراكبةٌ غير متناظرة: فقاعةٌ كبيرةٌ خافتةٌ
+/** ١٠. إعلانُ فعاليّة — طبقاتٌ متراكبةٌ غير متناظرة: فقاعةٌ كبيرةٌ خافتةٌ
  * تنزف خارج الحافّة العلويّة، وفقاعةٌ أصغر صلبةٌ فوقها قريبًا من الزاوية نفسها —
  * تراكمٌ حرٌّ لا تماثلٌ، على عكس التهنئة والشهادة. */
 export function createEventAdElements(): DocElement[] {
   return [
     mkShape('blob-back', 'ellipse', { x: 0.55, y: -0.25, w: 0.7, h: 0.7, rotation: 0 }, { fillToken: 'ac', opacity: 15, anim: defaultAnim('fade', 0, 0.6, 'easeOut') }),
     mkShape('blob-front', 'ellipse', { x: 0.68, y: 0.5, w: 0.45, h: 0.45, rotation: 0 }, { fillToken: 'ac', anim: defaultAnim('pop', 0.15, 0.6, 'back') }),
-    mkText('eyebrow', 'ورشة تطوير', { x: 0.06, y: 0.1, w: 0.3, h: 0.07, rotation: 0 }, { fontSize: 19, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.2, 0.5, 'easeOut') }),
-    mkText('title', 'بناء واجهاتٍ بِريأكت من الصفر', { x: 0.06, y: 0.2, w: 0.52, h: 0.28, rotation: 0 }, { fontSize: 35, weight: 'bold', fontFamily: 'Vazirmatn', anim: defaultAnim('slide', 0.3, 0.6, 'easeOut') }),
-    mkText('instructor', 'تقديم: م. فرقةُ الليل', { x: 0.06, y: 0.52, w: 0.5, h: 0.06, rotation: 0 }, { fontSize: 19, weight: 'medium', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.4, 0.5, 'easeOut') }),
+    mkText('eyebrow', 'أمسيةٌ مفتوحة', { x: 0.06, y: 0.1, w: 0.3, h: 0.07, rotation: 0 }, { fontSize: 19, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.2, 0.5, 'easeOut') }),
+    mkText('title', 'ليلةُ الجاز في الحديقة', { x: 0.06, y: 0.2, w: 0.52, h: 0.28, rotation: 0 }, { fontSize: 35, weight: 'bold', fontFamily: 'Vazirmatn', anim: defaultAnim('slide', 0.3, 0.6, 'easeOut') }),
+    mkText('instructor', 'تقديم: فرقةُ الليل', { x: 0.06, y: 0.52, w: 0.5, h: 0.06, rotation: 0 }, { fontSize: 19, weight: 'medium', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.4, 0.5, 'easeOut') }),
     mkShape('date-badge', 'rect', { x: 0.06, y: 0.62, w: 0.26, h: 0.09, rotation: 0 }, { fillToken: 'ac', radius: 0.1, anim: defaultAnim('pop', 0.5, 0.5, 'back') }),
     mkText('date-label', '٥ نوفمبر · ٧ مساءً', { x: 0.06, y: 0.62, w: 0.26, h: 0.09, rotation: 0 }, { fontSize: 15, weight: 'bold', color: '#FFFFFF', halign: 'center', valign: 'middle', fontFamily: 'Vazirmatn', anim: defaultAnim('pop', 0.5, 0.5, 'back') }),
-    mkText('cta', 'سجّل مجّانًا ←', { x: 0.06, y: 0.78, w: 0.3, h: 0.06, rotation: 0 }, { fontSize: 19, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.6, 0.4, 'easeOut') }),
+    mkText('cta', 'احجز مقعدك ←', { x: 0.06, y: 0.78, w: 0.3, h: 0.06, rotation: 0 }, { fontSize: 19, weight: 'bold', color: '#3867D6', fontFamily: 'Vazirmatn', anim: defaultAnim('fade', 0.6, 0.4, 'easeOut') }),
   ];
 }
 
 export const EVENT_AD_SLOTS: TemplateSlot[] = [
   { id: 'slot-eyebrow', label: 'التصنيف', elementId: 'eyebrow', kind: 'text' },
-  { id: 'slot-title', label: 'عنوان الدورة', elementId: 'title', kind: 'text' },
-  { id: 'slot-instructor', label: 'المدرّب', elementId: 'instructor', kind: 'text' },
+  { id: 'slot-title', label: 'عنوان الفعاليّة', elementId: 'title', kind: 'text' },
+  { id: 'slot-instructor', label: 'الجهةُ المنظِّمة', elementId: 'instructor', kind: 'text' },
   { id: 'slot-date', label: 'التاريخ والوقت', elementId: 'date-label', kind: 'text' },
   { id: 'slot-cta', label: 'زرّ الدعوة', elementId: 'cta', kind: 'text' },
 ];
@@ -662,7 +662,7 @@ export const BEFORE_AFTER_SLOTS: TemplateSlot[] = [
  * الزوايا أعلى اليسار، تقييمٌ نجميٌّ، ثم بطاقةٌ مستطيلةٌ مُدارةٌ بزاويةٍ صغيرة
  * (محاكاةُ لقطة شاشة طافية، بخطوطِ واجهةٍ داخليّةٍ مُقلَّدة) تتراكب أسفل الوسط —
  * الدورانُ الصغير على بطاقةٍ كبيرةٍ لا على ختمٍ صغير هو ما يجعل هذا التراكب
- * مختلفًا عن طبقات إعلان الدورة. */
+ * مختلفًا عن طبقات إعلان الفعاليّة. */
 export function createAppAdElements(): DocElement[] {
   return [
     mkShape('icon', 'rect', { x: 0.08, y: 0.08, w: 0.2, h: 0.1125, rotation: 0 }, { fillToken: 'ac', radius: 0.28, anim: defaultAnim('pop', 0, 0.5, 'back') }),
@@ -704,7 +704,7 @@ export type TemplateCategory =
   | 'stats'
   | 'menus'
   | 'certificates'
-  | 'courses'
+  | 'events'
   | 'realestate'
   | 'corporate'
   | 'howto'
@@ -725,7 +725,7 @@ export const TEMPLATE_CATEGORIES: { id: TemplateCategory; ar: string; en: string
   { id: 'stats', ar: 'إحصائيّات', en: 'Stats' },
   { id: 'menus', ar: 'قوائم طعام', en: 'Menus' },
   { id: 'certificates', ar: 'شهادات', en: 'Certificates' },
-  { id: 'courses', ar: 'دورات', en: 'Courses' },
+  { id: 'events', ar: 'فعاليات', en: 'Events' },
   { id: 'realestate', ar: 'عقار وضيافة', en: 'Real estate & hospitality' },
   { id: 'corporate', ar: 'إعلانٌ مؤسّسي', en: 'Corporate notice' },
   { id: 'howto', ar: 'خطوات', en: 'How-to steps' },
@@ -787,5 +787,5 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   { id: 'stat-infographic', nameKey: 't13', category: 'stats', paletteIdx: 5, sizeIdx: 6, anim: 'pop', decorAccent: false, selectOnOpen: 'big-stat', elements: createStatInfographicElements, slots: STAT_INFOGRAPHIC_SLOTS },
   { id: 'menu-list', nameKey: 't14', category: 'menus', paletteIdx: 8, sizeIdx: 4, anim: 'fade', decorAccent: false, selectOnOpen: 'header', elements: createMenuListElements, slots: MENU_LIST_SLOTS },
   { id: 'certificate', nameKey: 't15', category: 'certificates', paletteIdx: 0, sizeIdx: 1, anim: 'fade', decorAccent: false, selectOnOpen: 'name', elements: createCertificateElements, slots: CERTIFICATE_SLOTS },
-  { id: 'event-ad', nameKey: 't16', category: 'courses', paletteIdx: 9, sizeIdx: 9, anim: 'pop', decorAccent: false, selectOnOpen: 'title', elements: createEventAdElements, slots: EVENT_AD_SLOTS },
+  { id: 'event-ad', nameKey: 't16', category: 'events', paletteIdx: 9, sizeIdx: 9, anim: 'pop', decorAccent: false, selectOnOpen: 'title', elements: createEventAdElements, slots: EVENT_AD_SLOTS },
 ];

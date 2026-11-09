@@ -553,7 +553,7 @@ export const EN: Dictionary = {
   start: 'Start', new_project: 'New project', custom_size: 'Custom size', templates: 'Templates',
   recent: 'Recent',
   t1: 'Sale', t2: 'Listing', t3: 'Notice', t4: 'Steps', t5: 'Before/After', t6: 'App Ad',
-  t7: 'Seasonal Sale', t8: 'Centered Quote', t9: 'Job Opening', t10: 'Event Ticket', t11: 'Greeting Card', t12: 'Product Card', t13: 'Infographic', t14: 'Menu', t15: 'Certificate', t16: 'Course Ad',
+  t7: 'Seasonal Sale', t8: 'Centered Quote', t9: 'Job Opening', t10: 'Event Ticket', t11: 'Greeting Card', t12: 'Product Card', t13: 'Infographic', t14: 'Menu', t15: 'Certificate', t16: 'Event Ad',
   rec1: 'Weekend sale', rec2: 'Job opening', rec3: 'Quote of the week',
   time1: '2 hours ago', time2: 'Yesterday', time3: '3 days ago',
   h_search_ph: 'What do you want to make?', h_suggested: 'Suggested',
