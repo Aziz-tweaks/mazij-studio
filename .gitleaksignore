@@ -1,0 +1,14 @@
+# Verified non-findings.
+#
+# Each line is a gitleaks fingerprint that was inspected by hand and is not a
+# credential. Nothing is listed here that was not read first.
+#
+# aiKeyStore.ts line 3 names the localStorage slot the app keeps user-supplied
+# provider keys in. The value is a slot name, not a key; the scanner matches on
+# the identifier. The current version of that file carries an inline
+# `gitleaks:allow`, and this entry covers the commit that first introduced the
+# line, which a history scan still reaches.
+#
+# (This file quotes no code on purpose: an earlier version reproduced the line
+#  it was excusing, and tripped the same rule on itself.)
+fe1fcdf457424671487d7a3b10503bb3f325c0c8:app/src/lib/aiKeyStore.ts:generic-api-key:3
