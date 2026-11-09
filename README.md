@@ -76,7 +76,9 @@ node scripts/run-qa.mjs
 
 ## الرخصة
 
-[MIT](LICENSE). والخطوطُ المضمَّنةُ تحت SIL OFL 1.1، تفصيلُها في [`app/src/assets/fonts/OFL-NOTICE.md`](app/src/assets/fonts/OFL-NOTICE.md).
+[MIT](LICENSE).
+
+وما جاء من غيرِ هذا المستودع فله إشعارُه: [`app/NOTICE`](app/NOTICE) يسرد كلَّ تبعيّةٍ أو اقتباسٍ يشترط ترخيصُه الإسناد، بحقوقِ نشره وموضعِ استعماله. والخطوطُ المضمَّنةُ تحت SIL OFL 1.1، وأسطرُ حقوقها في [`app/src/assets/fonts/OFL-NOTICE.md`](app/src/assets/fonts/OFL-NOTICE.md). ونصوصُ التراخيص كاملةً في [`LICENSES/`](LICENSES).
 
 ---
 
@@ -110,6 +112,10 @@ See [`app/README.md`](app/README.md) for the full setup, test commands, and know
 
 **Replication harness** — `app/qa/replication` measures the app against real design targets: a design is rebuilt through the app's own commands, then scored against a written rubric. Third-party reference material is deliberately not committed; only the rubric and a neutral fallback ship, so every target runs from a fresh clone.
 
-**License** — [MIT](LICENSE). Bundled fonts are under SIL OFL 1.1.
+**License** — [MIT](LICENSE). Everything that came from elsewhere carries its notice:
+[`app/NOTICE`](app/NOTICE) lists every dependency and borrowing whose license requires
+attribution, with its copyright line and where it is used. Bundled fonts are under
+SIL OFL 1.1 ([`OFL-NOTICE.md`](app/src/assets/fonts/OFL-NOTICE.md)), and full license
+texts ship in [`LICENSES/`](LICENSES).
 
 </div>
