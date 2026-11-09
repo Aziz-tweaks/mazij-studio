@@ -82,6 +82,14 @@ selector model, from `crates/expr/src/noise.rs` and
 `crates/text/src/selectors.rs`. Sites that merely take an idea carry an
 "the idea is from" comment and need no notice; adapted code carries the full one.
 
+Bundled assets (not code)
+-------------------------
+Fonts, sound effects, motion-style templates and their previews live under
+`app/public/`. Their origin and terms are recorded in `app/public/ASSETS.md`.
+The twenty motion-style previews are regenerated from this repository's own
+templates by `app/scripts/make-motion-previews.mjs`, so their provenance is
+reproducible rather than asserted.
+
 License texts
 -------------
 Full texts of every license named in this file ship with the repository:
