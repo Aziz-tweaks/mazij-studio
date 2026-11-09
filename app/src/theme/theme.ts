@@ -69,7 +69,7 @@ export const NIGHT_THEME: Theme = {
   accent: '#6D5BFF',
 };
 
-// "island" was the Phase 1 light direction (design-source/reference-render.png).
+// "island" was the Phase 1 light direction.
 // Kept as a complete token set so a light switch stays a one-line change, but
 // it is no longer what the app ships with.
 export const ISLAND_THEME: Theme = {
