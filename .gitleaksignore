@@ -11,4 +11,8 @@
 #
 # (This file quotes no code on purpose: an earlier version reproduced the line
 #  it was excusing, and tripped the same rule on itself.)
-fe1fcdf457424671487d7a3b10503bb3f325c0c8:app/src/lib/aiKeyStore.ts:generic-api-key:3
+#
+# The fingerprint below embeds a commit hash. Any history rewrite changes it;
+# re-read it from `gitleaks git . -v` and update this line, or the scan reports
+# a finding that was already cleared.
+3e06661dedf97bdc44b9492bf482998a9bb36e0d:app/src/lib/aiKeyStore.ts:generic-api-key:3
