@@ -1,0 +1,122 @@
+# التكامل المستمرّ: ما يُفحَص عند كلِّ دفعٍ وكلِّ طلبِ سحبٍ نحو main.
+#
+# ما يفحصه هذا السير:
+#   ١. الواجهة: `npm ci` ثمّ فحصُ الأنواع ثمّ بناءُ Vite.
+#   ٢. Rust: `cargo check` للتطبيق ولثنائيِّ `mcp_server`، بعد تجهيز الثنائيَّين الجانبيَّين.
+#
+# ما لا يفحصه، ولا يدّعي فحصَه:
+#   · حِزَمُ QA (`npm test`): لها سيرٌ يدويٌّ مستقلٌّ في `qa.yml`، والسببُ مكتوبٌ هناك.
+#   · الحزمةُ النهائيّة (`npm run tauri build`): تحتاج توقيعًا وتوثيقًا من Apple، وليس هنا.
+#   · منصّاتٌ غيرُ macOS على Apple Silicon: المشروعُ نفسُه لا يدعمها اليوم.
+#   · iOS: `gen/apple` خارجَ المستودع، فلا شيءَ يُبنى منه.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# قراءةُ الشفرة وحدَها. السيرُ لا يكتب إلى المستودع ولا ينشر ولا يعلّق.
+permissions:
+  contents: read
+
+# دفعٌ جديدٌ على الفرع نفسِه يُلغي الجولةَ السابقة: دقائقُ macOS أغلى من أن تُهدَر.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: الواجهة وRust
+    # لماذا macOS، ولماذا هذا الإصدار بعينه:
+    #   · `scripts/setup-ffmpeg-sidecar.sh` يرفض بنصِّه كلَّ ثلاثيّةٍ غيرِ
+    #     `aarch64-apple-darwin` و`x86_64-apple-darwin`، فيخرج بخطأٍ على Linux وWindows.
+    #   · `scripts/setup-livephoto-tool.sh` يحتاج `swiftc` وAVFoundation.
+    #   · `Cargo.toml` فيه تبعيّاتٌ خاصّةٌ بـmacOS (`objc2`)، ففحصُها على Linux
+    #     يُسقِط `src/awake.rs` من الفحص بصمت.
+    #   · `macos-15` مُشغِّلٌ على Apple Silicon، وهي المعماريّةُ التي يُبنى عليها المشروع.
+    #     وهو مثبَّتٌ بالرقم لا `macos-latest`، كي لا تتبدّل الصورةُ تحت السير دون تعديلٍ هنا.
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node 20: الإصدارُ الذي يعمل عليه المشروعُ عند مالكه (v20.20.2)،
+      # وVite 8 يشترط `^20.19.0 || >=22.12.0`.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # `npm ci` لا `npm install`: القيدُ `package-lock.json` هو المرجع، وHANDOFF.md
+      # يوثّق أنّ الخروجَ عنه يرفع `onnxruntime-web` فوق ما جُهِّزت له أصولُ WASM.
+      - name: تثبيت التبعيّات
+        run: npm ci
+
+      - name: فحص الأنواع
+        run: npx tsc --noEmit -p tsconfig.json
+
+      # يسبق خطواتِ Rust عمدًا: `tauri.conf.json` يشير إلى `../dist`، فوجودُه قبل
+      # `cargo check` يُبعد أيَّ اعتراضٍ من Tauri على مجلّدِ واجهةٍ غائب.
+      - name: بناء الواجهة
+        run: npm run build
+
+      # قسمُ Rust. القرار: نجلب الثنائيَّين فعلًا، ولا نتخطّى فحصَ Rust.
+      #
+      # `src-tauri/binaries/` مستثنًى من git، و`tauri.macos.conf.json` يعلن الثنائيَّين
+      # في `externalBin`، فيفشل `tauri-build` بدونهما برسالة
+      # `resource path ... doesn't exist` قبل أن يُفحَص سطرُ Rust واحد.
+      #
+      # البدائلُ الثلاثةُ وما رجّح الأوّل:
+      #   · التخطّي: يترك خادمَ MCP والجسرَ ونصفَ التطبيق الأصيل بلا أيِّ فحص.
+      #   · ملفّاتٌ فارغةٌ بالاسمَين: تُرضي `tauri-build`، لكنّها تُخفي انكسارَ
+      #     السكربتَين نفسَيهما، وهما أوّلُ ما يشغّله كلُّ مستنسِخٍ جديد.
+      #   · الجلبُ الحقيقيّ: المُشغِّلُ macOS في كلِّ حال، والسكربتان خطوتُهما قصيرة،
+      #     وبه يُفحَص مسارُ الإعداد الموثَّق في README كما هو.
+      #
+      # ثمنُ هذا القرار، مذكورًا لا مستورًا: سكربت ffmpeg ينزّل «آخر إصدار» من خادمٍ
+      # خارجيّ (ffmpeg.martin-riedl.de). فإن غاب الخادمُ سقطت هذه الخطوةُ لسببٍ لا
+      # علاقةَ له بالشفرة. والكاشُ أدناه يحصر ذلك في الجولات التي تغيّر فيها أحدُ
+      # ملفّات الإعداد أو انتهى فيها عمرُ الكاش.
+
+      - name: كاش الثنائيَّين الجانبيَّين
+        uses: actions/cache@v4
+        with:
+          path: app/src-tauri/binaries
+          key: sidecars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/scripts/setup-ffmpeg-sidecar.sh', 'app/scripts/setup-livephoto-tool.sh', 'app/src-tauri/native/livephoto/main.swift') }}
+
+      - name: كاش Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            app/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ runner.arch }}-
+
+      # السكربتان يستخرجان الثلاثيّةَ من `rustc -vV`، فنُظهر الإصدارَ في السجلّ أوّلًا.
+      # Rust مثبَّتٌ سلفًا في صور macOS عند GitHub.
+      - name: إصدار Rust
+        run: rustc -vV && cargo -V
+
+      # كلاهما يتخطّى العملَ إن وجد الثنائيَّ مجهَّزًا (من الكاش).
+      - name: تجهيز ffmpeg
+        run: npm run setup:ffmpeg
+
+      - name: تجهيز livephoto
+        run: npm run setup:livephoto
+
+      # `--locked`: `Cargo.lock` متتبَّع، فمن غيّر `Cargo.toml` ونسي القيدَ يُكشَف هنا.
+      # ويشمل الفحصُ المكتبةَ والثنائيَّين `app` و`mcp_server` معًا.
+      # وهو فحصُ ترجمةٍ وحدَه: لا يُشغَّل ثنائيٌّ ولا تُبنى حزمة.
+      - name: cargo check
+        run: cargo check --locked --manifest-path src-tauri/Cargo.toml

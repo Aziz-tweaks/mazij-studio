@@ -1,0 +1,103 @@
+# حِزَمُ QA كاملةً (`npm test`): سيرٌ يدويٌّ، يُشغَّل من تبويب Actions بزرِّ «Run workflow».
+#
+# لماذا يدويٌّ وليس على كلِّ دفع:
+#   هذا السيرُ لم يُثبَت نجاحُه على مُشغِّلٍ مستضافٍ عند GitHub بعد. وما فيه ليس
+#   خطواتٍ يُعرَف أنّها تفشل، بل خطواتٌ لا يُعرَف أنّها تنجح هناك:
+#     · حزمتا `background-removal` و`auto-captions` تنزّلان نماذجَ حقيقيّةً من الشبكة
+#       وتتحقّقان من sha256، وحزمتا `controls` و`arabic-shaping` تجلبان خطًّا من
+#       fonts.gstatic.com.
+#     · حزمٌ تقيس بكسلاتٍ وأزمنةً على متصفّحٍ بلا واجهة، ومُشغِّلُ GitHub أضعفُ من
+#       جهازِ التطوير. وHANDOFF.md يوثّق أنّ `templates` قد تسقط تحت تنازع الموارد.
+#     · الجولةُ الكاملةُ عشراتُ الحزم واحدةً بعد واحدة، فزمنُها على المُشغِّل مجهول.
+#   فربطُه بكلِّ دفعٍ قبل جولةٍ خضراءَ واحدةٍ هنا يجعل main أحمرَ بلا دليل.
+#
+# الترقية: شغّله يدويًّا مرّةً. فإن خرج أخضرَ فانقل الوظيفةَ إلى `ci.yml`، أو أضف
+# هنا `push` و`pull_request` نحو main. وإن سقطت حزمٌ بعينها فهي نتيجةٌ تُقرأ:
+# `run-qa.mjs` يسمّي كلَّ حزمةٍ سقطت أو انكسرت باسمها.
+#
+# الخطواتُ هي تسلسلُ «استنساخ نظيف» في HANDOFF.md §٣ و§٤ حرفيًّا، بلا زيادة.
+
+name: QA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    name: حِزَم QA
+    # macOS على Apple Silicon شرطٌ لا اختيار: الحزمُ تشير بالاسم إلى
+    # `binaries/ffmpeg-aarch64-apple-darwin` و`binaries/livephoto-aarch64-apple-darwin`،
+    # فعلى أيِّ معماريّةٍ أخرى لا تجد الثنائيَّ أصلًا. وبقيّةُ الأسباب في `ci.yml`.
+    runs-on: macos-15
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: تثبيت التبعيّات
+        run: npm ci
+
+      # الحزمُ برامجُ Node مستقلّةٌ تستورد `chromium` من `playwright` المثبَّت على
+      # 1.64.1 بالضبط، والمتصفّحُ نفسُه لا يأتي مع `npm ci`. وبدونه تسقط الحزمُ كلُّها
+      # عند `chromium.launch()`. و`--with-deps` لا يلزم على macOS.
+      - name: متصفّح Playwright
+        run: npx playwright install chromium
+
+      - name: كاش الثنائيَّين الجانبيَّين
+        uses: actions/cache@v4
+        with:
+          path: app/src-tauri/binaries
+          key: sidecars-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/scripts/setup-ffmpeg-sidecar.sh', 'app/scripts/setup-livephoto-tool.sh', 'app/src-tauri/native/livephoto/main.swift') }}
+
+      - name: كاش Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            app/src-tauri/target
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ runner.arch }}-
+
+      # الأصولُ الأربعةُ التي لا تأتي مع الاستنساخ، وما يسقط بغيابِ كلٍّ منها:
+      #   ffmpeg: `video-export` و`reference-video` و`video-element` و`audio-track`.
+      - name: تجهيز ffmpeg
+        run: npm run setup:ffmpeg
+
+      #   livephoto: `live-photo-export`.
+      - name: تجهيز livephoto
+        run: npm run setup:livephoto
+
+      #   `public/ort` و`public/ort-whisper`: `background-removal` و`local-models`.
+      - name: تجهيز onnxruntime-web
+        run: bash scripts/setup-onnxruntime-wasm.sh
+
+      #   ثنائيُّ debug بعينه: `mcp-server` يشغّل `target/debug/mcp_server` لا release.
+      #   ويسبقه بناءُ الواجهة لأنّ `tauri.conf.json` يشير إلى `../dist`.
+      - name: بناء الواجهة
+        run: npm run build
+
+      - name: بناء mcp_server
+        run: cargo build --locked --bin mcp_server --manifest-path src-tauri/Cargo.toml
+
+      # `run-qa.mjs` يرفع Vite على المنفذ 1420 بنفسه وينتظره ثمّ يُنزله، فلا خطوةَ
+      # خادمٍ هنا. والمنفذُ خالٍ على مُشغِّلٍ نظيف، فلا حاجةَ إلى `QA_PORT`.
+      #
+      # حدٌّ معلوم: `phase2-live-clips` يبحث عن ffmpeg في `/opt/homebrew/bin/ffmpeg`
+      # (أو `MAZIJ_FFMPEG`). فإن لم يجده تخطّى «حَكَمَ الإطارات» وحدَه وطبع ذلك في
+      # السجلّ، وبقيّةُ تأكيداتِه تجري. فذلك الجزءُ غيرُ مفحوصٍ هنا.
+      - name: حِزَم QA
+        run: npm test
